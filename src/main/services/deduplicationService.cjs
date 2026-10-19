@@ -1,5 +1,5 @@
 const crypto = require('node:crypto')
-const { isUtilityTitle, isHiddenByDefaultTitle, isDlcTitle } = require('./utilityRules.cjs')
+const { isUtilityTitle, isHiddenByDefaultTitle, isDlcTitle, isDlcException } = require('./utilityRules.cjs')
 
 function id() { return crypto.randomUUID() }
 
@@ -41,6 +41,55 @@ const TITLE_SUFFIXES = [
   'pc'
 ]
 
+const PUBLISHER_PREFIXES = [
+  'deep silver',
+  'bethesda softworks',
+  'bethesda',
+  'warner bros games',
+  'warner bros interactive entertainment',
+  'warner bros',
+  'wb games',
+  'koch media',
+  'plaion',
+  'xbox game studios',
+  'microsoft studios',
+  '2k games',
+  '2k',
+  'square enix',
+  'bandai namco entertainment',
+  'bandai namco',
+  'focus home interactive',
+  'focus entertainment',
+  'thq nordic',
+  'thq',
+  'ubisoft entertainment',
+  'ubisoft',
+  'electronic arts',
+  'ea games',
+  'ea',
+  'capcom',
+  'konami',
+  'sega'
+]
+
+function cleanTitlePrefixes(rawTitle) {
+  if (!rawTitle) return ''
+  let title = String(rawTitle).trim()
+  if (/^(?:deep\s*silver\s*)?project\s*windfall$/i.test(title)) {
+    return 'Metro Exodus'
+  }
+  for (const pub of PUBLISHER_PREFIXES) {
+    const regex = new RegExp(`^${pub.replace(/\./g, '\\.')}\\s*[-:–—]?\\s+`, 'i')
+    if (regex.test(title)) {
+      title = title.replace(regex, '').trim()
+      break
+    }
+  }
+  title = title.replace(/\s*Xbox\s*Game\s*Studios$/i, '').trim()
+  title = title.replace(/^Metro-\s*/i, 'Metro: ')
+  return title
+}
+
 function normalizeCanonicalTitle(title) {
   let value = String(title || '')
     .toLowerCase()
@@ -50,6 +99,17 @@ function normalizeCanonicalTitle(title) {
     .replace(/[^a-z0-9]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
+
+  if (/^(?:deep\s*silver\s*)?project\s*windfall$/i.test(value)) {
+    value = 'metro exodus'
+  }
+
+  for (const pub of PUBLISHER_PREFIXES) {
+    if (value.startsWith(pub + ' ')) {
+      value = value.slice(pub.length + 1).trim()
+      break
+    }
+  }
 
   let changed = true
   while (changed && value) {
@@ -137,13 +197,14 @@ function findMatchingGame(db, record) {
 }
 
 function mergeRecord(db, record) {
-  const canonicalTitle = clean(record.canonicalTitle) || 'Untitled'
+  const canonicalTitle = cleanTitlePrefixes(clean(record.canonicalTitle) || 'Untitled')
   const normalized = normalizeCanonicalTitle(canonicalTitle)
   let game = findMatchingGame(db, record)
   let created = false
   let sourceLinked = false
   const strictUtility = isUtilityTitle(canonicalTitle) ? 1 : 0
   const strictDlc = isDlcTitle(canonicalTitle) ? 1 : 0
+  const isException = isDlcException(canonicalTitle) ? 1 : 0
   const strictHidden = autoHideEnabled(db) && isHiddenByDefaultTitle(canonicalTitle) ? 1 : 0
   if (!game) {
     const gameId = id()
@@ -180,7 +241,7 @@ function mergeRecord(db, record) {
       userRating: Number(record.userRating || 0),
       isFavorite: record.isFavorite ? 1 : 0,
       isUtility: (record.isUtility || strictUtility) ? 1 : 0,
-      isDlc: (record.isDlc || strictDlc) ? 1 : 0,
+      isDlc: (!isException && (record.isDlc || strictDlc)) ? 1 : 0,
       isHidden: (record.isHidden || strictHidden) ? 1 : 0,
       hiddenReason: record.hiddenReason || (strictHidden ? 'support-component-or-addon' : null),
       driveStatus: record.driveStatus || 'online',
@@ -190,7 +251,19 @@ function mergeRecord(db, record) {
   } else {
     const incomingTier = getEditionTierScore(canonicalTitle)
     const existingTier = getEditionTierScore(game.canonical_title)
-    const preferIncomingTitle = (incomingTier > existingTier) || (incomingTier === existingTier && canonicalTitle.length > String(game.canonical_title || '').length) ? 1 : 0
+    const existingHasPub = PUBLISHER_PREFIXES.some(p => String(game.canonical_title || '').toLowerCase().startsWith(p))
+    const incomingHasPub = PUBLISHER_PREFIXES.some(p => String(canonicalTitle || '').toLowerCase().startsWith(p))
+
+    let preferIncomingTitle = 0
+    if (existingHasPub && !incomingHasPub) {
+      preferIncomingTitle = 1
+    } else if (incomingHasPub && !existingHasPub) {
+      preferIncomingTitle = 0
+    } else if (incomingTier > existingTier) {
+      preferIncomingTitle = 1
+    } else if (incomingTier === existingTier && canonicalTitle.length > String(game.canonical_title || '').length) {
+      preferIncomingTitle = 1
+    }
 
     db.prepare(`UPDATE games SET
       canonical_title = CASE WHEN @preferIncomingTitle = 1 THEN @canonicalTitle ELSE canonical_title END,
@@ -208,15 +281,15 @@ function mergeRecord(db, record) {
       release_date = COALESCE(NULLIF(@releaseDate, ''), release_date),
       executable_path = COALESCE(NULLIF(@executablePath, ''), executable_path),
       is_installed = CASE WHEN @isInstalled = 1 THEN 1 ELSE is_installed END,
-      drive_letter = COALESCE(NULLIF(@driveLetter, ''), drive_letter),
-      install_path = COALESCE(NULLIF(@installPath, ''), install_path),
+      drive_letter = CASE WHEN @isInstalled = 1 AND NULLIF(@driveLetter, '') IS NOT NULL THEN @driveLetter ELSE COALESCE(NULLIF(@driveLetter, ''), drive_letter) END,
+      install_path = CASE WHEN @isInstalled = 1 AND NULLIF(@installPath, '') IS NOT NULL THEN @installPath ELSE COALESCE(NULLIF(@installPath, ''), install_path) END,
       install_size_bytes = CASE WHEN @installSizeBytes > 0 THEN @installSizeBytes ELSE install_size_bytes END,
       play_time_seconds = CASE WHEN @playTimeSeconds > 0 THEN @playTimeSeconds ELSE play_time_seconds END,
       last_played = COALESCE(NULLIF(@lastPlayed, ''), last_played),
       backlog_status = CASE WHEN @backlogStatusExplicit = 1 THEN @backlogStatus WHEN @derivedPlaying = 1 AND backlog_status = 'unplayed' THEN 'playing' ELSE backlog_status END,
       user_rating = CASE WHEN @userRating > 0 THEN @userRating ELSE user_rating END,
       is_utility = CASE WHEN @strictDlc = 1 THEN 0 WHEN @isUtility = 1 OR @strictUtility = 1 THEN 1 ELSE is_utility END,
-      is_dlc = CASE WHEN @isDlc = 1 OR @strictDlc = 1 THEN 1 ELSE is_dlc END,
+      is_dlc = CASE WHEN @isException = 1 THEN 0 WHEN @isDlc = 1 OR @strictDlc = 1 THEN 1 ELSE is_dlc END,
       is_hidden = CASE WHEN @isHidden = 1 OR (@strictHidden = 1 AND @autoHideSupportEntries = 1 AND COALESCE(hidden_reason, '') <> 'user-visible') THEN 1 ELSE is_hidden END,
       hidden_reason = CASE WHEN @isHidden = 1 OR (@strictHidden = 1 AND @autoHideSupportEntries = 1 AND COALESCE(hidden_reason, '') <> 'user-visible') THEN COALESCE(NULLIF(@hiddenReason, ''), 'support-component-or-addon') ELSE hidden_reason END,
       drive_status = CASE WHEN @isInstalled = 1 THEN @driveStatus ELSE drive_status END,
@@ -253,6 +326,7 @@ function mergeRecord(db, record) {
       strictUtility,
       isDlc: record.isDlc ? 1 : 0,
       strictDlc,
+      isException,
       isHidden: record.isHidden ? 1 : 0,
       strictHidden,
       autoHideSupportEntries: autoHideEnabled(db) ? 1 : 0,
@@ -322,4 +396,4 @@ async function mergeRecords(db, records, chunkSize = 50) {
   return summary
 }
 
-module.exports = { mergeRecords, mergeRecord, normalizeCanonicalTitle }
+module.exports = { mergeRecords, mergeRecord, normalizeCanonicalTitle, cleanTitlePrefixes }

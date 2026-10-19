@@ -2,13 +2,13 @@ import { Component, useEffect, useLayoutEffect, useMemo, useRef, useState, useCa
 import { createPortal } from 'react-dom'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
-  Activity, Archive, ArrowDownAZ, ArrowLeft, ArrowUpAZ, Check, ChevronDown, CircleHelp, Cpu, Database, Download,
-  FileSpreadsheet, Filter, FolderOpen, Gamepad2, HardDrive, LayoutGrid, ListFilter, Maximize2, Minus,
+  Activity, Archive, ArrowDownAZ, ArrowLeft, ArrowUpAZ, Check, ChevronDown, CircleHelp, Clock, Cpu, Database, Download,
+  FileSpreadsheet, Filter, FolderOpen, Gamepad2, HardDrive, LayoutGrid, ListFilter, Maximize2, Minimize2, Minus,
   Monitor, PackageCheck, PackageOpen, Palette, Play, Search, ScanLine, Settings2,
   ShieldCheck, Sparkles, Star, Sun, TerminalSquare, UploadCloud, Wrench, X, Moon, SlidersHorizontal,
   Dices, KeyRound, RefreshCw, ImagePlus, Trophy, WandSparkles, EyeOff, Eye, FileDown, Trash2, AlertTriangle, ArrowRightLeft,
   Bookmark, MoreHorizontal, Building2, Calendar, PlugZap, Info, Film, Camera, ChevronRight, ZoomIn,
-  PanelLeftClose, PanelLeft,
+  PanelLeftClose, PanelLeft, ChevronUp,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
@@ -29,7 +29,7 @@ const fallbackApi = {
   async setGameCategory() { return null },
   async updateGameStatus() { return null },
   window: { minimize() {}, maximize() {}, close() {} },
-  database: { async seedCheck() { return { seeded: false, count: 0 } }, async getGames() { return [] }, async getLibraryStats() { return { totalGames: 0, installedGames: 0, utilityTools: 0, installedUtilities: 0, visibleGames: 0, visibleInstalledGames: 0, dlcGames: 0, installedDlc: 0, hiddenGames: 0, hiddenInstalledGames: 0, hiddenDlc: 0, hiddenInstalledDlc: 0, readyToInstallCount: 0, artworkCovered: 0, missingArtwork: 0, totalStorageGb: 0, platformBreakdown: [] } }, async getLibrarySettings() { return { autoHideSupportEntries: true, steamGridDbApiKey: '' } }, async getActivityLog() { return [] }, async getLibraryHealth() { return { totalGames: 0, installedGames: 0, lastBackupTimestamp: null, lastBackupPath: null, lastScanTimestamp: null, backupsDirectory: null } }, async backupNow() { return { ok: true, backupPath: '' } }, async listBackups() { return { directory: 'UserData/backups', backups: [] } }, async openBackupsFolder() { return { success: true } }, async chooseBackupFile() { return null }, async restoreBackup() { return { success: true } }, async setLibrarySettings() { return { autoHideSupportEntries: true, steamGridDbApiKey: '' } }, async setGameHidden() { return null }, async updateGameStatus() { return null }, async updateGameMetadata() { return null }, async deleteGames() { return null }, async bulkUpdateGames() { return null }, async bulkMoveGameCategory() { return null }, async bulkSetGameHidden() { return null }, async moveGameCategory() { return null }, async exportCsv() { return null }, async exportSelectedCsv() { return null }, async purgeLibrary() { return { deletedGames: 0 } }, async backupArtworkCache() { return null }, async restoreArtworkCache() { return null }, onUpdated() { return () => {} } },
+  database: { async seedCheck() { return { seeded: false, count: 0 } }, async getGames() { return [] }, async getLibraryStats() { return { totalGames: 0, installedGames: 0, utilityTools: 0, installedUtilities: 0, visibleGames: 0, visibleInstalledGames: 0, dlcGames: 0, installedDlc: 0, hiddenGames: 0, hiddenInstalledGames: 0, hiddenDlc: 0, hiddenInstalledDlc: 0, readyToInstallCount: 0, artworkCovered: 0, missingArtwork: 0, totalStorageGb: 0, platformBreakdown: [] } }, async getLibrarySettings() { return { autoHideSupportEntries: true, steamGridDbApiKey: '', preferAnimatedArtwork: false } }, async getActivityLog() { return [] }, async getLibraryHealth() { return { totalGames: 0, installedGames: 0, lastBackupTimestamp: null, lastBackupPath: null, lastScanTimestamp: null, backupsDirectory: null } }, async backupNow() { return { ok: true, backupPath: '' } }, async listBackups() { return { directory: 'UserData/backups', backups: [] } }, async openBackupsFolder() { return { success: true } }, async chooseBackupFile() { return null }, async restoreBackup() { return { success: true } }, async setLibrarySettings() { return { autoHideSupportEntries: true, steamGridDbApiKey: '', preferAnimatedArtwork: false } }, async setGameHidden() { return null }, async updateGameStatus() { return null }, async updateGameMetadata() { return null }, async deleteGames() { return null }, async bulkUpdateGames() { return null }, async bulkMoveGameCategory() { return null }, async bulkSetGameHidden() { return null }, async moveGameCategory() { return null }, async exportCsv() { return null }, async exportSelectedCsv() { return null }, async purgeLibrary() { return { deletedGames: 0 } }, async backupArtworkCache() { return null }, async restoreArtworkCache() { return null }, onUpdated() { return () => {} } },
   scanner: { async scanAll() { return {} }, async chooseImportFile() { return null }, async importFile() { return {} }, async importBuffer() { return {} }, onProgress() { return () => {} } },
   games: { async openUri() {}, async getMedia() { return { success: false, screenshots: [], movies: [] } }, async changeArtwork() { return null }, async refetchArtwork() { return null }, async refetchSelectedArtwork() { return null }, async chooseAndSaveArtwork() { return null }, async chooseExecutable() { return null }, async launchExecutable() { return null } },
   roulette: { async pick() { return null } },
@@ -37,43 +37,111 @@ const fallbackApi = {
 }
 const api = window.api || fallbackApi
 
-const THEMES = {
-  monolith: { name: 'The Monolith', dark: ['#0b0f19', '#121a27', '#182233', '#f4f8ff', '#a9b8cc', '#71819a', '#38bdf8', 'rgba(56,189,248,.22)', '#06131b', '#26364c', '#3e526d', 'rgba(56,189,248,.13)', '#b9efff'], light: ['#f8fafc', '#ffffff', '#eef4fb', '#172033', '#52647c', '#7a8aa0', '#2563eb', 'rgba(37,99,235,.20)', '#ffffff', '#d8e2ef', '#b7c7db', 'rgba(37,99,235,.10)', '#174ea6'] },
-  brutalist: { name: 'The Brutalist Sanctuary', dark: ['#18181b', '#222225', '#2c2c30', '#f7f7f7', '#b5b5b9', '#85858b', '#ef4444', 'rgba(239,68,68,.23)', '#220707', '#3c3c42', '#5c5c64', 'rgba(239,68,68,.14)', '#ffc2c2'], light: ['#f4f4f5', '#ffffff', '#e8e8eb', '#1e1e21', '#52525b', '#71717a', '#dc2626', 'rgba(220,38,38,.19)', '#fff', '#d4d4d8', '#a1a1aa', 'rgba(220,38,38,.09)', '#991b1b'] },
-  eerie: { name: 'The Eerie Calm', dark: ['#080e1a', '#0f172a', '#162338', '#edfaff', '#a6bdca', '#718a9b', '#06b6d4', 'rgba(6,182,212,.23)', '#02191f', '#26384a', '#3c566d', 'rgba(6,182,212,.13)', '#a5f3fc'], light: ['#edf8fb', '#ffffff', '#e3f1f5', '#12303c', '#4d6d7a', '#6c8995', '#0891b2', 'rgba(8,145,178,.18)', '#fff', '#c9e1e8', '#9bbbc7', 'rgba(8,145,178,.10)', '#075985'] },
-  wasteland: { name: 'The Wasteland Horizon', dark: ['#14120e', '#211e16', '#2d291d', '#f8f5e7', '#bdb79a', '#8b846b', '#84cc16', 'rgba(132,204,22,.22)', '#111d04', '#4a4632', '#686146', 'rgba(132,204,22,.14)', '#d9f99d'], light: ['#f6f4e9', '#fffef8', '#ebe9d9', '#292d1c', '#677052', '#808a6d', '#65a30d', 'rgba(101,163,13,.18)', '#fff', '#d5d8bf', '#a9ae90', 'rgba(101,163,13,.10)', '#365314'] },
-  glitch: { name: 'The System Glitch', dark: ['#09090b', '#15111a', '#211426', '#fbf4ff', '#c7adc9', '#927694', '#d946ef', 'rgba(217,70,239,.24)', '#26072b', '#422448', '#68406c', 'rgba(6,182,212,.13)', '#f5b7ff'], light: ['#fdf4ff', '#ffffff', '#faeafe', '#301438', '#7a4e83', '#9b6ba3', '#c026d3', 'rgba(192,38,211,.18)', '#fff', '#edcbee', '#d69bd9', 'rgba(192,38,211,.09)', '#86198f'] },
-  ruins: { name: 'The Overgrown Ruins', dark: ['#131714', '#1a211b', '#242e26', '#f0fff5', '#b2c9b8', '#7d9887', '#10b981', 'rgba(16,185,129,.22)', '#032017', '#35483b', '#4c6757', 'rgba(16,185,129,.13)', '#a7f3d0'], light: ['#f0faf3', '#ffffff', '#e2f3e7', '#163321', '#52735d', '#6d8d76', '#059669', 'rgba(5,150,105,.17)', '#fff', '#c6e1cd', '#a2c8ac', 'rgba(5,150,105,.09)', '#065f46'] },
-  syndicate: { name: 'The Neon Syndicate', dark: ['#120824', '#1e1035', '#2d1648', '#fff2fb', '#cfafd1', '#987399', '#f43f5e', 'rgba(244,63,94,.23)', '#310612', '#51305c', '#7b4a83', 'rgba(244,63,94,.14)', '#fecdd3'], light: ['#fff1f6', '#ffffff', '#fee4ee', '#3c1328', '#815167', '#a77189', '#e11d48', 'rgba(225,29,72,.17)', '#fff', '#f0c2d2', '#d797ad', 'rgba(225,29,72,.09)', '#9f1239'] },
-  submerged: { name: 'The Submerged Base', dark: ['#05151d', '#0b232e', '#123542', '#efffff', '#a8c8ce', '#719aa3', '#14b8a6', 'rgba(20,184,166,.23)', '#02231f', '#2a4c56', '#3c6b72', 'rgba(20,184,166,.14)', '#99f6e4'], light: ['#ecfdfb', '#ffffff', '#dff6f3', '#103b3c', '#4b7274', '#6b9090', '#0d9488', 'rgba(13,148,136,.18)', '#fff', '#b9e3df', '#91c5c0', 'rgba(13,148,136,.09)', '#115e59'] },
-  ember: { name: 'The Ash & Ember', dark: ['#120e0d', '#211715', '#2e1e1a', '#fff8f2', '#ceb7a8', '#987c6c', '#f97316', 'rgba(249,115,22,.23)', '#2b1003', '#4b3329', '#725043', 'rgba(249,115,22,.14)', '#fed7aa'], light: ['#fff7ed', '#ffffff', '#ffead5', '#431e0d', '#825b43', '#9a7259', '#ea580c', 'rgba(234,88,12,.17)', '#fff', '#f2c9ac', '#dba37d', 'rgba(234,88,12,.09)', '#9a3412'] },
-  lab: { name: 'The Sterile Lab', dark: ['#0e1117', '#171b23', '#222934', '#f3f7fb', '#b0bcc9', '#7b8997', '#eab308', 'rgba(234,179,8,.22)', '#201800', '#394452', '#566576', 'rgba(234,179,8,.13)', '#fef08a'], light: ['#f5f7fa', '#ffffff', '#e7ebf0', '#17202c', '#526274', '#718295', '#ca8a04', 'rgba(202,138,4,.17)', '#fff', '#cbd5e1', '#aab7c5', 'rgba(202,138,4,.09)', '#854d0e'] },
+const LAYOUT_PALETTES = {
+  cinematic: {
+    base: '#000000',
+    surface: '#080808',
+    surfaceHover: '#121212',
+    card: '#0a0a0a',
+    textPrimary: '#ffffff',
+    textSecondary: '#a1a1aa',
+    textMuted: '#71717a',
+    accent: '#38bdf8',
+    accentGlow: 'rgba(56, 189, 248, 0.25)',
+    accentContrast: '#041017',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderHover: 'rgba(56, 189, 248, 0.40)',
+    badgeBg: 'rgba(56, 189, 248, 0.12)',
+    badgeText: '#bae6fd',
+  },
+  kinetic: {
+    base: '#000000',
+    surface: '#080808',
+    surfaceHover: '#121212',
+    card: '#0a0a0a',
+    textPrimary: '#ffffff',
+    textSecondary: '#a1a1aa',
+    textMuted: '#71717a',
+    accent: '#f97316',
+    accentGlow: 'rgba(249, 115, 22, 0.28)',
+    accentContrast: '#180700',
+    borderColor: 'rgba(255, 255, 255, 0.09)',
+    borderHover: 'rgba(249, 115, 22, 0.45)',
+    badgeBg: 'rgba(249, 115, 22, 0.14)',
+    badgeText: '#fed7aa',
+  },
+  atmospheric: {
+    base: '#000000',
+    surface: '#060807',
+    surfaceHover: '#0d1310',
+    card: '#080b09',
+    textPrimary: '#f0fdf4',
+    textSecondary: '#a1a1aa',
+    textMuted: '#71717a',
+    accent: '#10b981',
+    accentGlow: 'rgba(16, 185, 129, 0.22)',
+    accentContrast: '#021810',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderHover: 'rgba(16, 185, 129, 0.40)',
+    badgeBg: 'rgba(16, 185, 129, 0.12)',
+    badgeText: '#a7f3d0',
+  },
+  playful: {
+    base: '#000000',
+    surface: '#080808',
+    surfaceHover: '#121212',
+    card: '#0a0a0a',
+    textPrimary: '#ffffff',
+    textSecondary: '#a1a1aa',
+    textMuted: '#71717a',
+    accent: '#d6ff4b',
+    accentGlow: 'rgba(214, 255, 75, 0.25)',
+    accentContrast: '#121703',
+    borderColor: 'rgba(255, 255, 255, 0.10)',
+    borderHover: 'rgba(214, 255, 75, 0.45)',
+    badgeBg: 'rgba(214, 255, 75, 0.12)',
+    badgeText: '#ecfccb',
+  },
+  competitive: {
+    base: '#000000',
+    surface: '#080808',
+    surfaceHover: '#121212',
+    card: '#0a0a0a',
+    textPrimary: '#ffffff',
+    textSecondary: '#a1a1aa',
+    textMuted: '#71717a',
+    accent: '#f59e0b',
+    accentGlow: 'rgba(245, 158, 11, 0.26)',
+    accentContrast: '#180e00',
+    borderColor: 'rgba(255, 255, 255, 0.09)',
+    borderHover: 'rgba(245, 158, 11, 0.45)',
+    badgeBg: 'rgba(245, 158, 11, 0.14)',
+    badgeText: '#fde68a',
+  },
 }
-const THEME_KEYS = Object.keys(THEMES)
-const PALETTE_SLUG_MAP = {
-  monolith: 'the-monolith',
-  brutalist: 'the-brutalist-sanctuary',
-  eerie: 'the-eerie-calm',
-  wasteland: 'the-wasteland-horizon',
-  glitch: 'the-system-glitch',
-  ruins: 'the-overgrown-ruins',
-  syndicate: 'the-neon-syndicate',
-  submerged: 'the-submerged-base',
-  ember: 'the-ash-ember',
-  lab: 'the-sterile-lab',
-}
-function themeVars(themeKey, mode) {
-  const theme = THEMES[themeKey] || THEMES.monolith
-  const safeMode = mode === 'light' ? 'light' : 'dark'
-  const values = [...theme[safeMode]]
-  if (mode === 'dark') { values[0] = '#09090b'; values[1] = '#111113'; values[2] = '#18181b' }
-  if (mode === 'light') { values[3] = '#111827'; values[4] = '#334155'; values[5] = '#64748b' }
-  const names = ['--bg-base', '--bg-surface', '--bg-surface-hover', '--text-primary', '--text-secondary', '--text-muted', '--accent', '--accent-glow', '--accent-contrast', '--border-color', '--border-hover', '--badge-bg', '--badge-text']
-  const map = Object.fromEntries(names.map((name, index) => [name, values[index]]))
-  map['--accent-color'] = map['--accent']
-  map['--bg-primary'] = map['--bg-base']
-  map['--text-highlight'] = map['--accent']
-  return map
+
+function themeVars(layoutKey = 'cinematic') {
+  const p = LAYOUT_PALETTES[layoutKey] || LAYOUT_PALETTES.cinematic
+  return {
+    '--bg-base': p.base,
+    '--bg-primary': p.base,
+    '--bg-app': p.base,
+    '--bg-surface': p.surface,
+    '--bg-surface-hover': p.surfaceHover,
+    '--bg-card': p.card || p.surface,
+    '--text-primary': p.textPrimary,
+    '--text-secondary': p.textSecondary,
+    '--text-muted': p.textMuted,
+    '--text-highlight': p.accent,
+    '--accent': p.accent,
+    '--accent-color': p.accent,
+    '--accent-glow': p.accentGlow,
+    '--accent-contrast': p.accentContrast,
+    '--border-color': p.borderColor,
+    '--border-hover': p.borderHover,
+    '--badge-bg': p.badgeBg,
+    '--badge-text': p.badgeText,
+  }
 }
 function cn(...inputs) { return twMerge(clsx(inputs)) }
 function formatGb(value) { return `${Number(value || 0).toFixed(value < 10 ? 2 : 1)} GB` }
@@ -86,10 +154,10 @@ function formatBytes(bytes) {
   return `${(num / (1024 * 1024 * 1024)).toFixed(2)} GB`
 }
 function formatPlayTime(seconds) { const minutes = Math.round(Number(seconds || 0) / 60); if (minutes < 1) return 'No play time'; if (minutes < 60) return `${minutes}m played`; const hours = Math.floor(minutes / 60); const remainder = minutes % 60; return remainder ? `${hours}h ${remainder}m played` : `${hours}h played` }
-function normalizePlatform(platform) { const key = String(platform || '').toLowerCase().replace(/[^a-z0-9]/g, ''); return key.includes('steam') ? 'steam' : key.includes('epic') ? 'epic' : key.includes('gog') ? 'gog' : 'custom' }
-function platformLabel(platform) { return ({ steam: 'Steam', epic: 'Epic Games', gog: 'GOG', custom: 'Custom' })[normalizePlatform(platform)] || platform }
-function platformClass(platform) { return ({ steam: 'platform-steam', epic: 'platform-epic', gog: 'platform-gog', custom: 'platform-custom' })[normalizePlatform(platform)] || 'platform-custom' }
-function sourcePlatforms(sources = []) { return [...new Set(sources.map((source) => normalizePlatform(source.platform)))] }
+function normalizePlatform(platform) { const key = String(platform || '').toLowerCase().replace(/[^a-z0-9]/g, ''); return key.includes('steam') ? 'steam' : key.includes('epic') ? 'epic' : key.includes('gog') ? 'gog' : key.includes('amazon') ? 'amazon' : 'custom' }
+function platformLabel(platform) { return ({ steam: 'Steam', epic: 'Epic Games', gog: 'GOG', amazon: 'Amazon Games', custom: 'Custom' })[normalizePlatform(platform)] || platform }
+function platformClass(platform) { return ({ steam: 'platform-steam', epic: 'platform-epic', gog: 'platform-gog', amazon: 'platform-amazon', custom: 'platform-custom' })[normalizePlatform(platform)] || 'platform-custom' }
+function sourcePlatforms(sources = []) { if (!Array.isArray(sources)) return []; return [...new Set(sources.filter(Boolean).map((source) => normalizePlatform(source?.platform)))] }
 const MENU_WIDTH = 220
 const MENU_HEIGHT = 280
 const MENU_PADDING = 12
@@ -258,6 +326,7 @@ function launcherLabelFromUri(uri) {
 }
 function splitSourceLabels(value) { return String(value || '').split(/[,;|]/).map((label) => normalizeStoreLabel(label.trim())).filter((label) => label && label.toLowerCase() !== 'custom') }
 function sourceLabelsForGame(game) {
+  if (!game) return []
   const rawVariants = game.variants || [game]
   const variants = [...rawVariants].sort((a, b) => {
     const tierDiff = getEditionTierScore(b.canonical_title) - getEditionTierScore(a.canonical_title)
@@ -294,7 +363,9 @@ function sourceOptionsForGames(games = []) {
       counts.set(key, current)
     }
   }
-  return [...counts.values()].filter((source) => source.count > 0).sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }))
+  return [...counts.values()]
+    .filter((source) => source.count > 0)
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }))
 }
 function isLauncherUri(uri) { return /^(steam|com\.epicgames\.launcher|goggalaxy|origin2|origin|ea|ubisoft|uplay|xbox|ms-xbl|ms-windows-store|amazon-games|itch|battle-net|battlenet|riotclient):\/\//i.test(String(uri || '')) }
 function sourceLauncherFamily(source) {
@@ -332,6 +403,7 @@ function launcherUriForSource(source, game) {
   if (family === 'ea') return id ? `origin2://game/launch?offerIds=${id}` : null
   if (family === 'ubisoft') return id ? `uplay://launch/${id}/0` : null
   if (family === 'xbox') return `ms-windows-store://search/?query=${title}`
+  if (family === 'amazon') return id ? `amazon-games://play/${id}` : 'amazon-games://'
   return null
 }
 function fallbackLauncherUri(game) {
@@ -341,13 +413,14 @@ function fallbackLauncherUri(game) {
     if (generated) return generated
   }
   const labels = sourceLabelsForGame(game).map((label) => String(label).toLowerCase())
-  const source = labels.find((label) => label.includes('steam') || label.includes('epic') || label.includes('gog') || label.includes('xbox') || label.includes('ea') || label.includes('origin') || label.includes('ubisoft')) || labels[0] || ''
+  const source = labels.find((label) => label.includes('steam') || label.includes('epic') || label.includes('gog') || label.includes('xbox') || label.includes('ea') || label.includes('origin') || label.includes('ubisoft') || label.includes('amazon')) || labels[0] || ''
   if (source.includes('steam')) return null
   if (source.includes('epic')) return 'com.epicgames.launcher://'
   if (source.includes('gog')) return 'goggalaxy://'
   if (source.includes('xbox') || source.includes('microsoft')) return `ms-windows-store://search/?query=${encodeURIComponent(String(game.canonical_title || '').trim())}`
   if (source.includes('ea') || source.includes('origin') || source.includes('electronic arts')) return null
   if (source.includes('ubisoft') || source.includes('uplay')) return null
+  if (source.includes('amazon')) return 'amazon-games://'
   return null
 }
 function gameYear(game) {
@@ -603,6 +676,7 @@ function MetadataProvidersSection({ onRefresh }) {
   const [igdbClientId, setIgdbClientId] = useState('')
   const [igdbClientSecret, setIgdbClientSecret] = useState('')
   const [heroResolution, setHeroResolution] = useState('2.5k')
+  const [preferAnimatedArtwork, setPreferAnimatedArtwork] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [savedNotice, setSavedNotice] = useState(false)
@@ -646,6 +720,7 @@ function MetadataProvidersSection({ onRefresh }) {
       setIgdbClientId(typeof settings.igdbClientId === 'string' ? settings.igdbClientId : '')
       setIgdbClientSecret(typeof settings.igdbClientSecret === 'string' ? settings.igdbClientSecret : '')
       setHeroResolution(typeof settings.heroResolution === 'string' && settings.heroResolution ? settings.heroResolution : '2.5k')
+      setPreferAnimatedArtwork(Boolean(settings.preferAnimatedArtwork))
       setLoading(false)
     }).catch(() => {
       if (active) setLoading(false)
@@ -708,6 +783,7 @@ function MetadataProvidersSection({ onRefresh }) {
         igdbClientId: igdbClientId.trim(),
         igdbClientSecret: igdbClientSecret.trim(),
         heroResolution,
+        preferAnimatedArtwork,
       })
       setSavedNotice(true)
       setTimeout(() => setSavedNotice(false), 3000)
@@ -732,6 +808,7 @@ function MetadataProvidersSection({ onRefresh }) {
         igdbClientId: igdbClientId.trim(),
         igdbClientSecret: igdbClientSecret.trim(),
         heroResolution,
+        preferAnimatedArtwork,
       })
       const res = await api.scraper.syncMetadata?.(steamGridDbApiKey.trim())
       setSyncNotice(`Metadata synced: ${res?.metadataUpdated ?? 0} titles updated${res?.matched ? `, ${res.matched} matched` : ''}.`)
@@ -756,6 +833,7 @@ function MetadataProvidersSection({ onRefresh }) {
         igdbClientId: igdbClientId.trim(),
         igdbClientSecret: igdbClientSecret.trim(),
         heroResolution,
+        preferAnimatedArtwork,
       })
       const res = await api.scraper.runBulkArtworkSync?.(steamGridDbApiKey.trim())
       setSyncNotice(`Artwork synced: ${res?.updated ?? 0} items updated.`)
@@ -776,6 +854,7 @@ function MetadataProvidersSection({ onRefresh }) {
         igdbClientId: igdbClientId.trim(),
         igdbClientSecret: igdbClientSecret.trim(),
         heroResolution,
+        preferAnimatedArtwork,
       })
       const res = await api.scraper.syncMetadataAndArt?.(steamGridDbApiKey.trim())
       const artCount = res?.updated || res?.heroesUpdated || 0
@@ -851,9 +930,30 @@ function MetadataProvidersSection({ onRefresh }) {
               onChange={(e) => setHeroResolution(e.target.value)}
               className="provider-select"
             >
-              <option value="2.5k">2.5K / 1440p (Recommended)</option>
-              <option value="4k">4K (Ultra HD)</option>
+              <option value="720p">720p / Compact (Lowest Storage ~200-400 KB)</option>
+              <option value="1080p">1080p / Full HD (Balanced ~600 KB-1.2 MB)</option>
+              <option value="2.5k">2.5K / 1440p (High Quality - Recommended)</option>
+              <option value="4k">4K / 2160p (Ultra HD - Maximum Quality)</option>
             </select>
+          </div>
+
+          <div className="provider-field-block">
+            <label className="provider-label">
+              <span>Animated Artwork</span>
+              <small>Prefer animated WebP heroes on game details screen (Single hero only, zero library grid lag)</small>
+            </label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
+              <input
+                id="prefer-animated-artwork-toggle"
+                type="checkbox"
+                checked={preferAnimatedArtwork}
+                onChange={(e) => setPreferAnimatedArtwork(e.target.checked)}
+                style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: 'var(--accent, #6366f1)' }}
+              />
+              <label htmlFor="prefer-animated-artwork-toggle" style={{ fontSize: '13px', cursor: 'pointer', userSelect: 'none', color: preferAnimatedArtwork ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                {preferAnimatedArtwork ? 'Enabled (Animated WebP heroes on Game Details)' : 'Disabled (High-res static WebP — ultra-smooth)'}
+              </label>
+            </div>
           </div>
 
           <div className="provider-field-block">
@@ -1008,13 +1108,13 @@ function MetadataProvidersSection({ onRefresh }) {
         </div>
 
         {isBusy && syncProgress?.total > 0 && (
-          <div style={{ marginTop: '14px', width: '100%', background: 'var(--bg-base, #0c0e14)', padding: '12px', borderRadius: '6px', border: '1px solid var(--border-color, #272c38)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-secondary, #cbd5e1)', marginBottom: '6px' }}>
+          <div style={{ marginTop: '14px', width: '100%', background: 'rgba(255, 255, 255, 0.035)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', padding: '14px', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.08)', boxShadow: 'inset 0 1px 1px rgba(255, 255, 255, 0.05)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-secondary, #cbd5e1)', marginBottom: '8px' }}>
               <span style={{ fontWeight: 600 }}>{syncProgress.title ? `Syncing: ${syncProgress.current} / ${syncProgress.total} — ${syncProgress.title}` : (syncProgress.message || 'Processing...')}</span>
               <span style={{ color: 'var(--accent, #d6ff4b)', fontWeight: 700 }}>{Math.round((syncProgress.current / syncProgress.total) * 100)}%</span>
             </div>
-            <div style={{ height: '6px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `${Math.round((syncProgress.current / syncProgress.total) * 100)}%`, background: 'var(--accent, #d6ff4b)', transition: 'width 0.25s ease' }} />
+            <div style={{ height: '6px', background: 'rgba(255,255,255,0.08)', borderRadius: '9999px', overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${Math.round((syncProgress.current / syncProgress.total) * 100)}%`, background: 'var(--accent, #d6ff4b)', boxShadow: '0 0 10px var(--accent-glow)', transition: 'width 0.25s ease' }} />
             </div>
           </div>
         )}
@@ -1164,8 +1264,39 @@ function StatusDot({ tone = 'green' }) { return <span className={cn('status-dot'
 function PlatformBadge({ platform, label }) { return <span className={cn('platform-badge', platformClass(platform))}><span className="platform-mark" />{label || platformLabel(platform)}</span> }
 function PosterImage({ game, className = '', onImageError }) {
   const [failed, setFailed] = useState(false)
-  useEffect(() => setFailed(false), [game.cover_url])
-  return failed || !game.cover_url ? <div className={cn('poster-fallback', className)}><span>{game.canonical_title.slice(0, 1)}</span><strong>{game.canonical_title}</strong><small>{game.developer || 'Local collection'}</small></div> : <img className={className} src={normalizeArtworkUrl(game.cover_url)} alt={`${game.canonical_title} cover`} loading="lazy" decoding="async" onError={() => { setFailed(true); onImageError?.(game.id); }} />
+  const [loaded, setLoaded] = useState(false)
+  const imgRef = useRef(null)
+
+  useEffect(() => {
+    setFailed(false)
+    if (imgRef.current?.complete && imgRef.current.naturalWidth > 0) {
+      setLoaded(true)
+    } else {
+      setLoaded(false)
+    }
+  }, [game.cover_url])
+
+  return failed || !game.cover_url ? (
+    <div className={cn('poster-fallback', className)}>
+      <span>{game.canonical_title.slice(0, 1)}</span>
+      <strong>{game.canonical_title}</strong>
+      <small>{game.developer || 'Local collection'}</small>
+    </div>
+  ) : (
+    <img
+      ref={imgRef}
+      className={cn(className, loaded && 'is-loaded')}
+      src={normalizeArtworkUrl(game.cover_url)}
+      alt={`${game.canonical_title} cover`}
+      loading="eager"
+      decoding="sync"
+      onLoad={() => setLoaded(true)}
+      onError={() => {
+        setFailed(true)
+        onImageError?.(game.id)
+      }}
+    />
+  )
 }
 class ErrorBoundary extends Component {
   state = { hasError: false, error: null }
@@ -1173,11 +1304,49 @@ class ErrorBoundary extends Component {
   componentDidCatch(error, info) { console.error('[logpile renderer boundary]', error, info) }
   render() {
     if (!this.state.hasError) return this.props.children
-    return this.props.fallback || <div className="scan-message scan-error grid-error-boundary"><AlertTriangle size={15} /><span>Some library cards could not be rendered.</span><button className="outline-button small-button" onClick={() => this.setState({ hasError: false, error: null })}>Retry grid</button></div>
+    if (typeof this.props.fallback === 'function') {
+      return this.props.fallback({
+        error: this.state.error,
+        reset: () => this.setState({ hasError: false, error: null })
+      })
+    }
+    if (this.props.fallback !== undefined) {
+      return this.props.fallback
+    }
+    return (
+      <div className="scan-message scan-error grid-error-boundary">
+        <AlertTriangle size={15} />
+        <span>Some library cards could not be rendered.</span>
+        {this.state.error?.message ? <small style={{ opacity: 0.7, margin: '0 4px' }}>({this.state.error.message})</small> : null}
+        <button className="outline-button small-button" onClick={() => this.setState({ hasError: false, error: null })}>Retry grid</button>
+      </div>
+    )
   }
 }
 
-function TabErrorFallback({ onBack }) { return <div className="tab-error-fallback"><AlertTriangle size={22} /><h2>This section could not be rendered</h2><p>The library is still available. Return to the main collection and try the section again.</p><button className="outline-button" onClick={onBack}><LayoutGrid size={14} /> Back to Library</button></div> }
+function TabErrorFallback({ error, onBack, reset }) {
+  const handleRecover = () => {
+    reset?.()
+    onBack?.()
+  }
+
+  return (
+    <div className="tab-error-fallback">
+      <AlertTriangle size={24} style={{ color: '#ef4444' }} />
+      <h2>This section could not be rendered</h2>
+      <p>The library is still available. Return to the main collection and try the section again.</p>
+      {error?.message && (
+        <details className="error-details-box" style={{ maxWidth: 640, margin: '14px auto', textAlign: 'left', background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#fca5a5' }}>
+          <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Error details: {error.message}</summary>
+          <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', marginTop: 8, fontSize: 11, color: '#cbd5e1' }}>{error.stack || error.message}</pre>
+        </details>
+      )}
+      <button className="outline-button" onClick={handleRecover}>
+        <LayoutGrid size={14} /> Back to Library
+      </button>
+    </div>
+  )
+}
 
 function GameEditorModal({ game, onClose, onSaved }) {
   const [currentGame, setCurrentGame] = useState(game)
@@ -1433,6 +1602,7 @@ function GameCard({ game, onLaunch, onSelect, onHideGame, onContextMenu, compact
       <div className="poster-art">
         {selectMode ? (
           <button
+            type="button"
             className={cn('card-select-toggle', selected && 'active')}
             aria-label={`${selected ? 'Deselect' : 'Select'} ${game.canonical_title}`}
             onClick={(event) => { event.stopPropagation(); onToggleSelect?.(game) }}
@@ -1440,72 +1610,73 @@ function GameCard({ game, onLaunch, onSelect, onHideGame, onContextMenu, compact
             <Check size={13} />
           </button>
         ) : null}
+
+        {game.is_favorite ? (
+          <div className="poster-favorite-badge" title="Favorite title">
+            <Star size={11} fill="currentColor" />
+          </div>
+        ) : null}
+
         <PosterImage game={game} className="poster-image" onImageError={onImageError} />
         <div className="poster-gradient" />
-        <div className="poster-top">
-          <span className={cn('drive-pill', game.is_installed ? 'drive-online' : 'drive-ready')}>
-            {game.is_installed ? `${cleanDriveLabel(game.drive_letter)} · ${formatGb(game.install_size_gb)}` : 'READY TO INSTALL'}
-          </span>
-          <span
-            className={cn('poster-status-glyph', game.is_installed ? 'is-installed' : 'is-ready')}
-            title={game.is_installed ? 'Installed and ready to play' : 'Ready to install'}
-          >
-            {game.is_installed ? <Check size={11} strokeWidth={3} /> : <Download size={10} strokeWidth={2.5} />}
-          </span>
-          {game.is_favorite ? <Star size={14} fill="currentColor" /> : null}
-        </div>
-        <div className="poster-bottom">
-          <span className={cn('backlog-label', `status-pill-badge-${currentStatus}`)}>{statusLabel}</span>
-          <span>{formatPlayTime(game.play_time_seconds)}</span>
-        </div>
-        {/* Dynamic Theatrical Hover/Focus Overlay for Cinematic Theme */}
-        <div className="poster-cinematic-overlay">
-          <strong className="poster-cinematic-title" title={game.canonical_title}>
-            {game.canonical_title}
-          </strong>
-          <div className="poster-cinematic-meta">
-            <span>{formatPlayTime(game.play_time_seconds)}</span>
-            <span className="poster-cinematic-dot">·</span>
-            <span className={cn('poster-cinematic-status', game.is_installed ? 'text-installed' : 'text-ready')}>
-              {game.is_installed ? 'Installed' : 'Ready'}
-            </span>
+
+        {/* Machined Optical Hover Tray */}
+        <div className="poster-drawer">
+          <div className="drawer-header-row">
+            <div className="drawer-badges">
+              {storeLabels.map((label) => (
+                <PlatformBadge key={label} platform={normalizePlatform(label)} label={label} />
+              ))}
+            </div>
+            <div className="drawer-telemetry">
+              <span className={cn('drawer-status-pip', `pip-${currentStatus}`)} />
+              <span className="drawer-status-text">
+                {game.is_installed ? 'Installed' : 'Ready'}
+              </span>
+              {game.play_time_seconds > 0 ? (
+                <span className="drawer-playtime">{formatPlayTime(game.play_time_seconds)}</span>
+              ) : game.install_size_gb ? (
+                <span className="drawer-playtime">{formatGb(game.install_size_gb)}</span>
+              ) : null}
+            </div>
           </div>
-          <div className="poster-cinematic-actions">
+          <div className="drawer-actions">
             <button
               type="button"
-              className="poster-cinematic-play-btn"
-              onClick={(event) => { event.stopPropagation(); onLaunch(game) }}
+              className="drawer-action"
+              onClick={(event) => {
+                event.stopPropagation()
+                onLaunch(game)
+              }}
               title={game.is_installed ? `Play ${game.canonical_title}` : `Install via ${storeLabels[0] || 'store'}`}
             >
-              {game.is_installed ? <><Play size={11} fill="currentColor" /> Play</> : <><Download size={11} /> Install</>}
+              {game.is_installed ? (
+                <>
+                  <Play size={12} fill="currentColor" /> Play
+                </>
+              ) : (
+                <>
+                  <Download size={12} /> Install
+                </>
+              )}
             </button>
             <button
               type="button"
-              className="poster-cinematic-icon-btn"
+              className="drawer-icon-action"
               title="Hide from library"
               aria-label={`Hide ${game.canonical_title} from library`}
-              onClick={(event) => { event.stopPropagation(); onHideGame?.(game) }}
+              onClick={(event) => {
+                event.stopPropagation()
+                onHideGame?.(game)
+              }}
             >
               <EyeOff size={13} />
             </button>
           </div>
         </div>
-        <div className="poster-drawer">
-          <div className="drawer-badges">
-            {storeLabels.map((label) => <PlatformBadge key={label} platform={normalizePlatform(label)} label={label} />)}
-          </div>
-          <div className="drawer-actions">
-            <button className="drawer-action" onClick={(event) => { event.stopPropagation(); onLaunch(game) }}>
-              {game.is_installed ? <><Play size={13} fill="currentColor" /> Play</> : <><Download size={13} /> Install via {storeLabels[0] || platformLabel(platforms[0] || 'store')}</>}
-            </button>
-            <button className="drawer-icon-action" title="Hide from library" aria-label={`Hide ${game.canonical_title} from library`} onClick={(event) => { event.stopPropagation(); onHideGame?.(game) }}>
-              <EyeOff size={14} />
-            </button>
-          </div>
-        </div>
       </div>
       <div className="poster-caption">
-        <strong>{game.canonical_title}</strong>
+        <strong title={game.canonical_title}>{game.canonical_title}</strong>
         <small>{game.is_utility ? 'Utility tool' : game.developer || 'Unknown developer'}</small>
       </div>
     </article>
@@ -1566,7 +1737,7 @@ function ScanImportPanel({ open, onClose, onRefresh }) {
         <div className="scan-action-grid">
           <button className="scan-action-card" disabled={running} onClick={() => run(() => api.scanner.scanAll())}>
             <span className="scan-action-icon scan-lime"><ScanLine size={21} /></span>
-            <span><strong>Scan local drives</strong><small>Steam · Epic Games · GOG Galaxy</small></span>
+            <span><strong>Scan local drives</strong><small>Steam · Epic Games · GOG · Amazon Games</small></span>
             <ChevronDown className="action-arrow" size={15} />
           </button>
           <button className="scan-action-card" disabled={running} onClick={importViaPicker}>
@@ -2294,52 +2465,368 @@ const LAYOUT_THEMES = [
   { value: 'competitive', label: '🏆 Competitive', icon: Trophy },
 ]
 
-function ThemeSelector({ themeKey, mode, setThemeKey, setMode }) {
-  const themeOptions = useMemo(
-    () =>
-      THEME_KEYS.map((key) => ({
-        value: key,
-        label: THEMES[key].name,
-        colorDot: THEMES[key].dark[6],
-      })),
-    []
-  )
-
+function SanctuaryControls({ layoutTheme, setLayoutTheme }) {
   return (
-    <div className="theme-controls">
-      <CustomDropdown
-        value={themeKey}
-        onChange={setThemeKey}
-        options={themeOptions}
-        icon={Palette}
-        className="theme-dropdown"
-        menuClassName="theme-dropdown-menu"
-        title="Select color palette"
-      />
-      <button
-        type="button"
-        className="mode-toggle"
-        aria-label="Toggle light and dark mode"
-        onClick={() => setMode(mode === 'dark' ? 'light' : 'dark')}
-      >
-        {mode === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
-      </button>
+    <div className="sanctuary-controls-group">
+      <div className="sanctuary-capsule">
+        <CustomDropdown
+          value={layoutTheme}
+          onChange={setLayoutTheme}
+          options={LAYOUT_THEMES}
+          icon={Sparkles}
+          className="capsule-trigger capsule-layout"
+          menuClassName="sanctuary-dropdown-menu"
+          title="Select visual layout theme"
+        />
+      </div>
     </div>
   )
 }
 
-function LayoutThemeSelector({ layoutTheme, setLayoutTheme }) {
-  return (
-    <div className="layout-theme-controls">
-      <CustomDropdown
-        value={layoutTheme}
-        onChange={setLayoutTheme}
-        options={LAYOUT_THEMES}
-        icon={Sparkles}
-        className="layout-theme-dropdown"
-        menuClassName="layout-theme-dropdown-menu"
-        title="Select visual layout theme"
+function ShelfCardArt({ game }) {
+  const [heroFailed, setHeroFailed] = useState(false)
+
+  useEffect(() => {
+    setHeroFailed(false)
+  }, [game?.id, game?.hero_url])
+
+  const heroUrl = !heroFailed && game?.hero_url && String(game.hero_url).trim() ? normalizeArtworkUrl(game.hero_url) : null
+  const coverUrl = game?.cover_url && String(game.cover_url).trim() ? normalizeArtworkUrl(game.cover_url) : null
+
+  if (heroUrl) {
+    return (
+      <img
+        src={heroUrl}
+        alt={game?.canonical_title || 'Game'}
+        className="shelf-card-img"
+        loading="eager"
+        decoding="sync"
+        onError={() => setHeroFailed(true)}
       />
+    )
+  }
+
+  if (coverUrl) {
+    return (
+      <div className="shelf-card-art-fallback-wrap">
+        <div
+          className="shelf-card-blur-backdrop"
+          style={{ backgroundImage: `url("${coverUrl}")` }}
+          aria-hidden="true"
+        />
+        <img
+          src={coverUrl}
+          alt={game?.canonical_title || 'Game'}
+          className="shelf-card-img shelf-card-img-contain"
+          loading="eager"
+          decoding="sync"
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div className="shelf-card-fallback">{String(game?.canonical_title || '').slice(0, 1) || '?'}</div>
+  )
+}
+
+function HomeSpotlightAndShelf({
+  games,
+  onLaunch,
+  onSelect,
+  layoutTheme,
+  isCollapsed = false,
+  onToggleCollapse,
+}) {
+  const spotlightCandidates = useMemo(() => {
+    if (!games || !games.length) return []
+    const valid = games.filter((g) => g.is_installed && !g.is_utility && !g.is_dlc && (g.hero_url || g.cover_url))
+    if (!valid.length) return []
+
+    return [...valid].sort((a, b) => {
+      const aTime = Number(a.play_time_seconds || 0)
+      const bTime = Number(b.play_time_seconds || 0)
+      if (aTime !== bTime) return bTime - aTime
+
+      const aLast = a.last_played ? new Date(a.last_played).getTime() : 0
+      const bLast = b.last_played ? new Date(b.last_played).getTime() : 0
+      if (aLast !== bLast) return bLast - aLast
+
+      const aHero = a.hero_url ? 1 : 0
+      const bHero = b.hero_url ? 1 : 0
+      return bHero - aHero
+    }).slice(0, 5)
+  }, [games])
+
+  const [activeIndex, setActiveIndex] = useState(0)
+  const [isHovered, setIsHovered] = useState(false)
+
+  useEffect(() => {
+    if (isHovered || spotlightCandidates.length <= 1) return
+    const timer = setInterval(() => {
+      setActiveIndex((prev) => (prev + 1) % spotlightCandidates.length)
+    }, 7500)
+    return () => clearInterval(timer)
+  }, [isHovered, spotlightCandidates.length])
+
+  const featured = spotlightCandidates.length ? spotlightCandidates[activeIndex % spotlightCandidates.length] : null
+
+  const suggestedGames = useMemo(() => {
+    if (!games || !games.length || !featured) return []
+    const nonFeatured = games.filter((g) => g.is_installed && !g.is_utility && !g.is_dlc && g.id !== featured.id && (g.cover_url || g.hero_url))
+    if (!nonFeatured.length) return []
+
+    return [...nonFeatured].sort((a, b) => {
+      const aInst = a.is_installed ? 1 : 0
+      const bInst = b.is_installed ? 1 : 0
+      if (aInst !== bInst) return bInst - aInst
+
+      const aLast = a.last_played ? new Date(a.last_played).getTime() : 0
+      const bLast = b.last_played ? new Date(b.last_played).getTime() : 0
+      if (aLast !== bLast) return bLast - aLast
+
+      const aTime = Number(a.play_time_seconds || 0)
+      const bTime = Number(b.play_time_seconds || 0)
+      return bTime - aTime
+    }).slice(0, 6)
+  }, [games, featured?.id])
+
+  if (!spotlightCandidates.length || !featured) return null
+
+  const heroArt = featured.hero_url ? normalizeArtworkUrl(featured.hero_url) : (featured.cover_url ? normalizeArtworkUrl(featured.cover_url) : null)
+  const genres = String(featured.genres || featured.genre || '').split(',').map((g) => g.trim()).filter(Boolean)
+  const primaryGenre = genres[0] || 'Action'
+  const platforms = sourcePlatforms(featured.sources)
+  const mainPlatform = platforms[0] || normalizePlatform(featured.source) || 'custom'
+  const platformName = platformLabel(mainPlatform)
+
+  return (
+    <div className={cn("home-hero-container", isCollapsed && "is-collapsed")}>
+      {/* 1. Interactive Spotlight Hero Banner or Collapsed Ribbon */}
+      {isCollapsed ? (
+        <div className="home-spotlight-collapsed-ribbon">
+          <div className="collapsed-ribbon-left">
+            <span className="pulse-dot" />
+            <span className="collapsed-ribbon-tag">SPOTLIGHT</span>
+            <strong className="collapsed-ribbon-title">{featured.canonical_title}</strong>
+            <span className="collapsed-ribbon-platform">{platformName}</span>
+          </div>
+          <div className="collapsed-ribbon-actions">
+            {featured.is_installed && (
+              <button
+                type="button"
+                className="collapsed-ribbon-play"
+                onClick={() => onLaunch(featured)}
+              >
+                <Play size={12} fill="currentColor" />
+                <span>Play</span>
+              </button>
+            )}
+            <button
+              type="button"
+              className="collapsed-ribbon-toggle"
+              onClick={onToggleCollapse}
+              title="Expand Spotlight (Ctrl+H)"
+            >
+              <ChevronDown size={14} />
+              <span>Show Hero (Ctrl+H)</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        <section
+          className="home-spotlight"
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
+          <div
+            className="home-spotlight-bg"
+            key={featured.id}
+            style={{ backgroundImage: heroArt ? `url("${heroArt}")` : undefined }}
+          />
+          <div className="home-spotlight-scrim" />
+          <div className="home-spotlight-vignette" />
+
+          <div className="home-spotlight-body">
+            <div className="home-spotlight-content">
+              <div className="home-spotlight-eyebrow">
+                <span className="pulse-dot" />
+                <span>
+                  {layoutTheme === 'kinetic' ? '// SANCTUARY DISPATCH //' :
+                   layoutTheme === 'competitive' ? 'RANKED SPOTLIGHT' :
+                   layoutTheme === 'atmospheric' ? 'THE SANCTUARY ARCHIVE' :
+                   layoutTheme === 'playful' ? 'READY TO PLAY' :
+                   'SANCTUARY SPOTLIGHT'}
+                </span>
+              </div>
+
+              <h2 className="home-spotlight-title" title={featured.canonical_title}>
+                {featured.canonical_title}
+              </h2>
+
+              <div className="home-spotlight-chips">
+                <span className="spotlight-chip spotlight-platform-chip">
+                  <SourceIcon source={mainPlatform} size={12} />
+                  <span>{platformName}</span>
+                </span>
+
+                {featured.is_installed ? (
+                  <span className="spotlight-chip spotlight-status-chip is-installed">
+                    <Check size={11} />
+                    <span>Installed & Ready</span>
+                  </span>
+                ) : (
+                  <span className="spotlight-chip spotlight-status-chip is-ready">
+                    <span>In Library</span>
+                  </span>
+                )}
+
+                {featured.play_time_seconds > 0 && (
+                  <span className="spotlight-chip spotlight-time-chip">
+                    <Clock size={11} />
+                    <span>{formatPlayTime(featured.play_time_seconds)}</span>
+                  </span>
+                )}
+
+                {primaryGenre && (
+                  <span className="spotlight-chip spotlight-genre-chip">
+                    <span>{primaryGenre}</span>
+                  </span>
+                )}
+              </div>
+
+              <p className="home-spotlight-desc">
+                {featured.description || featured.synopsis || (featured.is_installed ? 'Installed locally on your high-speed drive. Ready for immediate launch.' : 'Available in your library collection. Jump in to view full media, achievements, and stats.')}
+              </p>
+
+              <div className="home-spotlight-actions">
+                {featured.is_installed ? (
+                  <button
+                    type="button"
+                    className="spotlight-btn-primary"
+                    onClick={() => onLaunch(featured)}
+                  >
+                    <Play size={14} fill="currentColor" />
+                    <span>Play Now</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="spotlight-btn-primary"
+                    onClick={() => onSelect(featured, 'spotlight')}
+                  >
+                    <Sparkles size={14} />
+                    <span>Inspect Title</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  className="spotlight-btn-secondary"
+                  onClick={() => onSelect(featured, 'spotlight')}
+                >
+                  <Info size={13} />
+                  <span>Game Details</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Interactive Switcher Rail */}
+            {spotlightCandidates.length > 1 && (
+              <div className="home-spotlight-switcher" aria-label="Spotlight carousel">
+                {spotlightCandidates.map((game, idx) => {
+                  const isActive = idx === (activeIndex % spotlightCandidates.length)
+                  const thumbImg = game.cover_url ? normalizeArtworkUrl(game.cover_url) : (game.hero_url ? normalizeArtworkUrl(game.hero_url) : null)
+                  return (
+                    <button
+                      key={game.id}
+                      type="button"
+                      className={cn("spotlight-switch-pill", isActive && "is-active")}
+                      onClick={() => setActiveIndex(idx)}
+                      title={game.canonical_title}
+                    >
+                      <div className="switch-thumb-wrap">
+                        {thumbImg ? (
+                          <img src={thumbImg} alt="" className="switch-thumb-img" loading="eager" decoding="sync" />
+                        ) : (
+                          <div className="switch-thumb-fallback">{String(game?.canonical_title || '').slice(0, 1) || '?'}</div>
+                        )}
+                      </div>
+                      <div className="switch-info">
+                        <span className="switch-name">{game.canonical_title}</span>
+                        <small className="switch-sub">
+                          {game.is_installed ? (game.play_time_seconds > 0 ? formatPlayTime(game.play_time_seconds) : 'Installed') : 'In Library'}
+                        </small>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* 2. Suggested Games Shelf */}
+      {!isCollapsed && suggestedGames.length >= 2 && (
+        <section className="home-shelf-section">
+          <div className="shelf-header">
+            <div className="shelf-title-wrap">
+              <div className="shelf-eyebrow">
+                <Gamepad2 size={13} />
+                <span>SUGGESTED TITLES</span>
+              </div>
+              <h3 className="shelf-title">Jump Back In</h3>
+            </div>
+            <span className="shelf-badge">{suggestedGames.length} titles ready</span>
+          </div>
+
+          <div className="shelf-track">
+            {suggestedGames.map((game) => {
+              const pForm = sourcePlatforms(game.sources)[0] || normalizePlatform(game.source)
+              return (
+                <div
+                  key={game.id}
+                  className="shelf-card"
+                  onClick={() => onSelect(game, 'shelf')}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === 'Enter') onSelect(game, 'shelf') }}
+                >
+                  <div className="shelf-card-art">
+                    <ShelfCardArt game={game} />
+                    <button
+                      type="button"
+                      className="shelf-quick-launch"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onLaunch(game)
+                      }}
+                      title={`Launch ${game.canonical_title}`}
+                    >
+                      <Play size={14} fill="currentColor" />
+                    </button>
+                  </div>
+                  <div className="shelf-card-info">
+                    <h4 className="shelf-card-name" title={game.canonical_title}>
+                      {game.canonical_title}
+                    </h4>
+                    <div className="shelf-card-meta">
+                      <span className="shelf-card-time">
+                        {game.play_time_seconds > 0 ? formatPlayTime(game.play_time_seconds) : (game.is_installed ? 'Installed' : 'Ready')}
+                      </span>
+                      <span className="shelf-card-platform">
+                        <SourceIcon source={pForm} size={11} />
+                        <span>{platformLabel(pForm)}</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      )}
     </div>
   )
 }
@@ -2367,17 +2854,26 @@ function VirtualGrid({
     const update = () => {
       const width = gridRef.current?.clientWidth || window.innerWidth
       setColumns(width >= 1180 ? 5 : width >= 880 ? 4 : width >= 600 ? 3 : 2)
-      setScrollMargin(gridRef.current?.offsetTop || 0)
+      const scrollEl = scrollElementRef?.current
+      if (gridRef.current && scrollEl) {
+        const gridRect = gridRef.current.getBoundingClientRect()
+        const scrollRect = scrollEl.getBoundingClientRect()
+        const margin = Math.round(gridRect.top - scrollRect.top + scrollEl.scrollTop)
+        setScrollMargin(Math.max(0, margin))
+      } else {
+        setScrollMargin(gridRef.current?.offsetTop || 0)
+      }
     }
     update()
     const observer = new ResizeObserver(update)
     if (gridRef.current) observer.observe(gridRef.current)
+    if (gridRef.current?.parentElement) observer.observe(gridRef.current.parentElement)
     window.addEventListener('resize', update)
     return () => {
       observer.disconnect()
       window.removeEventListener('resize', update)
     }
-  }, [])
+  }, [scrollElementRef])
 
   const rows = useMemo(() => {
     const next = []
@@ -2434,8 +2930,28 @@ function VirtualGrid({
     return () => cancelAnimationFrame(raf)
   }, [initialScrollTop, restoreGameId, columns, games, scrollElementRef, virtualizer])
 
+  const [isScrolling, setIsScrolling] = useState(false)
+  const scrollTimeoutRef = useRef(null)
+
+  useEffect(() => {
+    const el = scrollElementRef?.current
+    if (!el) return
+    const handleScroll = () => {
+      setIsScrolling(true)
+      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current)
+      scrollTimeoutRef.current = setTimeout(() => {
+        setIsScrolling(false)
+      }, 150)
+    }
+    el.addEventListener('scroll', handleScroll, { passive: true })
+    return () => {
+      el.removeEventListener('scroll', handleScroll)
+      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current)
+    }
+  }, [scrollElementRef])
+
   return (
-    <div ref={gridRef} className="virtual-grid-scroll">
+    <div ref={gridRef} className={cn("virtual-grid-scroll", isScrolling && "is-scrolling")}>
       <div className="virtual-grid-inner" style={{ height: `${virtualizer.getTotalSize()}px` }}>
         {virtualizer.getVirtualItems().map((row) => (
           <div
@@ -2448,7 +2964,7 @@ function VirtualGrid({
               gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
             }}
           >
-            {rows[row.index].map((game) => (
+            {rows[row.index]?.map((game) => (
               <GameCard
                 key={game.id}
                 game={game}
@@ -2736,6 +3252,10 @@ function SanctuaryStatusDropdown({ game, onStatusChange }) {
   const updatePosition = useCallback(() => {
     if (!triggerRef.current) return
     const rect = triggerRef.current.getBoundingClientRect()
+    if (rect.bottom < 30 || rect.top > window.innerHeight) {
+      setOpen(false)
+      return
+    }
     const menuEstimatedHeight = 240
     const spaceBelow = window.innerHeight - rect.bottom
     const spaceAbove = rect.top
@@ -2962,8 +3482,65 @@ function HeroView({
   const [isScrolled, setIsScrolled] = useState(false)
   const [launchMenuOpen, setLaunchMenuOpen] = useState(false)
   const [moreMenuOpen, setMoreMenuOpen] = useState(false)
+  const [launchMenuPlacement, setLaunchMenuPlacement] = useState('up')
+  const [moreMenuPlacement, setMoreMenuPlacement] = useState('up')
   const launchMenuRef = useRef(null)
   const moreMenuRef = useRef(null)
+
+  const updateMenuPlacements = useCallback(() => {
+    if (launchMenuOpen && launchMenuRef.current) {
+      const rect = launchMenuRef.current.getBoundingClientRect()
+      if (rect.bottom < 50 || rect.top > window.innerHeight - 20) {
+        setLaunchMenuOpen(false)
+        return
+      }
+      const spaceBelow = window.innerHeight - rect.bottom
+      const spaceAbove = rect.top - 50
+      const estHeight = 220
+      if (spaceAbove >= estHeight && spaceBelow < estHeight) {
+        setLaunchMenuPlacement('up')
+      } else if (spaceBelow >= estHeight) {
+        setLaunchMenuPlacement('down')
+      } else {
+        setLaunchMenuPlacement(spaceBelow >= spaceAbove ? 'down' : 'up')
+      }
+    }
+
+    if (moreMenuOpen && moreMenuRef.current) {
+      const rect = moreMenuRef.current.getBoundingClientRect()
+      if (rect.bottom < 50 || rect.top > window.innerHeight - 20) {
+        setMoreMenuOpen(false)
+        return
+      }
+      const spaceBelow = window.innerHeight - rect.bottom
+      const spaceAbove = rect.top - 50
+      const estHeight = 360
+      if (spaceAbove >= estHeight && spaceBelow < estHeight) {
+        setMoreMenuPlacement('up')
+      } else if (spaceBelow >= estHeight) {
+        setMoreMenuPlacement('down')
+      } else {
+        setMoreMenuPlacement(spaceBelow >= spaceAbove ? 'down' : 'up')
+      }
+    }
+  }, [launchMenuOpen, moreMenuOpen])
+
+  useLayoutEffect(() => {
+    if (launchMenuOpen || moreMenuOpen) {
+      updateMenuPlacements()
+    }
+  }, [launchMenuOpen, moreMenuOpen, updateMenuPlacements])
+
+  useEffect(() => {
+    if (!launchMenuOpen && !moreMenuOpen) return
+    const handleScrollOrResize = () => updateMenuPlacements()
+    window.addEventListener('resize', handleScrollOrResize)
+    window.addEventListener('scroll', handleScrollOrResize, true)
+    return () => {
+      window.removeEventListener('resize', handleScrollOrResize)
+      window.removeEventListener('scroll', handleScrollOrResize, true)
+    }
+  }, [launchMenuOpen, moreMenuOpen, updateMenuPlacements])
 
   const [isIdle, setIsIdle] = useState(false)
   const isIdleRef = useRef(false)
@@ -2974,11 +3551,6 @@ function HeroView({
   }, [isIdle, onIdleChange])
 
   useEffect(() => {
-    if (!isCinematicTheme) {
-      if (isIdle) setIsIdle(false)
-      return
-    }
-
     let timer = null
 
     const resetIdle = () => {
@@ -3059,8 +3631,20 @@ function HeroView({
         setMoreMenuOpen(false)
       }
     }
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        e.stopPropagation()
+        setLaunchMenuOpen(false)
+        setMoreMenuOpen(false)
+      }
+    }
     window.addEventListener('pointerdown', handleOutside)
-    return () => window.removeEventListener('pointerdown', handleOutside)
+    window.addEventListener('keydown', handleEscape, true)
+    return () => {
+      window.removeEventListener('pointerdown', handleOutside)
+      window.removeEventListener('keydown', handleEscape, true)
+    }
   }, [launchMenuOpen, moreMenuOpen])
 
   useEffect(() => {
@@ -3092,7 +3676,7 @@ function HeroView({
   const logoArtwork = activeGame.logo_url ? normalizeArtworkUrl(activeGame.logo_url) : null
   const detailHero = activeGame.hero_url ? normalizeArtworkUrl(activeGame.hero_url) : null
   const detailCover = activeGame.cover_url ? normalizeArtworkUrl(activeGame.cover_url) : null
-  const detailBackdropUrl = detailHero || detailCover
+  const detailBackdropUrl = detailHero
 
   const steamSource = (activeGame.sources || []).find(
     (s) => String(s.platform || '').toLowerCase().includes('steam') && s.platformGameId
@@ -3208,18 +3792,25 @@ function HeroView({
   // Pre-title: Clean studio & platform branding
   const primaryPlatform = platforms[0] || 'custom'
   const pub = (activeGame.publisher || '').trim()
-  const dev = (activeGame.developer || '').trim()
+  const rawDev = (activeGame.developer || '').trim()
+  const primaryDev = useMemo(() => {
+    if (!rawDev) return ''
+    const devList = rawDev.split(',').map((s) => s.trim()).filter(Boolean)
+    return devList[0] || rawDev
+  }, [rawDev])
 
   const billingCredit = useMemo(() => {
     const parts = []
-    if (activeGame.developer) parts.push(activeGame.developer.trim())
-    if (activeGame.publisher && activeGame.publisher.trim().toLowerCase() !== (activeGame.developer || '').trim().toLowerCase()) {
-      parts.push(activeGame.publisher.trim())
+    if (primaryDev) parts.push(primaryDev)
+    if (pub) {
+      if (!primaryDev || pub.toLowerCase() !== primaryDev.toLowerCase()) {
+        parts.push(pub)
+      }
     }
     const y = gameYear(activeGame)
     if (y) parts.push(y)
     return parts.map((s) => s.toUpperCase()).join('   ·   ')
-  }, [activeGame])
+  }, [primaryDev, pub, activeGame])
 
   const statusCredit = useMemo(() => {
     const parts = []
@@ -3254,209 +3845,6 @@ function HeroView({
     >
       {/* Tier 1: The IMAX Poster View (100vh stage) */}
       <div className="cinematic-hero-stage">
-        {/* Top Navigation */}
-        <div className={cn("cinematic-top-nav", isScrolled && "is-docked")}>
-          <div className="cinematic-nav-capsule">
-            <button type="button" className="cinematic-back-button" onClick={onBack} title="Return to Collector grid">
-              <ArrowLeft size={14} />
-              <span>Back to Library</span>
-            </button>
-          </div>
-
-          <div className="cinematic-top-actions">
-            {/* Favorite / Bookmark Button */}
-            <button
-              type="button"
-              className={cn('cinematic-top-btn', Boolean(activeGame.is_favorite) && 'active')}
-              title={activeGame.is_favorite ? 'Favorited · Click to remove' : 'Add to Favorites'}
-              onClick={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                onToggleFavorite?.(activeGame)
-              }}
-            >
-              <Bookmark size={13} fill={Boolean(activeGame.is_favorite) ? 'currentColor' : 'none'} />
-              <span>{activeGame.is_favorite ? 'Favorited' : 'Favorite'}</span>
-            </button>
-
-            {/* In-Game Captures & Gallery Shortcut Button */}
-            <button
-              type="button"
-              className={cn('cinematic-top-btn', activeTab === 'screenshots' && 'active')}
-              title={localCaptures.length > 0 ? `View ${localCaptures.length} Local Captures` : 'View In-Game Captures'}
-              onClick={() => {
-                setActiveTab('screenshots')
-                const dossierEl = document.querySelector('.cinematic-dossier-section')
-                dossierEl?.scrollIntoView({ behavior: 'smooth' })
-              }}
-            >
-              <Camera size={13} />
-              <span>Captures{localCaptures.length > 0 ? ` (${localCaptures.length})` : ''}</span>
-            </button>
-
-            {/* Edit Details */}
-            {onEdit ? (
-              <button
-                type="button"
-                className="cinematic-top-btn"
-                onClick={() => onEdit(activeGame)}
-                title="Edit game metadata"
-              >
-                <Settings2 size={13} />
-                <span>Edit Details</span>
-              </button>
-            ) : null}
-
-            {/* More Options Dropdown */}
-            <div className="hero-action-anchor" ref={moreMenuRef} style={moreMenuOpen ? { zIndex: 100 } : undefined}>
-              <button
-                type="button"
-                className={cn('cinematic-top-btn', moreMenuOpen && 'active')}
-                title="More options"
-                onClick={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  setMoreMenuOpen((prev) => !prev)
-                  setLaunchMenuOpen(false)
-                }}
-              >
-                <MoreHorizontal size={14} />
-              </button>
-
-              {moreMenuOpen && (
-                <div className="hero-dropdown-menu hero-more-menu">
-                  <button
-                    type="button"
-                    className="hero-menu-item"
-                    onClick={() => {
-                      setMoreMenuOpen(false)
-                      onEdit?.(activeGame)
-                    }}
-                  >
-                    <SlidersHorizontal size={14} />
-                    <span>Edit Metadata & Artwork</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    className="hero-menu-item"
-                    onClick={async () => {
-                      setMoreMenuOpen(false)
-                      try {
-                        const updated = await api.games.chooseAndSaveArtwork(activeGame.id, 'cover')
-                        if (updated) onGameUpdated?.(updated)
-                      } catch (err) {
-                        console.warn(err)
-                      }
-                    }}
-                  >
-                    <ImagePlus size={14} />
-                    <span>Upload Custom Cover Poster</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    className="hero-menu-item"
-                    onClick={async () => {
-                      setMoreMenuOpen(false)
-                      try {
-                        const updated = await api.games.chooseAndSaveArtwork(activeGame.id, 'hero')
-                        if (updated) onGameUpdated?.(updated)
-                      } catch (err) {
-                        console.warn(err)
-                      }
-                    }}
-                  >
-                    <UploadCloud size={14} />
-                    <span>Upload Custom Hero Banner</span>
-                  </button>
-
-                  <div className="hero-menu-divider" />
-
-                  {/* Sanctuary Status Quick Selector */}
-                  <div className="hero-menu-header">Sanctuary Status</div>
-                  <div className="hero-backlog-chips">
-                    {[
-                      { key: 'playing', label: 'Playing' },
-                      { key: 'paused', label: 'On Pause' },
-                      { key: 'completed', label: 'Completed' },
-                      { key: 'unplayed', label: 'Unplayed' }
-                    ].map((item) => {
-                      const cur = String(activeGame.status || (activeGame.backlog_status === 'dropped' ? 'paused' : (activeGame.backlog_status || 'unplayed'))).toLowerCase()
-                      return (
-                        <button
-                          key={item.key}
-                          type="button"
-                          className={cn('hero-backlog-chip', cur === item.key && 'active')}
-                          onClick={() => {
-                            setMoreMenuOpen(false)
-                            if (onUpdateStatus) onUpdateStatus(activeGame, item.key)
-                            else onUpdateBacklog?.(activeGame, item.key)
-                          }}
-                        >
-                          {item.label}
-                        </button>
-                      )
-                    })}
-                  </div>
-
-                  <div className="hero-menu-divider" />
-
-                  {/* Move Category */}
-                  <div className="hero-menu-header">Move Category</div>
-                  <button
-                    type="button"
-                    className="hero-menu-item"
-                    onClick={() => {
-                      setMoreMenuOpen(false)
-                      onMoveCategory?.(activeGame, 'main')
-                    }}
-                  >
-                    <LayoutGrid size={14} />
-                    <span>Move to Main Games</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="hero-menu-item"
-                    onClick={() => {
-                      setMoreMenuOpen(false)
-                      onMoveCategory?.(activeGame, 'dlc')
-                    }}
-                  >
-                    <PackageOpen size={14} />
-                    <span>Move to DLC & Add-ons</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="hero-menu-item"
-                    onClick={() => {
-                      setMoreMenuOpen(false)
-                      onMoveCategory?.(activeGame, 'utility')
-                    }}
-                  >
-                    <Wrench size={14} />
-                    <span>Move to Utility Tools</span>
-                  </button>
-
-                  <div className="hero-menu-divider" />
-
-                  <button
-                    type="button"
-                    className="hero-menu-item hero-menu-danger"
-                    onClick={() => {
-                      setMoreMenuOpen(false)
-                      onHideGame?.(activeGame)
-                    }}
-                  >
-                    <EyeOff size={14} />
-                    <span>Hide from Library</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
         {/* Main Hero Header Body */}
         <div className="cinematic-hero-body">
           <div className="cinematic-hero-left">
@@ -3486,11 +3874,10 @@ function HeroView({
             {/* Tactical / Theatrical Metadata Line */}
             {layoutTheme === 'kinetic' ? (
               <p className="hero-billing-block kinetic-meta-line">
-                {[(dev || '').split(',')[0].trim() || 'DEV UNKNOWN', pub, gameYear(activeGame)].filter(Boolean).join(' · ')}
+                {[primaryDev || 'DEV UNKNOWN', pub !== primaryDev ? pub : null, gameYear(activeGame)].filter(Boolean).join(' · ')}
               </p>
             ) : layoutTheme === 'competitive' ? (
               (() => {
-                const primaryDev = (dev || '').split(',')[0].trim()
                 const parts = [primaryDev, pub !== primaryDev ? pub : null, gameYear(activeGame)].filter(Boolean)
                 return parts.length > 0 ? (
                   <p className="hero-billing-block competitive-meta-line">
@@ -3500,7 +3887,6 @@ function HeroView({
               })()
             ) : layoutTheme === 'playful' ? (
               (() => {
-                const primaryDev = (dev || '').split(',')[0].trim()
                 const parts = [primaryDev, gameYear(activeGame)].filter(Boolean)
                 return parts.length > 0 ? (
                   <p className="hero-billing-block playful-meta-line">
@@ -3630,39 +4016,8 @@ function HeroView({
                   </button>
                 </div>
 
-                {layoutTheme === 'kinetic' && (
-                  <div className="kinetic-telemetry-strip">
-                    <span className="kinetic-telemetry-chip">
-                      {(storeLabels[0] || platformLabel(primaryPlatform) || 'LOCAL').toUpperCase()}
-                    </span>
-                    <span className="kinetic-telemetry-chip">
-                      {activeGame.install_size_gb ? formatGb(activeGame.install_size_gb) : (activeGame.install_size_bytes ? formatBytes(activeGame.install_size_bytes) : 'N/A')}
-                    </span>
-                    <span className="kinetic-telemetry-chip">
-                      {activeGame.play_time_seconds > 0 ? formatPlayTime(activeGame.play_time_seconds).toUpperCase() : 'NO LOG'}
-                    </span>
-                  </div>
-                )}
-
-                {layoutTheme === 'competitive' && (
-                  <div className="competitive-telemetry-strip">
-                    <span className="competitive-telemetry-chip">
-                      <span className="telemetry-label">SERVER:</span>
-                      <span className="telemetry-val">{(storeLabels[0] || platformLabel(primaryPlatform) || 'ONLINE').toUpperCase()}</span>
-                    </span>
-                    <span className="competitive-telemetry-chip">
-                      <span className="telemetry-label">CLIENT:</span>
-                      <span className="telemetry-val">{activeGame.install_size_gb ? formatGb(activeGame.install_size_gb) : (activeGame.install_size_bytes ? formatBytes(activeGame.install_size_bytes) : 'SYNCED')}</span>
-                    </span>
-                    <span className="competitive-telemetry-chip">
-                      <span className="telemetry-label">LOGGED:</span>
-                      <span className="telemetry-val">{activeGame.play_time_seconds > 0 ? formatPlayTime(activeGame.play_time_seconds).toUpperCase() : '0H'}</span>
-                    </span>
-                  </div>
-                )}
-
                 {launchMenuOpen && (
-                  <div className="hero-dropdown-menu">
+                  <div className={cn("hero-dropdown-menu", `placement-${launchMenuPlacement}`)}>
                     <div className="hero-menu-header">Launch Options</div>
                     <button
                       type="button"
@@ -3747,7 +4102,242 @@ function HeroView({
                   </div>
                 )}
               </div>
+
+              {/* Luxury Companion Ghost Buttons */}
+              <button
+                type="button"
+                className={cn('hero-ghost-btn', Boolean(activeGame.is_favorite) && 'active')}
+                title={activeGame.is_favorite ? 'Favorited · Click to remove' : 'Add to Favorites'}
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  onToggleFavorite?.(activeGame)
+                }}
+              >
+                <Bookmark size={14} fill={Boolean(activeGame.is_favorite) ? 'currentColor' : 'none'} />
+                <span>{activeGame.is_favorite ? 'Favorited' : 'Favorite'}</span>
+              </button>
+
+              <button
+                type="button"
+                className={cn('hero-ghost-btn', activeTab === 'screenshots' && 'active')}
+                title={localCaptures.length > 0 ? `View ${localCaptures.length} Local Captures` : 'View In-Game Captures'}
+                onClick={() => {
+                  setActiveTab('screenshots')
+                  const dossierEl = document.querySelector('.cinematic-dossier-section')
+                  dossierEl?.scrollIntoView({ behavior: 'smooth' })
+                }}
+              >
+                <Camera size={14} />
+                <span>Captures{localCaptures.length > 0 ? ` (${localCaptures.length})` : ''}</span>
+              </button>
+
+              {onEdit ? (
+                <button
+                  type="button"
+                  className="hero-ghost-btn"
+                  onClick={() => onEdit(activeGame)}
+                  title="Edit metadata & artwork"
+                >
+                  <Settings2 size={14} />
+                  <span>Edit Details</span>
+                </button>
+              ) : null}
+
+              <button
+                type="button"
+                className="hero-ghost-btn hero-details-scroll-btn"
+                title="Scroll to specifications & story overview"
+                onClick={() => {
+                  const dossierEl = document.querySelector('.cinematic-dossier-section')
+                  dossierEl?.scrollIntoView({ behavior: 'smooth' })
+                }}
+              >
+                <ChevronDown size={14} />
+                <span>Details</span>
+              </button>
+
+              {/* More Options Dropdown Ghost Capsule */}
+              <div className="hero-action-anchor" ref={moreMenuRef} style={moreMenuOpen ? { zIndex: 100 } : undefined}>
+                <button
+                  type="button"
+                  className={cn('hero-ghost-btn hero-ghost-icon-btn', moreMenuOpen && 'active')}
+                  title="More options"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    setMoreMenuOpen((prev) => !prev)
+                    setLaunchMenuOpen(false)
+                  }}
+                >
+                  <MoreHorizontal size={15} />
+                </button>
+
+                {moreMenuOpen && (
+                  <div className={cn("hero-dropdown-menu hero-more-menu", `placement-${moreMenuPlacement}`)}>
+                    <button
+                      type="button"
+                      className="hero-menu-item"
+                      onClick={() => {
+                        setMoreMenuOpen(false)
+                        onEdit?.(activeGame)
+                      }}
+                    >
+                      <SlidersHorizontal size={14} />
+                      <span>Edit Metadata & Artwork</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className="hero-menu-item"
+                      onClick={async () => {
+                        setMoreMenuOpen(false)
+                        try {
+                          const updated = await api.games.chooseAndSaveArtwork(activeGame.id, 'cover')
+                          if (updated) onGameUpdated?.(updated)
+                        } catch (err) {
+                          console.warn(err)
+                        }
+                      }}
+                    >
+                      <ImagePlus size={14} />
+                      <span>Upload Custom Cover Poster</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className="hero-menu-item"
+                      onClick={async () => {
+                        setMoreMenuOpen(false)
+                        try {
+                          const updated = await api.games.chooseAndSaveArtwork(activeGame.id, 'hero')
+                          if (updated) onGameUpdated?.(updated)
+                        } catch (err) {
+                          console.warn(err)
+                        }
+                      }}
+                    >
+                      <UploadCloud size={14} />
+                      <span>Upload Custom Hero Banner</span>
+                    </button>
+
+                    <div className="hero-menu-divider" />
+
+                    {/* Sanctuary Status Quick Selector */}
+                    <div className="hero-menu-header">Sanctuary Status</div>
+                    <div className="hero-backlog-chips">
+                      {[
+                        { key: 'playing', label: 'Playing' },
+                        { key: 'paused', label: 'On Pause' },
+                        { key: 'completed', label: 'Completed' },
+                        { key: 'unplayed', label: 'Unplayed' }
+                      ].map((item) => {
+                        const cur = String(activeGame.status || (activeGame.backlog_status === 'dropped' ? 'paused' : (activeGame.backlog_status || 'unplayed'))).toLowerCase()
+                        return (
+                          <button
+                            key={item.key}
+                            type="button"
+                            className={cn('hero-backlog-chip', cur === item.key && 'active')}
+                            onClick={() => {
+                              setMoreMenuOpen(false)
+                              if (onUpdateStatus) onUpdateStatus(activeGame, item.key)
+                              else onUpdateBacklog?.(activeGame, item.key)
+                            }}
+                          >
+                            {item.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+
+                    <div className="hero-menu-divider" />
+
+                    {/* Move Category */}
+                    <div className="hero-menu-header">Move Category</div>
+                    <button
+                      type="button"
+                      className="hero-menu-item"
+                      onClick={() => {
+                        setMoreMenuOpen(false)
+                        onMoveCategory?.(activeGame, 'main')
+                      }}
+                    >
+                      <LayoutGrid size={14} />
+                      <span>Move to Main Games</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="hero-menu-item"
+                      onClick={() => {
+                        setMoreMenuOpen(false)
+                        onMoveCategory?.(activeGame, 'dlc')
+                      }}
+                    >
+                      <PackageOpen size={14} />
+                      <span>Move to DLC & Add-ons</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="hero-menu-item"
+                      onClick={() => {
+                        setMoreMenuOpen(false)
+                        onMoveCategory?.(activeGame, 'utility')
+                      }}
+                    >
+                      <Wrench size={14} />
+                      <span>Move to Utility Tools</span>
+                    </button>
+
+                    <div className="hero-menu-divider" />
+
+                    <button
+                      type="button"
+                      className="hero-menu-item hero-menu-danger"
+                      onClick={() => {
+                        setMoreMenuOpen(false)
+                        onHideGame?.(activeGame)
+                      }}
+                    >
+                      <EyeOff size={14} />
+                      <span>Hide from Library</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
+
+            {/* Tactical / Broadcast Telemetry Rows Situated Cleanly Below Primary CTA */}
+            {layoutTheme === 'competitive' && (
+              <div className="competitive-telemetry-strip">
+                <span className="competitive-telemetry-chip">
+                  <span className="telemetry-label">SERVER:</span>
+                  <span className="telemetry-val">{(storeLabels[0] || platformLabel(primaryPlatform) || 'ONLINE').toUpperCase()}</span>
+                </span>
+                <span className="competitive-telemetry-chip">
+                  <span className="telemetry-label">CLIENT:</span>
+                  <span className="telemetry-val">{activeGame.install_size_gb ? formatGb(activeGame.install_size_gb) : (activeGame.install_size_bytes ? formatBytes(activeGame.install_size_bytes) : 'SYNCED')}</span>
+                </span>
+                <span className="competitive-telemetry-chip">
+                  <span className="telemetry-label">LOGGED:</span>
+                  <span className="telemetry-val">{activeGame.play_time_seconds > 0 ? formatPlayTime(activeGame.play_time_seconds).toUpperCase() : '0H'}</span>
+                </span>
+              </div>
+            )}
+
+            {layoutTheme === 'kinetic' && (
+              <div className="kinetic-telemetry-strip">
+                <span className="kinetic-telemetry-chip">
+                  {(storeLabels[0] || platformLabel(primaryPlatform) || 'LOCAL').toUpperCase()}
+                </span>
+                <span className="kinetic-telemetry-chip">
+                  {activeGame.install_size_gb ? formatGb(activeGame.install_size_gb) : (activeGame.install_size_bytes ? formatBytes(activeGame.install_size_bytes) : 'N/A')}
+                </span>
+                <span className="kinetic-telemetry-chip">
+                  {activeGame.play_time_seconds > 0 ? formatPlayTime(activeGame.play_time_seconds).toUpperCase() : 'NO LOG'}
+                </span>
+              </div>
+            )}
+
             {layoutTheme === 'atmospheric' && (
               <div className="atmospheric-meta-line">
                 {[
@@ -3758,18 +4348,11 @@ function HeroView({
               </div>
             )}
           </div>
-        </div>
-
-        {/* Pinned Animated Scroll Affordance Pill */}
-        <div
-          className={cn("cinematic-scroll-pill", isScrolled && "is-hidden")}
-          onClick={() => {
-            const dossierEl = document.querySelector('.cinematic-dossier-section')
-            dossierEl?.scrollIntoView({ behavior: 'smooth' })
-          }}
-          title="Scroll to explore dossier"
-        >
-          <ChevronDown size={16} className="cinematic-pill-chevron" />
+          {!detailHero && detailCover && (
+            <div className="hero-fallback-poster-card" title={activeGame.canonical_title}>
+              <img src={detailCover} alt={activeGame.canonical_title} className="hero-fallback-poster-img" />
+            </div>
+          )}
         </div>
       </div>
 
@@ -3871,7 +4454,7 @@ function HeroView({
               <div className="cinematic-dossier-col cinematic-dossier-col-right">
                 {/* Series & Franchise Carousel - if available */}
                 {franchise.games.length > 0 && (
-                  <section className="franchise-carousel-section" style={{ marginTop: 0, paddingLeft: 0, paddingRight: 0, overflow: 'visible' }}>
+                  <section className="franchise-carousel-section">
                     <div className="franchise-header">
                       <div>
                         <div className="eyebrow">
@@ -3912,7 +4495,7 @@ function HeroView({
 
                 {/* Media Showcase Preview */}
                 {screenshotItems.length > 0 && (
-                  <section className="cinematic-overview-media-section" style={{ marginTop: franchise.games.length > 0 ? '24px' : '0' }}>
+                  <section className="cinematic-overview-media-section">
                     <div className="franchise-header">
                       <div>
                         <div className="eyebrow">
@@ -3970,7 +4553,7 @@ function HeroView({
 
                 {/* If neither franchise nor screenshots exist, show related titles preview if any */}
                 {franchise.games.length === 0 && screenshotItems.length === 0 && relatedGamesData.games.length > 0 && (
-                  <section className="franchise-carousel-section studio-section cinematic-studio-section" style={{ marginTop: 0, paddingLeft: 0, paddingRight: 0, overflow: 'visible' }}>
+                  <section className="franchise-carousel-section studio-section cinematic-studio-section">
                     <div className="franchise-header">
                       <div>
                         <div className="eyebrow">
@@ -4016,7 +4599,7 @@ function HeroView({
         {activeTab === 'related' && (
           <div className="cinematic-tab-pane" style={{ overflow: 'visible' }}>
             {relatedGamesData.games.length > 0 ? (
-              <section className="franchise-carousel-section studio-section cinematic-studio-section" style={{ marginTop: 0, paddingLeft: 0, paddingRight: 0, overflow: 'visible' }}>
+              <section className="franchise-carousel-section studio-section cinematic-studio-section">
                 <div className="franchise-header">
                   <div>
                     <div className="eyebrow">
@@ -4214,11 +4797,27 @@ function App() {
     })
   }, [])
 
+  const [isSpotlightCollapsed, setIsSpotlightCollapsed] = useState(() => localStorage.getItem('logpile-spotlight-collapsed') === 'true')
+  const handleToggleSpotlight = useCallback(() => {
+    setIsSpotlightCollapsed((prev) => {
+      const next = !prev
+      localStorage.setItem('logpile-spotlight-collapsed', String(next))
+      return next
+    })
+  }, [])
+
   useEffect(() => {
     const handleKey = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b' && !e.target.matches('input, textarea')) {
         e.preventDefault()
         toggleSidebar()
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'h' && !e.target.matches('input, textarea')) {
+        e.preventDefault()
+        handleToggleSpotlight()
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        searchInputRef.current?.focus()
+        searchInputRef.current?.select()
       } else if (e.key === 'F11') {
         e.preventDefault()
         if (api?.window?.toggleFullScreen) {
@@ -4232,9 +4831,9 @@ function App() {
     }
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
-  }, [toggleSidebar])
+  }, [toggleSidebar, handleToggleSpotlight])
 
-  const mainScrollRef = useRef(null); const searchInputRef = useRef(null); const libraryScrollRef = useRef(0); const lastClickedGameIdRef = useRef(null); const [restoredGameId, setRestoredGameId] = useState(null); const [games, setGames] = useState([]); const [hiddenGames, setHiddenGames] = useState([]); const [stats, setStats] = useState(() => ({ ...EMPTY_LIBRARY_STATS })); const [query, setQuery] = useState(''); const [debouncedQuery, setDebouncedQuery] = useState(''); const [view, setView] = useState('all'); const [sourceFilters, setSourceFilters] = useState([]); const [genreFilter, setGenreFilter] = useState('all'); const [backlogFilter, setBacklogFilter] = useState('all'); const [sortKey, setSortKey] = useState('title-asc'); const [viewMode, setViewMode] = useState('grid'); const [activeGame, setActiveGame] = useState(null); const isDetailView = viewMode === 'hero' && Boolean(activeGame) && view !== 'system' && view !== 'today'; const [themeKey, setThemeKey] = useState(() => localStorage.getItem('logpile-theme') || 'monolith'); const [layoutTheme, setLayoutTheme] = useState(() => localStorage.getItem('logpile-layout-theme') || 'cinematic'); const handleLayoutThemeChange = (newTheme) => { setLayoutTheme(newTheme); localStorage.setItem('logpile-layout-theme', newTheme); }; const [mode, setMode] = useState(() => localStorage.getItem('logpile-mode') || 'dark'); const [loading, setLoading] = useState(true); const [notice, setNotice] = useState(''); const [noticeTone, setNoticeTone] = useState('success'); const [scanOpen, setScanOpen] = useState(false); const [editorGame, setEditorGame] = useState(null); const [purgeOpen, setPurgeOpen] = useState(false); const [purgeBusy, setPurgeBusy] = useState(false); const [confirmModal, setConfirmModal] = useState(null); const [contextMenu, setContextMenu] = useState(null); const contextMenuRef = useRef(null); const [selectMode, setSelectMode] = useState(false); const [selectedIds, setSelectedIds] = useState([]); const [bulkEditOpen, setBulkEditOpen] = useState(false); const [bulkBusy, setBulkBusy] = useState(false); const [qualityFilters, setQualityFilters] = useState([]); const [failedImageIds, setFailedImageIds] = useState(new Set()); const [scannerStatus, setScannerStatus] = useState(null); const [isDetailHudIdle, setIsDetailHudIdle] = useState(false); const [isDetailScrolled, setIsDetailScrolled] = useState(false)
+  const mainScrollRef = useRef(null); const searchInputRef = useRef(null); const libraryScrollRef = useRef(0); const lastClickedGameIdRef = useRef(null); const navOriginRef = useRef({ view: 'installed', source: 'grid', scrollTop: 0 }); const hasSeededRef = useRef(false); const [restoredGameId, setRestoredGameId] = useState(null); const [games, setGames] = useState([]); const [hiddenGames, setHiddenGames] = useState([]); const [stats, setStats] = useState(() => ({ ...EMPTY_LIBRARY_STATS })); const [query, setQuery] = useState(''); const [debouncedQuery, setDebouncedQuery] = useState(''); const [view, setView] = useState('installed'); const [sourceFilters, setSourceFilters] = useState([]); const [genreFilter, setGenreFilter] = useState('all'); const [backlogFilter, setBacklogFilter] = useState('all'); const [sortKey, setSortKey] = useState('title-asc'); const [viewMode, setViewMode] = useState('grid'); const [activeGame, setActiveGame] = useState(null); const isDetailView = viewMode === 'hero' && Boolean(activeGame); const [layoutTheme, setLayoutTheme] = useState(() => localStorage.getItem('logpile-layout-theme') || 'cinematic'); const handleLayoutThemeChange = (newTheme) => { setLayoutTheme(newTheme); localStorage.setItem('logpile-layout-theme', newTheme); }; const mode = 'dark'; const [loading, setLoading] = useState(true); const [notice, setNotice] = useState(''); const [noticeTone, setNoticeTone] = useState('success'); const [scanOpen, setScanOpen] = useState(false); const [editorGame, setEditorGame] = useState(null); const [purgeOpen, setPurgeOpen] = useState(false); const [purgeBusy, setPurgeBusy] = useState(false); const [confirmModal, setConfirmModal] = useState(null); const [contextMenu, setContextMenu] = useState(null); const contextMenuRef = useRef(null); const [selectMode, setSelectMode] = useState(false); const [selectedIds, setSelectedIds] = useState([]); const [bulkEditOpen, setBulkEditOpen] = useState(false); const [bulkBusy, setBulkBusy] = useState(false); const [qualityFilters, setQualityFilters] = useState([]); const [failedImageIds, setFailedImageIds] = useState(new Set()); const [scannerStatus, setScannerStatus] = useState(null); const [isDetailHudIdle, setIsDetailHudIdle] = useState(false); const [isDetailScrolled, setIsDetailScrolled] = useState(false)
   const [libraryHealth, setLibraryHealth] = useState(null)
   const [activityLog, setActivityLog] = useState([])
   const [activityLoading, setActivityLoading] = useState(false)
@@ -4386,14 +4985,36 @@ function App() {
     setNotice(`Artwork updated for ${game?.canonical_title || 'the selected title'}.`)
     window.setTimeout(() => setNotice(''), 3000)
   }
+  const handleArtworkError = useCallback((error) => {
+    setNoticeTone('error')
+    setNotice(error?.message || 'Failed to update custom artwork.')
+    window.setTimeout(() => setNotice(''), 3500)
+  }, [])
   const handleCardContextMenu = (event, game) => { event.preventDefault(); event.stopPropagation(); const left = event.clientX + MENU_WIDTH > window.innerWidth ? Math.max(MENU_PADDING, window.innerWidth - MENU_WIDTH - MENU_PADDING) : event.clientX; const top = event.clientY + MENU_HEIGHT > window.innerHeight ? Math.max(MENU_PADDING, event.clientY - MENU_HEIGHT) : event.clientY; setContextMenu({ game, anchorX: event.clientX, anchorY: event.clientY, x: left, y: top }) }
-  const handleArtworkError = (error) => { setNoticeTone('error'); setNotice(error.message || 'Artwork could not be changed.'); window.setTimeout(() => setNotice(''), 3000) }
-  const handlePickWinner = (game) => {
-    setView('all')
-    setViewMode('hero')
+  const handleSelectGame = useCallback((game, originSource = 'grid') => {
+    const currentScroll = mainScrollRef.current?.scrollTop || 0
+    if (originSource === 'grid') {
+      libraryScrollRef.current = currentScroll
+      lastClickedGameIdRef.current = game?.id || null
+    } else {
+      lastClickedGameIdRef.current = null
+    }
+    navOriginRef.current = {
+      view,
+      source: originSource,
+      scrollTop: originSource === 'grid' ? currentScroll : 0,
+    }
     setActiveGame(game)
+    setViewMode('hero')
     librarySidebarPrefRef.current = sidebarCollapsed
     setSidebarCollapsed(true)
+    if (mainScrollRef.current) {
+      mainScrollRef.current.scrollTop = 0
+    }
+  }, [view, sidebarCollapsed])
+
+  const handlePickWinner = (game) => {
+    handleSelectGame(game, 'today')
   }
   const handleEditorSaved = async (updated, shouldClose = true) => {
     setNoticeTone('success')
@@ -4420,14 +5041,29 @@ function App() {
     const scrollTop = preserveScroll ? mainScrollRef.current?.scrollTop || 0 : null
     if (!preserveScroll) setLoading(true)
     try {
-      await api.database.seedCheck()
+      if (!hasSeededRef.current) {
+        hasSeededRef.current = true
+        await api.database.seedCheck().catch(() => {})
+      }
       const sort = sortKey === 'size-desc' ? { field: 'install_size_bytes', direction: 'desc' } : sortKey === 'title-desc' ? { field: 'canonical_title', direction: 'desc' } : sortKey === 'last-played' ? { field: 'last_played', direction: 'desc' } : { field: 'canonical_title', direction: 'asc' }
       const libraryFilters = { utility: view === 'utilities', dlc: view === 'dlc', installed: view === 'installed' ? true : view === 'ready' ? false : undefined }
-      const [nextGames, nextStats, allLibraryRows] = await Promise.all([api.database.getGames(libraryFilters, sort), api.database.getLibraryStats(), api.database.getGames({ utility: false, includeHidden: true, includeDlc: true }, { field: 'canonical_title', direction: 'asc' })])
+
+      const nextGamesPromise = api.database.getGames(libraryFilters, sort)
+      const statsPromise = api.database.getLibraryStats().catch(() => null)
+      const hiddenPromise = api.database.getGames({ utility: false, includeHidden: true, includeDlc: true }, { field: 'canonical_title', direction: 'asc' }).catch(() => [])
+
+      const nextGames = await nextGamesPromise
       const consolidated = consolidateGames(Array.isArray(nextGames) ? nextGames : [])
       setGames(consolidated)
-      setHiddenGames((Array.isArray(allLibraryRows) ? allLibraryRows : []).filter((game) => game && game.is_hidden))
-      setStats(normalizeLibraryStats(nextStats))
+      if (!preserveScroll) setLoading(false)
+
+      statsPromise.then((nextStats) => {
+        if (nextStats) setStats(normalizeLibraryStats(nextStats))
+      })
+      hiddenPromise.then((allLibraryRows) => {
+        setHiddenGames((Array.isArray(allLibraryRows) ? allLibraryRows : []).filter((game) => game && game.is_hidden))
+      })
+
       setFailedImageIds((prev) => {
         if (!prev.size) return prev
         const next = new Set(prev)
@@ -4438,9 +5074,8 @@ function App() {
         }
         return next
       })
-    } catch (error) { setNotice(error.message || 'Unable to read the local library database.') }
+    } catch (error) { setNotice(error.message || 'Unable to read the local library database.'); if (!preserveScroll) setLoading(false) }
     finally {
-      if (!preserveScroll) setLoading(false)
       if (preserveScroll && scrollTop !== null) {
         window.requestAnimationFrame(() => {
           if (mainScrollRef.current) mainScrollRef.current.scrollTop = scrollTop
@@ -4451,7 +5086,7 @@ function App() {
       }
     }
   }
-  useEffect(() => { loadData() }, [view, sortKey, qualityFilters]); useEffect(() => { const close = () => setContextMenu(null); window.addEventListener('pointerdown', close); window.addEventListener('click', close); window.addEventListener('contextmenu', close); return () => { window.removeEventListener('pointerdown', close); window.removeEventListener('click', close); window.removeEventListener('contextmenu', close) } }, []); useLayoutEffect(() => { if (!contextMenu || !contextMenuRef.current) return; const bounds = contextMenuRef.current.getBoundingClientRect(); const menuWidth = bounds.width || MENU_WIDTH; const menuHeight = bounds.height || MENU_HEIGHT; const anchorX = contextMenu.anchorX; const anchorY = contextMenu.anchorY; const left = anchorX + menuWidth > window.innerWidth ? Math.max(MENU_PADDING, window.innerWidth - menuWidth - MENU_PADDING) : anchorX; const top = anchorY + menuHeight > window.innerHeight ? Math.max(MENU_PADDING, anchorY - menuHeight) : anchorY; const clampedLeft = Math.max(MENU_PADDING, Math.min(left, Math.max(MENU_PADDING, window.innerWidth - menuWidth - MENU_PADDING))); const clampedTop = Math.max(MENU_PADDING, Math.min(top, Math.max(MENU_PADDING, window.innerHeight - menuHeight - MENU_PADDING))); if (clampedLeft !== contextMenu.x || clampedTop !== contextMenu.y) setContextMenu((current) => current ? { ...current, x: clampedLeft, y: clampedTop } : current) }, [contextMenu]); useEffect(() => { const offArtwork = api.scraper.onUpdated?.(() => loadData({ preserveScroll: true })); const offLibrary = api.database.onUpdated?.(() => loadData({ preserveScroll: true })); return () => { offArtwork?.(); offLibrary?.() } }, [view, sortKey, qualityFilters]); useEffect(() => { const timer = setTimeout(() => setDebouncedQuery(query), 150); return () => clearTimeout(timer) }, [query]); useEffect(() => { localStorage.setItem('logpile-theme', themeKey) }, [themeKey]); useEffect(() => { localStorage.setItem('logpile-mode', mode) }, [mode]);
+  useEffect(() => { loadData() }, [view, sortKey, qualityFilters]); useEffect(() => { const close = () => setContextMenu(null); window.addEventListener('pointerdown', close); window.addEventListener('click', close); window.addEventListener('contextmenu', close); window.addEventListener('scroll', close, true); return () => { window.removeEventListener('pointerdown', close); window.removeEventListener('click', close); window.removeEventListener('contextmenu', close); window.removeEventListener('scroll', close, true) } }, []); useLayoutEffect(() => { if (!contextMenu || !contextMenuRef.current) return; const bounds = contextMenuRef.current.getBoundingClientRect(); const menuWidth = bounds.width || MENU_WIDTH; const menuHeight = bounds.height || MENU_HEIGHT; const anchorX = contextMenu.anchorX; const anchorY = contextMenu.anchorY; const left = anchorX + menuWidth > window.innerWidth ? Math.max(MENU_PADDING, window.innerWidth - menuWidth - MENU_PADDING) : anchorX; const top = anchorY + menuHeight > window.innerHeight ? Math.max(MENU_PADDING, anchorY - menuHeight) : anchorY; const clampedLeft = Math.max(MENU_PADDING, Math.min(left, Math.max(MENU_PADDING, window.innerWidth - menuWidth - MENU_PADDING))); const clampedTop = Math.max(MENU_PADDING, Math.min(top, Math.max(MENU_PADDING, window.innerHeight - menuHeight - MENU_PADDING))); if (clampedLeft !== contextMenu.x || clampedTop !== contextMenu.y) setContextMenu((current) => current ? { ...current, x: clampedLeft, y: clampedTop } : current) }, [contextMenu]); useEffect(() => { const offArtwork = api.scraper.onUpdated?.(() => loadData({ preserveScroll: true })); const offLibrary = api.database.onUpdated?.(() => loadData({ preserveScroll: true })); return () => { offArtwork?.(); offLibrary?.() } }, [view, sortKey, qualityFilters]); useEffect(() => { const timer = setTimeout(() => setDebouncedQuery(query), 150); return () => clearTimeout(timer) }, [query]); useEffect(() => { localStorage.setItem('logpile-layout-theme', layoutTheme) }, [layoutTheme]);
   useEffect(() => {
     let isMounted = true
     const offProgress = api.scanner.onProgress?.((payload) => {
@@ -4468,15 +5103,41 @@ function App() {
     }
   }, [])
   const handleBackToLibrary = useCallback(() => {
+    const origin = navOriginRef.current || { view: 'all', source: 'grid', scrollTop: 0 }
     const targetGameId = activeGame?.id || lastClickedGameIdRef.current
-    if (targetGameId) {
-      setRestoredGameId(targetGameId)
-      window.setTimeout(() => setRestoredGameId(null), 2200)
-    }
+
+    setActiveGame(null)
     setViewMode('grid')
     setIsDetailScrolled(false)
     if (librarySidebarPrefRef.current !== undefined) {
       setSidebarCollapsed(librarySidebarPrefRef.current)
+    }
+
+    // Restore the originating view (e.g. today, installed, all, etc.)
+    setView(origin.view || 'all')
+
+    if (origin.source === 'today' || origin.view === 'today') {
+      setRestoredGameId(null)
+      lastClickedGameIdRef.current = null
+      if (mainScrollRef.current) {
+        mainScrollRef.current.scrollTop = 0
+      }
+    } else if (origin.source === 'spotlight' || origin.source === 'shelf') {
+      // Kept at the top of Page 1 (Spotlight and Shelf) without auto-scrolling down
+      setRestoredGameId(null)
+      lastClickedGameIdRef.current = null
+      if (mainScrollRef.current) {
+        mainScrollRef.current.scrollTop = 0
+      }
+    } else {
+      // Grid: restore exact scroll & focused card
+      if (targetGameId) {
+        setRestoredGameId(targetGameId)
+        window.setTimeout(() => setRestoredGameId(null), 2200)
+      }
+      if (mainScrollRef.current && typeof origin.scrollTop === 'number') {
+        mainScrollRef.current.scrollTop = origin.scrollTop
+      }
     }
   }, [activeGame])
 
@@ -4515,7 +5176,7 @@ function App() {
           document.documentElement.requestFullscreen().catch(() => {})
         }
       } else if (e.key === 'Escape' && isDetailView) {
-        if (document.querySelector('.lightbox-backdrop, .modal-backdrop')) {
+        if (document.querySelector('.lightbox-backdrop, .modal-backdrop, .hero-dropdown-menu, .status-dropdown-menu, .custom-dropdown-portal, .art-context-menu')) {
           return
         }
         handleBackToLibrary()
@@ -4544,19 +5205,23 @@ function App() {
     { value: 'completed', label: 'Completed' },
     { value: 'dropped', label: 'Dropped' },
   ], [])
-  const handleSelectGame = (game) => {
-    if (mainScrollRef.current) {
-      libraryScrollRef.current = mainScrollRef.current.scrollTop
-      mainScrollRef.current.scrollTop = 0
-    }
-    lastClickedGameIdRef.current = game?.id || null
-    setActiveGame(game)
-    setViewMode('hero')
-    librarySidebarPrefRef.current = sidebarCollapsed
-    setSidebarCollapsed(true)
-  }
   const filteredGames = useMemo(() => { let result = strictTitleSearch(games, debouncedQuery); if (view === 'installed') result = result.filter((game) => game.is_installed && !game.is_utility && !game.is_dlc); if (view === 'ready') result = result.filter((game) => !game.is_installed && !game.is_utility && !game.is_dlc); if (view === 'utilities') result = result.filter((game) => game.is_utility); if (view === 'dlc') result = result.filter((game) => game.is_dlc && !game.is_utility); if (view !== 'utilities' && view !== 'dlc' && view !== 'system') result = result.filter((game) => !game.is_utility && !game.is_dlc); if (qualityFilters.includes('missingArtwork')) { result = result.filter((game) => { const artwork = String(game.cover_url ?? '').trim().toLowerCase(); const hasNoArt = !artwork || artwork === 'null' || artwork === 'undefined'; return hasNoArt || failedImageIds.has(game.id) }) } if (qualityFilters.includes('missingIds')) result = result.filter((game) => { const id = String(game.steamgriddb_id ?? '').trim().toLowerCase(); return !id || id === 'null' || id === 'undefined' }); if (sourceFilters.length) result = result.filter((game) => sourceFilters.some((source) => sourceLabelsForGame(game).some((label) => sourceKey(label) === source))); if (genreFilter !== 'all') result = result.filter((game) => String(game.genres || game.genre || '').split(',').map((genre) => genre.trim()).includes(genreFilter)); if (backlogFilter !== 'all') result = result.filter((game) => game.backlog_status === backlogFilter); return result.sort((a, b) => { if (debouncedQuery.trim()) { const rank = titleSearchRank(a.canonical_title, debouncedQuery) - titleSearchRank(b.canonical_title, debouncedQuery); if (rank) return rank } if (sortKey === 'title-desc') return b.canonical_title.localeCompare(a.canonical_title); if (sortKey === 'size-desc') return (b.install_size_bytes || 0) - (a.install_size_bytes || 0); if (sortKey === 'drive-asc') return String(a.drive_letter || 'Z:').localeCompare(String(b.drive_letter || 'Z:')); if (sortKey === 'last-played') return String(b.last_played || '').localeCompare(String(a.last_played || '')); if (sortKey === 'platform') return platformLabel(sourcePlatforms(a.sources)[0] || '').localeCompare(platformLabel(sourcePlatforms(b.sources)[0] || '')); return a.canonical_title.localeCompare(b.canonical_title) }) }, [games, debouncedQuery, view, sourceFilters, genreFilter, backlogFilter, sortKey, qualityFilters, failedImageIds])
   const filteredRecordIds = useMemo(() => [...new Set(filteredGames.flatMap((game) => (game.variants || [game]).map((variant) => variant.id).filter(Boolean)))], [filteredGames])
+  const isHomeView = !query && !debouncedQuery && !selectMode && genreFilter === 'all' && backlogFilter === 'all' && qualityFilters.length === 0 && sourceFilters.length === 0 && (view === 'all' || view === 'installed')
+  const collectionHeading = useMemo(() => {
+    if (sourceFilters.length === 1) {
+      const found = sourceOptions.find((s) => s.key === sourceFilters[0])
+      return found ? found.label : 'Filtered Collection'
+    }
+    if (sourceFilters.length > 1) {
+      return 'Filtered Collection'
+    }
+    if (view === 'installed') return 'Installed Games'
+    if (view === 'ready') return 'Ready to Install'
+    if (view === 'utilities') return 'Utility Tools'
+    if (view === 'dlc') return 'DLC & Add-ons'
+    return 'Full Collection'
+  }, [sourceFilters, sourceOptions, view])
   const setSidebarView = (nextView) => {
     if (nextView !== view) {
       libraryScrollRef.current = 0
@@ -4744,12 +5409,22 @@ function App() {
       }
     })
   }
-  const displayTotalGames = Math.max(0, stats.visibleGames ?? (stats.totalGames - stats.utilityTools - (stats.dlcGames || 0) - (stats.hiddenGames || 0) - (stats.hiddenDlc || 0))); const displayInstalledGames = Math.max(0, stats.visibleInstalledGames ?? (stats.installedGames - (stats.installedUtilities || 0) - (stats.installedDlc || 0) - (stats.hiddenInstalledGames || 0) - (stats.hiddenInstalledDlc || 0))); const displayDlcGames = Math.max(0, stats.dlcGames || 0); const readyToInstallCount = Math.max(0, Number(stats.readyToInstallCount || 0)); const installedPercent = displayTotalGames ? Math.round((displayInstalledGames / displayTotalGames) * 100) : 0; const safeThemeKey = THEMES[themeKey] ? themeKey : 'monolith'; const safeMode = mode === 'light' ? 'light' : 'dark'; const vars = themeVars(safeThemeKey, safeMode); const currentPalette = PALETTE_SLUG_MAP[safeThemeKey] || 'the-monolith'
+  const displayTotalGames = Math.max(0, stats.visibleGames ?? (stats.totalGames - stats.utilityTools - (stats.dlcGames || 0) - (stats.hiddenGames || 0) - (stats.hiddenDlc || 0))); const displayInstalledGames = Math.max(0, stats.visibleInstalledGames ?? (stats.installedGames - (stats.installedUtilities || 0) - (stats.installedDlc || 0) - (stats.hiddenInstalledGames || 0) - (stats.hiddenInstalledDlc || 0))); const displayDlcGames = Math.max(0, stats.dlcGames || 0); const readyToInstallCount = Math.max(0, Number(stats.readyToInstallCount || 0)); const installedPercent = displayTotalGames ? Math.round((displayInstalledGames / displayTotalGames) * 100) : 0; const vars = themeVars(layoutTheme);
+
+  const workspaceItems = useMemo(() => {
+    const remaining = [
+      { key: 'ready', icon: Download, label: 'Ready to install', count: readyToInstallCount },
+      { key: 'dlc', icon: PackageOpen, label: 'DLC & add-ons', count: displayDlcGames },
+      { key: 'utilities', icon: Wrench, label: 'Utility tools', count: stats.utilityTools || 0 },
+    ]
+    remaining.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }))
+    return remaining
+  }, [readyToInstallCount, displayDlcGames, stats.utilityTools])
+
   useEffect(() => {
-    document.documentElement.setAttribute('data-mode', safeMode)
-    document.documentElement.setAttribute('data-palette', currentPalette)
+    document.documentElement.setAttribute('data-mode', 'dark')
     document.documentElement.setAttribute('data-layout', layoutTheme)
-  }, [safeMode, currentPalette, layoutTheme])
+  }, [layoutTheme])
   const toggleSource = (source) => setSourceFilters((current) => current.includes(source) ? current.filter((item) => item !== source) : [...current, source])
   const chooseLaunchVariant = (game) => {
     const installed = (game.variants || [game]).filter((variant) => variant.is_installed)
@@ -4771,7 +5446,7 @@ function App() {
     const canUseStoredUri = family === 'steam' ? validSteamAppId(launchSource, variant) : (!(family === 'ea' || family === 'ubisoft') || sourceHasRealId(launchSource, variant))
     const uri = generatedUri || (canUseStoredUri && isLauncherUri(storedUri) ? storedUri : (launcherUriForSource(launchSource, variant) || fallbackLauncherUri(variant)))
     const notify = (message, tone = 'success') => { setNoticeTone(tone); setNotice(message); window.setTimeout(() => setNotice(''), 3000) }
-    const storefront = sourceLabelsForGame(variant)[0] || (family === 'ea' ? 'EA Games' : family === 'ubisoft' ? 'Ubisoft' : 'storefront')
+    const storefront = sourceLabelsForGame(variant)[0] || (family === 'ea' ? 'EA Games' : family === 'ubisoft' ? 'Ubisoft' : family === 'amazon' ? 'Amazon Games' : 'storefront')
     const launchMeta = {
       gameId: variant.id,
       title: variant.canonical_title || game.canonical_title,
@@ -4796,28 +5471,104 @@ function App() {
   }
   const detailHero = activeGame?.hero_url ? normalizeArtworkUrl(activeGame.hero_url) : null
   const detailCover = activeGame?.cover_url ? normalizeArtworkUrl(activeGame.cover_url) : null
+  const isAmbientCoverFallback = !detailHero && Boolean(detailCover)
   const detailBackdropUrl = detailHero || detailCover
-  const isBackdropFallbackBlur = !detailHero && Boolean(detailCover)
-  const activeLogo = safeMode === 'light' ? (logoLight || logoDark) : logoDark
 
-  return <div className={cn("app-shell", isDetailView && "is-detail-view", isDetailView && isDetailHudIdle && "detail-hud-idle", isDetailView && isDetailScrolled && "detail-is-scrolled", sidebarCollapsed && "sidebar-is-collapsed", `layout-${layoutTheme}`)} data-theme={themeKey} data-palette={currentPalette} data-layout-theme={layoutTheme} data-layout={layoutTheme} data-mode={safeMode} style={vars}>
+  return <div className={cn("app-shell", isDetailView && "is-detail-view", isDetailView && isDetailHudIdle && "detail-hud-idle", isDetailView && isDetailScrolled && "detail-is-scrolled", sidebarCollapsed && "sidebar-is-collapsed", `layout-${layoutTheme}`)} data-layout-theme={layoutTheme} data-layout={layoutTheme} data-mode="dark" style={vars}>
     {isDetailView && detailBackdropUrl && (
-      <div className="global-detail-backdrop-wrap">
+      <div className={cn("global-detail-backdrop-wrap", isAmbientCoverFallback && "is-ambient-cover-wrap")}>
         <div
-          className={cn("global-detail-backdrop-img", isBackdropFallbackBlur && "is-blurred-cover")}
+          className={cn("global-detail-backdrop-img", isAmbientCoverFallback && "is-ambient-cover-blur")}
           style={{ backgroundImage: `url("${detailBackdropUrl}")` }}
         />
         <div className="global-detail-backdrop-gradient" />
       </div>
     )}
-    <header className="titlebar"><div className="drag-region"><img src={activeLogo} onError={(e) => { if (e.currentTarget.src !== logoDark) e.currentTarget.src = logoDark }} alt="Logpile" className="w-6 h-6 object-contain flex-shrink-0 shrink-0 aspect-square rounded select-none pointer-events-none app-logo titlebar-logo" style={{ width: '24px', height: '24px', minWidth: '24px', minHeight: '24px', maxWidth: '24px', maxHeight: '24px', objectFit: 'contain', flexShrink: 0 }} /></div><div className="titlebar-tools"><LayoutThemeSelector layoutTheme={layoutTheme} setLayoutTheme={handleLayoutThemeChange} /><ThemeSelector themeKey={themeKey} mode={mode} setThemeKey={setThemeKey} setMode={setMode} /><WindowControls /></div></header>
-    <div className="app-body">
-      <aside className={cn("sidebar", sidebarCollapsed && "is-collapsed")}>
-        <div className="sidebar-top">
-          <div className="sidebar-brand-wrap">
-            <img src={activeLogo} onError={(e) => { if (e.currentTarget.src !== logoDark) e.currentTarget.src = logoDark }} alt="Logpile" className="w-8 h-8 object-contain flex-shrink-0 shrink-0 aspect-square rounded-md select-none app-logo sidebar-brand-logo" style={{ width: '32px', height: '32px', minWidth: '32px', minHeight: '32px', maxWidth: '32px', maxHeight: '32px', objectFit: 'contain', flexShrink: 0 }} />
-            {!sidebarCollapsed && <span className="font-bold text-xl tracking-tight sidebar-brand-name">Logpile</span>}
+    <header className="titlebar">
+      <div className="drag-region">
+        {isDetailView ? (
+          <div className="titlebar-detail-nav">
+            <button
+              type="button"
+              className="titlebar-back-btn"
+              onClick={handleBackToLibrary}
+              title="Return to library (Esc)"
+            >
+              <ArrowLeft size={14} />
+              <span>{navOriginRef.current?.view === 'today' ? "Back to Today's Pick" : (navOriginRef.current?.view === 'installed' ? 'Back to Installed' : 'Back to Library')}</span>
+            </button>
+            <div
+              className="titlebar-brand-capsule titlebar-brand-interactive"
+              onClick={handleBackToLibrary}
+              title="Logpile — Return to library"
+            >
+              <img
+                src={logoDark}
+                alt="Logpile"
+                className="w-5 h-5 object-contain flex-shrink-0 shrink-0 aspect-square select-none pointer-events-none app-logo titlebar-logo"
+                style={{ width: '18px', height: '18px', minWidth: '18px', minHeight: '18px', maxWidth: '18px', maxHeight: '18px', objectFit: 'contain', flexShrink: 0 }}
+              />
+              <span className="titlebar-brand-label">Logpile</span>
+            </div>
           </div>
+        ) : (
+          <div className="titlebar-brand-capsule">
+            <img
+              src={logoDark}
+              alt="Logpile"
+              className="w-5 h-5 object-contain flex-shrink-0 shrink-0 aspect-square select-none pointer-events-none app-logo titlebar-logo"
+              style={{ width: '18px', height: '18px', minWidth: '18px', minHeight: '18px', maxWidth: '18px', maxHeight: '18px', objectFit: 'contain', flexShrink: 0 }}
+            />
+            <span className="titlebar-brand-label">Logpile</span>
+          </div>
+        )}
+      </div>
+      <div className="titlebar-center">
+        {!isDetailView && (
+          <div className="titlebar-search">
+            <Search size={13} />
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value)
+                if (view === 'system' || view === 'today' || view === 'about') setSidebarView('all')
+              }}
+              placeholder="Search titles, studios... (Ctrl+K)"
+              autoComplete="off"
+              spellCheck="false"
+            />
+            {query ? (
+              <button
+                type="button"
+                className="titlebar-search-clear"
+                aria-label="Clear search"
+                title="Clear search"
+                onClick={(e) => {
+                  e.preventDefault()
+                  setQuery('')
+                  searchInputRef.current?.focus()
+                }}
+              >
+                <X size={11} />
+              </button>
+            ) : (
+              <kbd className="titlebar-search-kbd">Ctrl K</kbd>
+            )}
+          </div>
+        )}
+      </div>
+      <div className="titlebar-tools">
+        <SanctuaryControls layoutTheme={layoutTheme} setLayoutTheme={handleLayoutThemeChange} />
+        <WindowControls />
+      </div>
+    </header>
+    <div className="app-body">
+      {!isDetailView && (
+        <aside className={cn("sidebar", sidebarCollapsed && "is-collapsed")}>
+        <div className="sidebar-top">
+          {!sidebarCollapsed && <span className="sidebar-top-title">LIBRARY</span>}
           <button
             type="button"
             className="sidebar-toggle-btn"
@@ -4825,110 +5576,113 @@ function App() {
             title={sidebarCollapsed ? "Expand sidebar (Ctrl+B)" : "Collapse sidebar (Ctrl+B)"}
             aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
-            {sidebarCollapsed ? <PanelLeft size={16} /> : <PanelLeftClose size={16} />}
+            {sidebarCollapsed ? <PanelLeft size={15} /> : <PanelLeftClose size={15} />}
           </button>
         </div>
         <nav className="nav-stack">
-          {sidebarCollapsed ? (
-            <button
-              type="button"
-              className="sidebar-search-collapsed-btn"
-              onClick={() => {
-                setSidebarCollapsed(false)
-                librarySidebarPrefRef.current = false
-                localStorage.setItem('logpile-sidebar-collapsed', 'false')
-                setTimeout(() => searchInputRef.current?.focus(), 100)
-              }}
-              title="Search titles, studios..."
-            >
-              <Search size={15} />
-            </button>
-          ) : (
-            <div className="sidebar-search">
-              <Search size={14} />
-              <input ref={searchInputRef} type="text" value={query} onChange={(event) => { setQuery(event.target.value); if (view === 'system' || view === 'today') setSidebarView('all') }} placeholder="Search titles, studios..." autoComplete="off" spellCheck="false" />
-              {query ? <button type="button" className="sidebar-search-clear" aria-label="Clear search" title="Clear search" onClick={(e) => { e.preventDefault(); setQuery(''); searchInputRef.current?.focus() }}><X size={11} /></button> : null}
-            </div>
-          )}
-          <div className="sidebar-filter-summary">
-            <span>{filteredGames.length} of {games.length} titles</span>
-            {(query || sourceFilters.length || genreFilter !== 'all' || backlogFilter !== 'all' || qualityFilters.length) ? (
+          {(query || sourceFilters.length || genreFilter !== 'all' || backlogFilter !== 'all' || qualityFilters.length) ? (
+            <div className="sidebar-filter-summary">
+              <span>{filteredGames.length} of {games.length} titles</span>
               <button type="button" className="sidebar-reset-btn" onClick={() => { setQuery(''); setSourceFilters([]); setGenreFilter('all'); setBacklogFilter('all'); setQualityFilters([]) }}>Reset all</button>
-            ) : null}
+            </div>
+          ) : null}
+
+          <div className="nav-group nav-group-workspace">
+            <p className="nav-label">Workspace</p>
+            <button
+              className={cn('nav-item', view === 'installed' && 'active')}
+              onClick={() => setSidebarView('installed')}
+              title="Installed"
+            >
+              <PackageCheck size={15} />
+              <span>Installed</span>
+              <em>{displayInstalledGames}</em>
+            </button>
+            <button
+              className={cn('nav-item', view === 'all' && 'active')}
+              onClick={() => setSidebarView('all')}
+              title="All games"
+            >
+              <LayoutGrid size={15} />
+              <span>All games</span>
+              <em>{displayTotalGames}</em>
+            </button>
+            {workspaceItems.map((item) => {
+              const Icon = item.icon
+              return (
+                <button
+                  key={item.key}
+                  className={cn('nav-item', view === item.key && 'active')}
+                  onClick={() => setSidebarView(item.key)}
+                  title={item.label}
+                >
+                  <Icon size={15} />
+                  <span>{item.label}</span>
+                  <em>{item.count}</em>
+                </button>
+              )
+            })}
+            <button
+              className={cn('nav-item', view === 'today' && 'active')}
+              onClick={() => setSidebarView('today')}
+              title="Today’s Pick"
+            >
+              <Dices size={15} />
+              <span>Today’s Pick</span>
+            </button>
           </div>
-          <p className="nav-label">Workspace</p>
-          {[
-            ['all', LayoutGrid, 'All games'],
-            ['installed', PackageCheck, 'Installed'],
-            ['ready', Download, 'Ready to install'],
-            ['dlc', PackageOpen, 'DLC & add-ons'],
-            ['utilities', Wrench, 'Utility tools']
-          ].map(([key, Icon, label]) => (
+
+          <div className="nav-divider" />
+
+          <div className="nav-group nav-group-sources">
+            <p className="nav-label nav-label-spaced">Sources</p>
             <button
-              key={key}
-              className={cn('nav-item', view === key && 'active')}
-              onClick={() => setSidebarView(key)}
-              title={label}
+              className={cn('nav-item nav-item-source nav-item-all-sources', !sourceFilters.length && 'active')}
+              onClick={() => { setSourceFilters([]); setViewMode('grid'); if (view === 'system' || view === 'today') setSidebarView('all') }}
+              title="All sources"
             >
-              <Icon size={17} />
-              <span>{label}</span>
-              {key === 'all' ? <em>{displayTotalGames}</em> : key === 'installed' ? <em>{displayInstalledGames}</em> : key === 'ready' ? <em>{readyToInstallCount}</em> : key === 'dlc' ? <em>{displayDlcGames}</em> : key === 'utilities' ? <em>{stats.utilityTools}</em> : null}
+              <SourceIcon source="all" size={14} className="sidebar-source-icon" />
+              <span>All sources</span>
+              <em>{games.length}</em>
             </button>
-          ))}
+            {sourceOptions.map((source) => (
+              <button
+                key={source.key}
+                className={cn('nav-item nav-item-source', sourceFilters.includes(source.key) && 'active')}
+                onClick={() => { toggleSource(source.key); setViewMode('grid'); if (view === 'system' || view === 'today') setSidebarView('all') }}
+                title={source.label}
+              >
+                <SourceIcon source={source.key} size={14} className="sidebar-source-icon" />
+                <span>{source.label}</span>
+                <em>{source.count}</em>
+              </button>
+            ))}
+          </div>
+        </nav>
+
+        <div className="sidebar-bottom-dock">
           <button
-            className={cn('nav-item', view === 'today' && 'active')}
-            onClick={() => setSidebarView('today')}
-            title="Today’s Pick"
-          >
-            <Dices size={17} />
-            <span>Today’s Pick</span>
-          </button>
-          <p className="nav-label nav-label-spaced">Sources</p>
-          <button
-            className={cn('nav-item', !sourceFilters.length && 'active')}
-            onClick={() => { setSourceFilters([]); setViewMode('grid'); if (view === 'system' || view === 'today') setSidebarView('all') }}
-            title="All sources"
-          >
-            <SourceIcon source="all" size={15} className="sidebar-source-icon" />
-            <span>All sources</span>
-            <em>{games.length}</em>
-          </button>
-          {sourceOptions.map((source) => (
-            <button
-              key={source.key}
-              className={cn('nav-item', sourceFilters.includes(source.key) && 'active')}
-              onClick={() => { toggleSource(source.key); setViewMode('grid'); if (view === 'system' || view === 'today') setSidebarView('all') }}
-              title={source.label}
-            >
-              <SourceIcon source={source.key} size={15} className="sidebar-source-icon" />
-              <span>{source.label}</span>
-              <em>{source.count}</em>
-            </button>
-          ))}
-          <p className="nav-label nav-label-spaced">Preferences</p>
-          <button
-            className={cn('nav-item', view === 'system' && 'active')}
+            type="button"
+            className={cn('sidebar-dock-btn', view === 'system' && 'active')}
             onClick={() => setSidebarView('system')}
             title="Settings"
           >
-            <Settings2 size={17} />
-            <span>Settings</span>
+            <Settings2 size={14} />
+            {!sidebarCollapsed && <span>Settings</span>}
           </button>
           <button
-            className={cn('nav-item', view === 'about' && 'active')}
+            type="button"
+            className={cn('sidebar-dock-btn', view === 'about' && 'active')}
             onClick={() => setSidebarView('about')}
             title="About Logpile"
           >
-            <CircleHelp size={17} />
-            <span>About Logpile</span>
+            <CircleHelp size={14} />
+            {!sidebarCollapsed && <span>About</span>}
           </button>
-        </nav>
+        </div>
       </aside>
-      <main className="main-content"><div ref={mainScrollRef} className={cn('main-scroll', isDetailView && 'main-scroll-fullbleed')}><ErrorBoundary key={view} fallback={<TabErrorFallback onBack={() => setSidebarView('all')} />}>{view === 'about' ? <AboutView /> : view === 'system' ? <>
-      <LibraryHealthSection health={libraryHealth} stats={stats} backupsList={backupsList} backupBusy={backupBusy} restoreBusy={restoreBusy} onBackupNow={handleBackupNow} onOpenBackupsFolder={handleOpenBackupsFolder} onOpenBackupsManager={handleOpenBackupsManager} />
-      <RecentActivitySection activityLog={activityLog} loading={activityLoading} onRefresh={fetchSystemHealthAndActivity} />
-      <section className="stats-section"><div className="section-header compact"><div><h2>Library overview</h2><p>At-a-glance footprint across all connected sources.</p></div><span className="sync-label"><span className="pulse-dot" /> Synced locally</span></div><div className="stats-grid"><StatCard icon={Gamepad2} label="Visible games" value={displayTotalGames} meta={`${stats.hiddenGames || 0} hidden support/add-on entries`} /><StatCard icon={PackageOpen} label="DLC & add-ons" value={displayDlcGames} meta={`${stats.installedDlc || 0} installed add-ons`} accent="amber" /><StatCard icon={PackageCheck} label="Installed" value={displayInstalledGames} meta={`${installedPercent}% of visible library`} accent="violet" /><StatCard icon={Wrench} label="Utility tools" value={stats.utilityTools} meta="Performance & creator tools" accent="amber" /><StatCard icon={HardDrive} label="Disk footprint" value={formatGb(stats.totalStorageGb)} meta="Used by game library" accent="blue" /><StatCard icon={Database} label="Available storage" value={stats.systemSpecs?.freeStorageGb ? `${stats.systemSpecs.freeStorageGb} GB` : '—'} meta={stats.systemSpecs?.driveCount ? `Free on ${stats.systemSpecs.driveCount} drives (${stats.systemSpecs.driveLetters || '—'})` : '—'} accent="green" /><StatCard icon={HardDrive} label="Total capacity" value={stats.systemSpecs?.totalStorageGb ? `${stats.systemSpecs.totalStorageGb} GB` : '—'} meta="Across all connected drives" accent="violet" /><StatCard icon={Cpu} label="System specs" value={stats.systemSpecs?.gpu ? stats.systemSpecs.gpu.replace(/NVIDIA\s+|GeForce\s+/gi, '') : 'Unknown GPU'} meta={`${stats.systemSpecs?.cpu ? stats.systemSpecs.cpu.replace(/Intel\s+|Core\s+/gi, '') : 'Unknown CPU'} · ${stats.systemSpecs?.ram || '—'}`} accent="cyan" /></div></section><HiddenItemsPanel games={hiddenGames} onRestore={(game) => updateHiddenState(game, false)} /><ArtworkManager onRefresh={loadData} onCancel={handleCancelSync} /><MetadataProvidersSection onRefresh={loadData} /><AdvancedDiagnosticsSection themeName={THEMES[safeThemeKey].name} health={libraryHealth} /><DatabaseManagement onExport={handleExport} onBackup={handleBackupCache} onRestore={handleRestoreCache} onOpenBackups={handleOpenBackupsManager} onPurge={() => setPurgeOpen(true)} />
-      </> : view === 'today' ? <section className="library-section today-section"><div className="section-header compact"><div><div className="eyebrow"><span>DAILY ROTATION</span><span className="eyebrow-line" /></div><h2>Today’s Pick</h2><p>One installed, non-utility title selected from your local library.</p></div></div><RoulettePanel onWinner={handlePickWinner} /></section> : isDetailView ? <HeroView games={filteredGames} activeGame={activeGame || filteredGames[0]} onSelect={setActiveGame} onLaunch={handleLaunch} onBack={handleBackToLibrary} onEdit={setEditorGame} onHideGame={(game) => updateHiddenState(game, true)} onMoveCategory={moveCategory} onContextMenu={handleCardContextMenu} isCinematicTheme={layoutTheme === 'cinematic'} layoutTheme={layoutTheme} scrollContainerRef={mainScrollRef} onIdleChange={setIsDetailHudIdle} onScrollStateChange={setIsDetailScrolled} onToggleFavorite={async (game) => {
+      )}
+      <main className="main-content"><div ref={mainScrollRef} className={cn('main-scroll', isDetailView && 'main-scroll-fullbleed')}><ErrorBoundary key={`${view}-${viewMode}-${activeGame?.id || 'none'}`} fallback={({ error, reset }) => <TabErrorFallback error={error} reset={reset} onBack={handleBackToLibrary} />}>{isDetailView ? <HeroView games={filteredGames} activeGame={activeGame || filteredGames[0]} onSelect={setActiveGame} onLaunch={handleLaunch} onBack={handleBackToLibrary} onEdit={setEditorGame} onHideGame={(game) => updateHiddenState(game, true)} onMoveCategory={moveCategory} onContextMenu={handleCardContextMenu} isCinematicTheme={layoutTheme === 'cinematic'} layoutTheme={layoutTheme} scrollContainerRef={mainScrollRef} onIdleChange={setIsDetailHudIdle} onScrollStateChange={setIsDetailScrolled} onToggleFavorite={async (game) => {
   const nextFav = !game.is_favorite
   try {
     await api.database.updateGameMetadata(game.id, { is_favorite: nextFav })
@@ -5019,7 +5773,69 @@ function App() {
 }} onGameUpdated={(updated) => {
   setActiveGame(updated)
   loadData({ preserveScroll: true })
-}} /> : <section className="library-section library-pure-games"><div className="library-top-bar"><div className="library-top-bar-left"><CustomDropdown value={sortKey} onChange={setSortKey} options={sortOptions} icon={ArrowDownAZ} className="top-bar-dropdown" title="Sort games" /><CustomDropdown value={genreFilter} onChange={setGenreFilter} options={genreOptions} icon={Filter} className="top-bar-dropdown" title="Filter by genre" /><CustomDropdown value={backlogFilter} onChange={setBacklogFilter} options={backlogOptions} icon={SlidersHorizontal} className="top-bar-dropdown" title="Filter by backlog status" /><div className="top-bar-chip-group"><button type="button" className={cn('top-bar-chip', qualityFilters.includes('missingArtwork') && 'active')} onClick={() => setQualityFilters((current) => current.includes('missingArtwork') ? current.filter((item) => item !== 'missingArtwork') : [...current, 'missingArtwork'])}>Missing Artwork</button><button type="button" className={cn('top-bar-chip', qualityFilters.includes('missingIds') && 'active')} onClick={() => setQualityFilters((current) => current.includes('missingIds') ? current.filter((item) => item !== 'missingIds') : [...current, 'missingIds'])}>Missing IDs</button></div></div><div className="library-top-bar-right"><button type="button" className={cn('outline-button', selectMode && 'active')} onClick={() => { setSelectMode((current) => !current); if (selectMode) setSelectedIds([]) }}><Check size={14} /><span>{selectMode ? 'Exit select' : 'Select mode'}</span></button><button type="button" className="outline-button" onClick={() => setScanOpen(true)}><ScanLine size={14} /><span>Scan & import</span></button></div></div>{selectMode ? <div className="bulk-action-bar"><span><Check size={14} /> {selectedIds.length} selected · {filteredRecordIds.length} filtered</span><div className="bulk-action-group"><button className="outline-button" disabled={bulkBusy || !filteredRecordIds.length} onClick={selectAllFiltered}><Check size={14} /> Select All Filtered</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={deselectAll}><X size={14} /> Deselect All</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={() => handleBulkMove('dlc')}><PackageOpen size={14} /> Move to DLC</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleBulkHide}><EyeOff size={14} /> Hide from Library</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleRefetchSelected}><RefreshCw size={14} /> Re-fetch Artwork</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleExportSelected}><FileDown size={14} /> Export Selected to CSV</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={() => setBulkEditOpen(true)}><SlidersHorizontal size={14} /> Edit Selected</button><button className="danger-button" disabled={bulkBusy || !selectedIds.length} onClick={handleDeleteSelected}><Trash2 size={14} /> Delete Selected</button></div></div> : null}{notice ? <div className={cn('notice', noticeTone === 'error' && 'notice-error', noticeTone === 'warning' && 'notice-warning')}>{noticeTone === 'error' ? <X size={14} /> : noticeTone === 'warning' ? <AlertTriangle size={14} /> : <Check size={14} />} {notice}</div> : null}{loading ? <div className="empty-state"><div className="loader" /> Loading and indexing your library…</div> : filteredGames.length ? <ErrorBoundary><VirtualGrid games={filteredGames} onLaunch={handleLaunch} onSelect={handleSelectGame} onHideGame={(game) => updateHiddenState(game, true)} onMoveCategory={moveCategory} onEditGame={setEditorGame} onContextMenu={handleCardContextMenu} onArtworkChanged={handleArtworkChanged} onArtworkError={handleArtworkError} selectMode={selectMode} selectedIds={selectedIds} onToggleSelect={toggleGameSelection} scrollElementRef={mainScrollRef} onImageError={handleImageError} initialScrollTop={activeGame?.id === lastClickedGameIdRef.current ? libraryScrollRef.current : 0} restoreGameId={activeGame?.id || lastClickedGameIdRef.current} restoredGameId={restoredGameId} /></ErrorBoundary> : (!games.length && !query && !sourceFilters.length && genreFilter === 'all' && backlogFilter === 'all' && !qualityFilters.length) ? <div className="empty-state"><strong>Your library is empty.</strong><span>Click Scan & import (top right) to add your games.</span></div> : <div className="empty-state"><Search size={21} /><span>No titles match these filters.</span></div>}</section>}</ErrorBoundary></div><footer className="statusbar"><span><TerminalSquare size={13} /> {scannerStatus ? <span className="inline-flex items-center gap-1.5"><span className="pulse-dot" /> {scannerStatus}</span> : 'Ready'}</span><span><span className="pulse-dot" /> Offline · Local storage</span><span>Version 1.1.0</span></footer></main>
+}} /> : view === 'about' ? <AboutView /> : view === 'system' ? <>
+      <LibraryHealthSection health={libraryHealth} stats={stats} backupsList={backupsList} backupBusy={backupBusy} restoreBusy={restoreBusy} onBackupNow={handleBackupNow} onOpenBackupsFolder={handleOpenBackupsFolder} onOpenBackupsManager={handleOpenBackupsManager} />
+      <RecentActivitySection activityLog={activityLog} loading={activityLoading} onRefresh={fetchSystemHealthAndActivity} />
+      <section className="stats-section"><div className="section-header compact"><div><h2>Library overview</h2><p>At-a-glance footprint across all connected sources.</p></div><span className="sync-label"><span className="pulse-dot" /> Synced locally</span></div><div className="stats-grid"><StatCard icon={Gamepad2} label="Visible games" value={displayTotalGames} meta={`${stats.hiddenGames || 0} hidden support/add-on entries`} /><StatCard icon={PackageOpen} label="DLC & add-ons" value={displayDlcGames} meta={`${stats.installedDlc || 0} installed add-ons`} accent="amber" /><StatCard icon={PackageCheck} label="Installed" value={displayInstalledGames} meta={`${installedPercent}% of visible library`} accent="violet" /><StatCard icon={Wrench} label="Utility tools" value={stats.utilityTools} meta="Performance & creator tools" accent="amber" /><StatCard icon={HardDrive} label="Disk footprint" value={formatGb(stats.totalStorageGb)} meta="Used by game library" accent="neutral" /><StatCard icon={Database} label="Available storage" value={stats.systemSpecs?.freeStorageGb ? `${stats.systemSpecs.freeStorageGb} GB` : '—'} meta={stats.systemSpecs?.driveCount ? `Free on ${stats.systemSpecs.driveCount} drives (${stats.systemSpecs.driveLetters || '—'})` : '—'} accent="green" /><StatCard icon={HardDrive} label="Total capacity" value={stats.systemSpecs?.totalStorageGb ? `${stats.systemSpecs.totalStorageGb} GB` : '—'} meta="Across all connected drives" accent="violet" /><StatCard icon={Cpu} label="System specs" value={stats.systemSpecs?.gpu ? stats.systemSpecs.gpu.replace(/NVIDIA\s+|GeForce\s+/gi, '') : 'Unknown GPU'} meta={`${stats.systemSpecs?.cpu ? stats.systemSpecs.cpu.replace(/Intel\s+|Core\s+/gi, '') : 'Unknown CPU'} · ${stats.systemSpecs?.ram || '—'}`} accent="neutral" /></div></section><HiddenItemsPanel games={hiddenGames} onRestore={(game) => updateHiddenState(game, false)} /><ArtworkManager onRefresh={loadData} onCancel={handleCancelSync} /><MetadataProvidersSection onRefresh={loadData} /><AdvancedDiagnosticsSection themeName={LAYOUT_THEMES.find((t) => t.value === layoutTheme)?.label || layoutTheme} health={libraryHealth} /><DatabaseManagement onExport={handleExport} onBackup={handleBackupCache} onRestore={handleRestoreCache} onOpenBackups={handleOpenBackupsManager} onPurge={() => setPurgeOpen(true)} />
+      </> : view === 'today' ? <section className="library-section today-section"><div className="section-header compact"><div><div className="eyebrow"><span>DAILY ROTATION</span><span className="eyebrow-line" /></div><h2>Today’s Pick</h2><p>One installed, non-utility title selected from your local library.</p></div></div><RoulettePanel onWinner={handlePickWinner} /></section> : <section className="library-section library-pure-games">{isHomeView && (
+  <ErrorBoundary fallback={null}>
+    <HomeSpotlightAndShelf
+      games={games}
+      onLaunch={handleLaunch}
+      onSelect={handleSelectGame}
+      layoutTheme={layoutTheme}
+      isCollapsed={isSpotlightCollapsed}
+      onToggleCollapse={handleToggleSpotlight}
+    />
+  </ErrorBoundary>
+)}<div className="library-top-bar">
+  <div className="library-top-bar-left">
+    <div className="collection-header-brand">
+      <h2 className="collection-title">{collectionHeading}</h2>
+      <span className="collection-count">{filteredGames.length} titles</span>
+    </div>
+    <div className="top-bar-divider" />
+    <CustomDropdown value={sortKey} onChange={setSortKey} options={sortOptions} icon={ArrowDownAZ} className="top-bar-dropdown" title="Sort games" />
+    <CustomDropdown value={genreFilter} onChange={setGenreFilter} options={genreOptions} icon={Filter} className="top-bar-dropdown" title="Filter by genre" />
+    <CustomDropdown value={backlogFilter} onChange={setBacklogFilter} options={backlogOptions} icon={SlidersHorizontal} className="top-bar-dropdown" title="Filter by backlog status" />
+    <div className="top-bar-chip-group">
+      <button type="button" className={cn('top-bar-chip', qualityFilters.includes('missingArtwork') && 'active')} onClick={() => setQualityFilters((current) => current.includes('missingArtwork') ? current.filter((item) => item !== 'missingArtwork') : [...current, 'missingArtwork'])}>Missing Artwork</button>
+      <button type="button" className={cn('top-bar-chip', qualityFilters.includes('missingIds') && 'active')} onClick={() => setQualityFilters((current) => current.includes('missingIds') ? current.filter((item) => item !== 'missingIds') : [...current, 'missingIds'])}>Missing IDs</button>
+    </div>
+  </div>
+  <div className="library-top-bar-right">
+    {isHomeView && !isSpotlightCollapsed && (
+      <button
+        type="button"
+        className="outline-button compact-hero-top-btn"
+        onClick={handleToggleSpotlight}
+        title="Compact hero spotlight (Ctrl+H)"
+      >
+        <Minimize2 size={13} />
+        <span>Compact Hero</span>
+      </button>
+    )}
+    <button
+      type="button"
+      className={cn('outline-button select-mode-btn', selectMode && 'active')}
+      onClick={() => {
+        setSelectMode((current) => !current)
+        if (selectMode) setSelectedIds([])
+      }}
+    >
+      <Check size={14} />
+      <span>{selectMode ? 'Exit select' : 'Select mode'}</span>
+    </button>
+    <button
+      type="button"
+      className="outline-button scan-import-btn"
+      onClick={() => setScanOpen(true)}
+    >
+      <ScanLine size={13} />
+      <span>Scan & import</span>
+    </button>
+  </div>
+</div>{selectMode ? <div className="bulk-action-bar"><span><Check size={14} /> {selectedIds.length} selected · {filteredRecordIds.length} filtered</span><div className="bulk-action-group"><button className="outline-button" disabled={bulkBusy || !filteredRecordIds.length} onClick={selectAllFiltered}><Check size={14} /> Select All Filtered</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={deselectAll}><X size={14} /> Deselect All</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={() => handleBulkMove('dlc')}><PackageOpen size={14} /> Move to DLC</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleBulkHide}><EyeOff size={14} /> Hide from Library</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleRefetchSelected}><RefreshCw size={14} /> Re-fetch Artwork</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleExportSelected}><FileDown size={14} /> Export Selected to CSV</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={() => setBulkEditOpen(true)}><SlidersHorizontal size={14} /> Edit Selected</button><button className="danger-button" disabled={bulkBusy || !selectedIds.length} onClick={handleDeleteSelected}><Trash2 size={14} /> Delete Selected</button></div></div> : null}{notice ? <div className={cn('notice', noticeTone === 'error' && 'notice-error', noticeTone === 'warning' && 'notice-warning')}>{noticeTone === 'error' ? <X size={14} /> : noticeTone === 'warning' ? <AlertTriangle size={14} /> : <Check size={14} />} {notice}</div> : null}{loading ? <div className="empty-state"><div className="loader" /> Loading and indexing your library…</div> : filteredGames.length ? <ErrorBoundary><VirtualGrid games={filteredGames} onLaunch={handleLaunch} onSelect={handleSelectGame} onHideGame={(game) => updateHiddenState(game, true)} onMoveCategory={moveCategory} onEditGame={setEditorGame} onContextMenu={handleCardContextMenu} onArtworkChanged={handleArtworkChanged} onArtworkError={handleArtworkError} selectMode={selectMode} selectedIds={selectedIds} onToggleSelect={toggleGameSelection} scrollElementRef={mainScrollRef} onImageError={handleImageError} initialScrollTop={activeGame?.id === lastClickedGameIdRef.current ? libraryScrollRef.current : 0} restoreGameId={activeGame?.id || lastClickedGameIdRef.current} restoredGameId={restoredGameId} /></ErrorBoundary> : (!games.length && !query && !sourceFilters.length && genreFilter === 'all' && backlogFilter === 'all' && !qualityFilters.length) ? <div className="empty-state"><strong>Your library is empty.</strong><span>Click Scan & import (top right) to add your games.</span></div> : <div className="empty-state"><Search size={21} /><span>No titles match these filters.</span></div>}</section>}</ErrorBoundary></div><footer className="statusbar"><span className="statusbar-item statusbar-terminal"><TerminalSquare size={13} /> {scannerStatus ? <span className="inline-flex items-center gap-1.5"><span className="pulse-dot" /> {scannerStatus}</span> : 'Ready'}</span><span className="statusbar-item statusbar-storage"><span className="pulse-dot" /> Offline · Local storage</span><span className="statusbar-item statusbar-version">Version 1.2.0</span></footer></main>
     </div><ScanImportPanel open={scanOpen} onClose={() => setScanOpen(false)} onRefresh={loadData} /><GameEditorModal game={editorGame} onClose={() => setEditorGame(null)} onSaved={handleEditorSaved} /><PurgeConfirmModal open={purgeOpen} busy={purgeBusy} onClose={() => setPurgeOpen(false)} onConfirm={handlePurge} /><BulkEditModal open={bulkEditOpen} count={selectedIds.length} busy={bulkBusy} onClose={() => setBulkEditOpen(false)} onApply={handleBulkApply} /><ContextMenu menu={contextMenu} menuRef={contextMenuRef} onClose={() => setContextMenu(null)} onMoveCategory={moveCategory} onEditGame={setEditorGame} onHideGame={(game) => updateHiddenState(game, true)} onArtworkChanged={handleArtworkChanged} onArtworkError={handleArtworkError} /><ConfirmActionModal config={confirmModal} onClose={() => setConfirmModal(null)} /><BackupsManagerModal open={backupsModalOpen} busy={backupBusy || restoreBusy} backups={backupsList} loading={backupsLoading} backupsDirectory={backupsDirectory || libraryHealth?.backupsDirectory} onClose={() => setBackupsModalOpen(false)} onBackupNow={handleBackupNow} onOpenFolder={handleOpenBackupsFolder} onRestoreBackup={handleRestoreBackup} onChooseAndRestoreFile={handleChooseAndRestoreFile} /></div>
 }
 export default App

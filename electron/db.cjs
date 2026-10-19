@@ -3,8 +3,8 @@ const crypto = require('node:crypto')
 const fs = require('node:fs')
 const path = require('node:path')
 const { fileURLToPath } = require('node:url')
-const { isUtilityTitle, isHiddenByDefaultTitle, isDlcTitle } = require('../src/main/services/utilityRules.cjs')
-const { normalizeCanonicalTitle } = require('../src/main/services/deduplicationService.cjs')
+const { isUtilityTitle, isHiddenByDefaultTitle, isDlcTitle, isDlcException } = require('../src/main/services/utilityRules.cjs')
+const { normalizeCanonicalTitle, cleanTitlePrefixes } = require('../src/main/services/deduplicationService.cjs')
 
 function normalizeTitle(title) {
   return normalizeCanonicalTitle(title)
@@ -37,12 +37,48 @@ function enforceUtilityClassification(db) {
 }
 
 function enforceDlcClassification(db) {
-  const update = db.prepare('UPDATE games SET is_dlc = CASE WHEN @isDlc = 1 THEN 1 ELSE is_dlc END, is_utility = CASE WHEN @isDlc = 1 THEN 0 ELSE is_utility END WHERE id = @id')
-  const games = db.prepare('SELECT id, canonical_title FROM games').all()
+  const update = db.prepare('UPDATE games SET is_dlc = @isDlc, is_utility = CASE WHEN @isDlc = 1 THEN 0 ELSE is_utility END WHERE id = @id')
+  const games = db.prepare('SELECT id, canonical_title, is_dlc FROM games').all()
   const migrate = db.transaction(() => {
-    for (const game of games) update.run({ id: game.id, isDlc: isDlcTitle(game.canonical_title) ? 1 : 0 })
+    for (const game of games) {
+      const rawTitle = game.canonical_title || ''
+      // If standalone sequel exception (Silent Hill, Evil Within, Metro base games), enforce is_dlc = 0
+      if (isDlcException(rawTitle)) {
+        if (game.is_dlc !== 0) {
+          update.run({ id: game.id, isDlc: 0 })
+        }
+      } else if (isDlcTitle(rawTitle)) {
+        if (game.is_dlc !== 1) {
+          update.run({ id: game.id, isDlc: 1 })
+        }
+      }
+    }
   })
   migrate()
+}
+
+function cleanupLegacyGameRecords(db) {
+  try {
+    const games = db.prepare("SELECT id, canonical_title, drive_letter, install_path FROM games WHERE canonical_title LIKE 'Deep Silver %' OR canonical_title LIKE '%Project Windfall%' OR canonical_title LIKE '%Xbox Game Studios%' OR (install_path IS NOT NULL AND drive_letter = 'C:' AND install_path NOT LIKE 'C:%')").all()
+    if (!games || !games.length) return
+    const update = db.prepare('UPDATE games SET canonical_title = @title, normalized_title = @norm, drive_letter = @drive WHERE id = @id')
+    const migrate = db.transaction(() => {
+      for (const g of games) {
+        const cleaned = cleanTitlePrefixes ? cleanTitlePrefixes(g.canonical_title) : g.canonical_title
+        const norm = normalizeCanonicalTitle(cleaned)
+        let drive = g.drive_letter
+        if (g.install_path && /^[a-zA-Z]:[/\\]/i.test(g.install_path)) {
+          drive = `${g.install_path.charAt(0).toUpperCase()}:`
+        }
+        if (cleaned !== g.canonical_title || drive !== g.drive_letter) {
+          update.run({ id: g.id, title: cleaned, norm, drive })
+        }
+      }
+    })
+    migrate()
+  } catch (err) {
+    console.warn('[DB] cleanupLegacyGameRecords warning:', err?.message)
+  }
 }
 
 function getAppSetting(db, key, fallback = null) {
@@ -69,8 +105,33 @@ function enforceHiddenClassification(db) {
   migrate()
 }
 
+function getSqliteNativeBinding() {
+  const abi = process.versions?.modules
+  const candidates = [
+    abi ? path.join(__dirname, 'bin', `better_sqlite3_v${abi}.node`) : null,
+    path.join(__dirname, 'bin', 'better_sqlite3.node'),
+    path.join(__dirname, '..', 'node_modules', 'better-sqlite3', 'build', 'Release', 'better_sqlite3.node'),
+  ].filter(Boolean)
+
+  for (const candidate of candidates) {
+    try {
+      if (fs.existsSync(candidate)) return candidate
+    } catch {}
+  }
+  return null
+}
+
+function openDatabase(dbPath, options = {}) {
+  const binding = getSqliteNativeBinding()
+  const dbOptions = { ...options }
+  if (binding && !dbOptions.nativeBinding) {
+    dbOptions.nativeBinding = binding
+  }
+  return new Database(dbPath, dbOptions)
+}
+
 function createDatabase(dbPath) {
-  const db = new Database(dbPath)
+  const db = openDatabase(dbPath)
   db.pragma('foreign_keys = ON')
   db.pragma('journal_mode = WAL')
   db.exec(`
@@ -202,6 +263,7 @@ function createDatabase(dbPath) {
   enforceUtilityClassification(db)
   enforceHiddenClassification(db)
   db.prepare("UPDATE games SET genres = genre WHERE (genres IS NULL OR TRIM(genres) = '') AND genre IS NOT NULL AND TRIM(genre) <> ''").run()
+  cleanupLegacyGameRecords(db)
   enforceDlcClassification(db)
   return db
 }
@@ -350,12 +412,14 @@ function getLibrarySettings(db) {
   const storedIgdbId = getAppSetting(db, 'igdb_client_id', '')
   const storedIgdbSecret = getAppSetting(db, 'igdb_client_secret', '')
   const storedHeroRes = getAppSetting(db, 'hero_resolution', '2.5k')
+  const storedPreferAnimated = getAppSetting(db, 'prefer_animated_artwork', 'false')
   return {
     autoHideSupportEntries: Boolean(autoHideSupportEntriesEnabled(db)),
     steamGridDbApiKey: typeof storedKey === 'string' ? storedKey : '',
     igdbClientId: typeof storedIgdbId === 'string' ? storedIgdbId : '',
     igdbClientSecret: typeof storedIgdbSecret === 'string' ? storedIgdbSecret : '',
     heroResolution: typeof storedHeroRes === 'string' && storedHeroRes ? storedHeroRes : '2.5k',
+    preferAnimatedArtwork: storedPreferAnimated === 'true' || storedPreferAnimated === '1',
   }
 }
 
@@ -366,12 +430,14 @@ function setLibrarySettings(db, settings = {}) {
   if (settings.igdbClientId !== undefined && (typeof settings.igdbClientId !== 'string' || settings.igdbClientId.length > 300)) throw new Error('Invalid IGDB Client ID.')
   if (settings.igdbClientSecret !== undefined && (typeof settings.igdbClientSecret !== 'string' || settings.igdbClientSecret.length > 300)) throw new Error('Invalid IGDB Client Secret.')
   if (settings.heroResolution !== undefined && typeof settings.heroResolution !== 'string') throw new Error('Invalid hero resolution.')
+  if (settings.preferAnimatedArtwork !== undefined && typeof settings.preferAnimatedArtwork !== 'boolean') throw new Error('Invalid prefer-animated setting.')
 
   if (settings.autoHideSupportEntries !== undefined) db.prepare("INSERT INTO app_settings (key, value) VALUES ('auto_hide_support_entries', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(settings.autoHideSupportEntries ? '1' : '0')
   if (settings.steamGridDbApiKey !== undefined) db.prepare("INSERT INTO app_settings (key, value) VALUES ('steamgriddb_api_key', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(String(settings.steamGridDbApiKey).trim())
   if (settings.igdbClientId !== undefined) db.prepare("INSERT INTO app_settings (key, value) VALUES ('igdb_client_id', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(String(settings.igdbClientId).trim())
   if (settings.igdbClientSecret !== undefined) db.prepare("INSERT INTO app_settings (key, value) VALUES ('igdb_client_secret', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(String(settings.igdbClientSecret).trim())
   if (settings.heroResolution !== undefined) db.prepare("INSERT INTO app_settings (key, value) VALUES ('hero_resolution', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(String(settings.heroResolution).trim())
+  if (settings.preferAnimatedArtwork !== undefined) db.prepare("INSERT INTO app_settings (key, value) VALUES ('prefer_animated_artwork', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(settings.preferAnimatedArtwork ? 'true' : 'false')
 
   if (settings.autoHideSupportEntries !== undefined) enforceHiddenClassification(db)
   return getLibrarySettings(db)
@@ -777,4 +843,4 @@ function deleteUserCapture(db, captureId) {
   return db.prepare('DELETE FROM user_captures WHERE id = ?').run(captureId)
 }
 
-module.exports = { createDatabase, seedIfEmpty, getGames, setGameHidden, updateGameStatus, updateGameMetadata, deleteGames, bulkUpdateGames, moveGameCategory, bulkMoveGameCategory, bulkSetGameHidden, getLibrarySettings, setLibrarySettings, getActivityLog, logActivity, getAppConfig, setAppConfig, getLibraryHealth, getRandomInstalledGame, getLibraryStats, exportLibraryCsv, exportSelectedCsv, purgeLibrary, enforceUtilityClassification, enforceDlcClassification, getUserCaptures, addUserCapture, deleteUserCapture }
+module.exports = { createDatabase, openDatabase, seedIfEmpty, getGames, setGameHidden, updateGameStatus, updateGameMetadata, deleteGames, bulkUpdateGames, moveGameCategory, bulkMoveGameCategory, bulkSetGameHidden, getLibrarySettings, setLibrarySettings, getActivityLog, logActivity, getAppConfig, setAppConfig, getLibraryHealth, getRandomInstalledGame, getLibraryStats, exportLibraryCsv, exportSelectedCsv, purgeLibrary, enforceUtilityClassification, enforceDlcClassification, getUserCaptures, addUserCapture, deleteUserCapture }

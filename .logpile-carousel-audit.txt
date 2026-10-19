@@ -1,9 +1,0 @@
-logpile Cinematic carousel audit and fix — 2026-08-27.
-
-The current HeroView received the full filteredGames array, but its filmstrip render used games.slice(0, 80), which capped visible carousel entries. The heading already used games.length, so the dataset and displayed subset were inconsistent.
-
-The database getGames query contains no LIMIT 100 cap; the collector and HeroView receive the complete filtered dataset.
-
-Fix applied in src/App.jsx: HeroView now creates a horizontal useVirtualizer with count: games.length, horizontal: true, estimateSize: 95, and overscan: 8. It renders virtual items into a fixed-width relative track and no longer slices the array. The header remains games.length titles, now matching the complete filtered dataset.
-
-Fix applied in src/styles.css: filmstrip-scroll is an overflow-x auto block; filmstrip-virtual-track supplies the full horizontal width and fixed height; virtual-film-card is absolutely positioned at the virtual item transform.

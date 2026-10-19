@@ -5,6 +5,7 @@ const { scanRepacks } = require('./scanners/repackScanner.cjs')
 const { scanUbisoft } = require('./scanners/ubisoftScanner.cjs')
 const { scanEA } = require('./scanners/eaScanner.cjs')
 const { scanXbox } = require('./scanners/xboxScanner.cjs')
+const { scanAmazon } = require('./scanners/amazonScanner.cjs')
 const { importCatalog, importCatalogFromBuffer } = require('./excelImporter.cjs')
 const { mergeRecords } = require('./deduplicationService.cjs')
 const {
@@ -20,6 +21,7 @@ async function scanAll(db, onProgress, userDataPath) {
     { source: 'steam', run: scanSteam },
     { source: 'epic', run: scanEpic },
     { source: 'gog', run: scanGog },
+    { source: 'amazon', run: scanAmazon },
     { source: 'repack', run: scanRepacks },
     { source: 'ubisoft', run: scanUbisoft },
     { source: 'ea', run: scanEA },

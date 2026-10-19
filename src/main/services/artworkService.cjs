@@ -4,6 +4,8 @@ const path = require('node:path')
 const { pathToFileURL, fileURLToPath } = require('node:url')
 const { execFileSync } = require('node:child_process')
 const { fetchIgdbMetadata, stripTitleNoise } = require('./igdbService.cjs')
+const { isDlcTitle, isDlcException } = require('./utilityRules.cjs')
+const { normalizeCanonicalTitle } = require('./deduplicationService.cjs')
 
 const API_BASE = 'https://www.steamgriddb.com/api/v2'
 
@@ -167,7 +169,11 @@ async function fetchHeroesForId(id, apiKey, signal, heroResolution = '2.5k') {
   const cleanId = String(id).trim()
   const dimQuery = heroResolution === '4k'
     ? '?dimensions=3840x2160,3840x1240'
-    : '?dimensions=2560x1440,1920x1080,1920x620'
+    : (heroResolution === '720p'
+      ? '?dimensions=1920x620,1920x1080'
+      : (heroResolution === '1080p'
+        ? '?dimensions=1920x1080,1920x620'
+        : '?dimensions=2560x1440,1920x1080,1920x620'))
   try {
     const heroes = await apiGet(`/heroes/game/${cleanId}${dimQuery}`, apiKey, signal)
     if (heroes?.length > 0) return heroes
@@ -189,9 +195,70 @@ async function fetchHeroesForId(id, apiKey, signal, heroResolution = '2.5k') {
   return []
 }
 
-function pickBestHero(heroes, heroResolution = '2.5k') {
+function pickBestGrid(grids = []) {
+  if (!Array.isArray(grids) || !grids.length) return null
+
+  // Filter out grids with DVD cases, plastic case mockups, or ugly borders when clean covers exist
+  const isMockupOrDvd = (g) => {
+    const url = String(g.url || '').toLowerCase()
+    const notes = String(g.notes || '').toLowerCase()
+    const style = String(g.style || '').toLowerCase()
+    return url.includes('dvd') || url.includes('case') || url.includes('mockup') || notes.includes('dvd') || style.includes('dvd')
+  }
+  const cleanGrids = grids.filter(g => !isMockupOrDvd(g))
+  const pool = cleanGrids.length > 0 ? cleanGrids : grids
+
+  // 1. Prefer crisp static 600x900 WebP (lightweight & high fidelity)
+  const webp600 = pool.find(g => String(g.url || '').toLowerCase().includes('.webp') && Number(g.width) === 600 && Number(g.height) === 900)
+  if (webp600) return webp600
+  // 2. Any 600x900 grid
+  const standard600 = pool.find(g => Number(g.width) === 600 && Number(g.height) === 900)
+  if (standard600) return standard600
+  // 3. Any webp grid
+  const anyWebp = pool.find(g => String(g.url || '').toLowerCase().includes('.webp'))
+  if (anyWebp) return anyWebp
+  return pool[0]
+}
+
+function pickBestHero(heroes, heroResolution = '2.5k', preferAnimated = false) {
   if (!Array.isArray(heroes) || !heroes.length) return null
-  if (heroResolution === '4k') {
+
+  // If user enabled animated artwork, prioritize animated webp/gif for the hero showcase
+  if (preferAnimated) {
+    const animatedHero = heroes.find(h => {
+      const url = String(h.url || '').toLowerCase()
+      const mime = String(h.mime || '').toLowerCase()
+      return mime.includes('webp') || mime.includes('gif') || url.includes('.webp') || url.includes('.gif') || Boolean(h.animated)
+    })
+    if (animatedHero) return animatedHero
+  }
+
+  const isWebp = (h) => String(h.url || '').toLowerCase().includes('.webp')
+
+  if (heroResolution === '720p') {
+    // 720p / Compact: prioritize 1920x620 or <=720 height (lowest storage)
+    const compactWebp = heroes.find((h) => isWebp(h) && Number(h.height) <= 720)
+    if (compactWebp) return compactWebp
+    const exact620 = heroes.find((h) => Number(h.width) === 1920 && Number(h.height) === 620)
+    if (exact620) return exact620
+    const anyCompact = heroes.find((h) => Number(h.height) <= 720)
+    if (anyCompact) return anyCompact
+    const exact1080 = heroes.find((h) => Number(h.width) === 1920 && Number(h.height) === 1080)
+    if (exact1080) return exact1080
+  } else if (heroResolution === '1080p') {
+    // 1080p / Full HD: prioritize 1920x1080 (balanced)
+    const webp1080 = heroes.find((h) => isWebp(h) && Number(h.width) === 1920 && Number(h.height) === 1080)
+    if (webp1080) return webp1080
+    const exact1080 = heroes.find((h) => Number(h.width) === 1920 && Number(h.height) === 1080)
+    if (exact1080) return exact1080
+    const exact620 = heroes.find((h) => Number(h.width) === 1920 && Number(h.height) === 620)
+    if (exact620) return exact620
+    const exact1440 = heroes.find((h) => Number(h.width) === 2560 && Number(h.height) === 1440)
+    if (exact1440) return exact1440
+  } else if (heroResolution === '4k') {
+    // 4K / Ultra HD
+    const webp4k = heroes.find((h) => isWebp(h) && Number(h.width) === 3840)
+    if (webp4k) return webp4k
     const exact4k = heroes.find((h) => Number(h.width) === 3840 && Number(h.height) === 2160)
     if (exact4k) return exact4k
     const wide4k = heroes.find((h) => Number(h.width) === 3840)
@@ -201,6 +268,9 @@ function pickBestHero(heroes, heroResolution = '2.5k') {
     const exact1080 = heroes.find((h) => Number(h.width) === 1920 && Number(h.height) === 1080)
     if (exact1080) return exact1080
   } else {
+    // Default 2.5K / 1440p (High Quality)
+    const webp1440 = heroes.find((h) => isWebp(h) && Number(h.width) === 2560 && Number(h.height) === 1440)
+    if (webp1440) return webp1440
     const exact1440 = heroes.find((h) => Number(h.width) === 2560 && Number(h.height) === 1440)
     if (exact1440) return exact1440
     const exact1080 = heroes.find((h) => Number(h.width) === 1920 && Number(h.height) === 1080)
@@ -376,12 +446,16 @@ function relinkLocalArtwork(db, userDataPath, game) {
     if (!currentValid) {
       const slug = artworkSlug(game)
       const localMatches = [
+        path.join(artworkDir, `${slug}-${kind}.webp`),
         path.join(artworkDir, `${slug}-${kind}.jpg`),
         path.join(artworkDir, `${slug}-${kind}.png`),
+        path.join(artworkDir, `${slug}_${kind}.webp`),
         path.join(artworkDir, `${slug}_${kind}.jpg`),
         path.join(artworkDir, `${slug}-icon.png`),
+        path.join(legacyDir, `${slug}-${kind}.webp`),
         path.join(legacyDir, `${slug}-${kind}.jpg`),
         path.join(legacyDir, `${slug}-${kind}.png`),
+        path.join(legacyDir, `${slug}_${kind}.webp`),
         path.join(legacyDir, `${slug}_${kind}.jpg`),
         path.join(legacyDir, `${slug}-icon.png`),
       ]
@@ -410,11 +484,29 @@ async function apiGet(endpoint, apiKey, signal) {
   return (await res.json()).data || []
 }
 
+function getArtworkExtension(url, fallback = 'jpg') {
+  if (!url) return fallback
+  const clean = String(url).split('?')[0].toLowerCase()
+  if (clean.endsWith('.webp')) return 'webp'
+  if (clean.endsWith('.png')) return 'png'
+  if (clean.endsWith('.gif')) return 'gif'
+  if (clean.endsWith('.jpeg') || clean.endsWith('.jpg')) return 'jpg'
+  return fallback
+}
+
 async function downloadImage(url, destination) {
   const res = await fetch(url)
   if (!res.ok) throw new Error(`Download failed: ${res.status}`)
-  await fs.writeFile(destination, Buffer.from(await res.arrayBuffer()))
-  return pathToFileURL(destination).href
+  const contentType = (res.headers.get('content-type') || '').toLowerCase()
+  let finalDest = destination
+  // If destination has a generic ext but actual content is webp or png, adjust extension
+  if (contentType.includes('webp') && !finalDest.endsWith('.webp')) {
+    finalDest = finalDest.replace(/\.[a-zA-Z0-9]+$/, '.webp')
+  } else if (contentType.includes('png') && !finalDest.endsWith('.png')) {
+    finalDest = finalDest.replace(/\.[a-zA-Z0-9]+$/, '.png')
+  }
+  await fs.writeFile(finalDest, Buffer.from(await res.arrayBuffer()))
+  return pathToFileURL(finalDest).href
 }
 
 async function runBulkArtworkSync(db, userDataPath, apiKey, onProgress, signal, options = {}) {
@@ -422,6 +514,7 @@ async function runBulkArtworkSync(db, userDataPath, apiKey, onProgress, signal, 
   if (!key) throw new Error('SteamGridDB API key is required.')
   const cacheDir = getArtworkDirectory(userDataPath)
   const heroResolution = getAppSettingValue(db, 'hero_resolution', '2.5k')
+  const preferAnimated = Boolean(options?.preferAnimated ?? (getAppSettingValue(db, 'prefer_animated_artwork', 'false') === 'true'))
 
   const forceAll = Boolean(options?.forceAll || options?.forceHeroes)
 
@@ -507,13 +600,16 @@ async function runBulkArtworkSync(db, userDataPath, apiKey, onProgress, signal, 
           if (needsLogo && !logos.length) logos = await fetchLogosForId(resolvedId, key, signal)
         }
       }
-      if (grids?.[0]?.url && needsCover) {
-        const dest = path.join(cacheDir, `${artworkSlug(game)}-cover.jpg`)
-        newCoverUrl = await downloadImage(grids[0].url, dest)
+      const bestGrid = pickBestGrid(grids)
+      if (bestGrid?.url && needsCover) {
+        const ext = getArtworkExtension(bestGrid.url, 'jpg')
+        const dest = path.join(cacheDir, `${artworkSlug(game)}-cover.${ext}`)
+        newCoverUrl = await downloadImage(bestGrid.url, dest)
       }
-      const bestHero = pickBestHero(heroes, heroResolution)
+      const bestHero = pickBestHero(heroes, heroResolution, preferAnimated)
       if (bestHero?.url && needsHero) {
-        const destHero = path.join(cacheDir, `${artworkSlug(game)}-hero.jpg`)
+        const ext = getArtworkExtension(bestHero.url, 'jpg')
+        const destHero = path.join(cacheDir, `${artworkSlug(game)}-hero.${ext}`)
         newHeroUrl = await downloadImage(bestHero.url, destHero)
       }
       if (logos?.[0]?.url && needsLogo) {
@@ -990,6 +1086,9 @@ async function findSteamAppIdForTitle(title, signal, retryCount = 0) {
 
 function extractDlcBaseTitle(title) {
   if (!title) return null
+  // Only extract base title if the title is actually a DLC!
+  if (!isDlcTitle(title)) return null
+
   let t = String(title).trim().replace(/[™®©]/g, '').trim()
   if (t.includes(' - ')) {
     const cand = t.split(' - ')[0].trim()
@@ -1005,6 +1104,13 @@ function extractDlcBaseTitle(title) {
   }
   const noise = [
     /\b(?:Soundtrack|Original\s+Soundtrack|OST)\b/i,
+    /\b(?:The\s+Assignment|The\s+Consequence|The\s+Executioner)\b/i,
+    /\b(?:Sam'?s\s+Story|The\s+Two\s+Colonels)\b/i,
+    /\b(?:Burial\s+at\s+Sea|Clash\s+in\s+the\s+Clouds)\b/i,
+    /\b(?:Hearts\s+of\s+Stone|Blood\s+and\s+Wine)\b/i,
+    /\b(?:The\s+Knife\s+of\s+Dunwall|The\s+Brigmore\s+Witches)\b/i,
+    /\b(?:Far\s+Harbor|Nuka[- ]World|Dead\s+Money|Honest\s+Hearts|Old\s+World\s+Blues|Lonesome\s+Road)\b/i,
+    /\b(?:Shadow\s+of\s+the\s+Erdtree|Phantom\s+Liberty|Undead\s+Nightmare)\b/i,
     /\b(?:Extras\s+Pack|Giveaway|Mega\s+Giveaway|Mega\s+Pack|Party\s+Pack|Founder'?s\s+Pack|Starter\s+Pack|Decal\s+Pack|Livery\s+Pack)\b/i,
     /\b(?:Deluxe\s+Edition\s+Upgrade(?:\s+Bundle)?|Upgrade\s+Bundle|Upgrade)\b/i,
     /\b(?:Franchise\s+Bundle|\d+th\s+Anniversary\s+Bundle|Starter\s+Bundle(?:\s*\d+)?|The\s+Daring\s+Lifestyle\s+Bundle|Seasoning'?s\s+Greetings\s+Bundle|Thanatoasty\s+Bundle|Winterfest\s+Bundle|Bundle)\b/i,
@@ -1022,26 +1128,30 @@ function findLocalParentGame(db, dlcTitle, excludeId) {
   const baseTitle = extractDlcBaseTitle(dlcTitle)
   if (!baseTitle) return null
   try {
+    const baseNorm = normalizeCanonicalTitle(baseTitle)
     let parent = db.prepare(`
       SELECT * FROM games 
-      WHERE (canonical_title = ? OR normalized_title = ?)
+      WHERE (normalized_title = ? OR LOWER(canonical_title) = LOWER(?))
         AND id <> ?
-        AND (developer IS NOT NULL AND TRIM(developer) <> '')
+        AND (is_dlc = 0 OR is_dlc IS NULL)
       LIMIT 1
-    `).get(baseTitle, baseTitle.toLowerCase(), excludeId)
+    `).get(baseNorm, baseTitle, excludeId)
 
-    if (!parent) {
-      parent = db.prepare(`
-        SELECT * FROM games 
-        WHERE (canonical_title LIKE ? OR normalized_title LIKE ?)
-          AND id <> ?
-          AND (developer IS NOT NULL AND TRIM(developer) <> '')
-          AND (is_dlc = 0 OR is_dlc IS NULL)
-        ORDER BY LENGTH(canonical_title) ASC
-        LIMIT 1
-      `).get(`${baseTitle}%`, `${baseTitle.toLowerCase()}%`, excludeId)
+    if (parent) return parent
+
+    const candidates = db.prepare(`
+      SELECT * FROM games 
+      WHERE id <> ? 
+        AND (is_dlc = 0 OR is_dlc IS NULL)
+        AND (developer IS NOT NULL AND TRIM(developer) <> '')
+    `).all(excludeId)
+
+    for (const cand of candidates) {
+      if (normalizeCanonicalTitle(cand.canonical_title) === baseNorm) {
+        return cand
+      }
     }
-    return parent || null
+    return null
   } catch {
     return null
   }
@@ -1100,8 +1210,9 @@ async function syncLibraryMetadata(db, userDataPath, apiKey, onProgress, signal,
     const needsRelDate = !game.release_date || !String(game.release_date).trim()
     const needsMeta = forceAll || needsDesc || needsGenres || needsDev || needsPub || needsRelDate
 
-    const dlcBaseTitle = extractDlcBaseTitle(game.canonical_title)
-    if (needsMeta && (game.is_dlc === 1 || dlcBaseTitle)) {
+    const isConfirmedDlc = (game.is_dlc === 1 || isDlcTitle(game.canonical_title)) && !isDlcException(game.canonical_title)
+    const dlcBaseTitle = isConfirmedDlc ? extractDlcBaseTitle(game.canonical_title) : null
+    if (needsMeta && isConfirmedDlc && dlcBaseTitle) {
       const localParent = findLocalParentGame(db, game.canonical_title, game.id)
       if (localParent) {
         const desc = localParent.description || null
@@ -1227,6 +1338,7 @@ async function syncLibraryMetadataAndArt(db, userDataPath, apiKey, onProgress, s
   const key = safeKey(apiKey)
   const cacheDir = getArtworkDirectory(userDataPath)
   const heroResolution = getAppSettingValue(db, 'hero_resolution', '2.5k')
+  const preferAnimated = Boolean(options?.preferAnimated ?? (getAppSettingValue(db, 'prefer_animated_artwork', 'false') === 'true'))
   const igdbClientId = getAppSettingValue(db, 'igdb_client_id')
   const igdbClientSecret = getAppSettingValue(db, 'igdb_client_secret')
 
@@ -1269,8 +1381,9 @@ async function syncLibraryMetadataAndArt(db, userDataPath, apiKey, onProgress, s
     const needsMeta = needsDesc || needsGenres || needsDev || needsPub || needsRelDate
 
     // Check if this is a DLC: if parent game is locally in library, inherit metadata and artwork!
-    const dlcBaseTitle = extractDlcBaseTitle(game.canonical_title)
-    if (game.is_dlc === 1 || dlcBaseTitle) {
+    const isConfirmedDlc = (game.is_dlc === 1 || isDlcTitle(game.canonical_title)) && !isDlcException(game.canonical_title)
+    const dlcBaseTitle = isConfirmedDlc ? extractDlcBaseTitle(game.canonical_title) : null
+    if (isConfirmedDlc && dlcBaseTitle) {
       const localParent = findLocalParentGame(db, game.canonical_title, game.id)
       if (localParent) {
         const desc = localParent.description || null
@@ -1421,13 +1534,16 @@ async function syncLibraryMetadataAndArt(db, userDataPath, apiKey, onProgress, s
         }
       }
 
-      if (grids?.[0]?.url && needsCover) {
-        const dest = path.join(cacheDir, `${artworkSlug(game)}-cover.jpg`)
-        newCoverUrl = await downloadImage(grids[0].url, dest)
+      const bestGrid = pickBestGrid(grids)
+      if (bestGrid?.url && needsCover) {
+        const ext = getArtworkExtension(bestGrid.url, 'jpg')
+        const dest = path.join(cacheDir, `${artworkSlug(game)}-cover.${ext}`)
+        newCoverUrl = await downloadImage(bestGrid.url, dest)
       }
-      const bestHero = pickBestHero(heroes, heroResolution)
+      const bestHero = pickBestHero(heroes, heroResolution, preferAnimated)
       if (bestHero?.url && needsHero) {
-        const destHero = path.join(cacheDir, `${artworkSlug(game)}-hero.jpg`)
+        const ext = getArtworkExtension(bestHero.url, 'jpg')
+        const destHero = path.join(cacheDir, `${artworkSlug(game)}-hero.${ext}`)
         newHeroUrl = await downloadImage(bestHero.url, destHero)
       }
       if (logos?.[0]?.url && needsLogo) {

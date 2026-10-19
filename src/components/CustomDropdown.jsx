@@ -24,6 +24,10 @@ export function CustomDropdown({
   const updatePosition = () => {
     if (!triggerRef.current) return
     const rect = triggerRef.current.getBoundingClientRect()
+    if (rect.bottom < 30 || rect.top > window.innerHeight) {
+      setIsOpen(false)
+      return
+    }
     const spaceBelow = window.innerHeight - rect.bottom
     const openUpwards = spaceBelow < 220 && rect.top > 220
 

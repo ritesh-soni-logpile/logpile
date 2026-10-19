@@ -29,6 +29,7 @@ protocol.registerSchemesAsPrivileged([
 
 const {
   createDatabase,
+  openDatabase,
   seedIfEmpty,
   getGames,
   setGameHidden,
@@ -218,8 +219,7 @@ async function restoreDatabaseBackup(targetBackupPath, userDataPath) {
 
   let verifyDb = null
   try {
-    const Database = require('better-sqlite3')
-    verifyDb = new Database(targetBackupPath, { readonly: true, fileMustExist: true })
+    verifyDb = openDatabase(targetBackupPath, { readonly: true, fileMustExist: true })
     const checkResult = verifyDb.pragma('quick_check(1)', { simple: true })
     if (checkResult !== 'ok') {
       throw new Error('Backup integrity check failed: database file is corrupted.')
@@ -367,6 +367,12 @@ function createWindow() {
         mainWindow.webContents.toggleDevTools()
         event.preventDefault()
       }
+    }
+  })
+
+  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    if (!app.isPackaged) {
+      console.log(`[Renderer L${level}] ${message}`)
     }
   })
 
@@ -1185,9 +1191,8 @@ app.whenReady().then(() => {
     try { fs.mkdirSync(artworkDir, { recursive: true }) } catch {}
   }
   try {
-    const { migrateLegacyArtwork, relinkAllLocalArtwork } = require('../src/main/services/artworkService.cjs')
+    const { migrateLegacyArtwork } = require('../src/main/services/artworkService.cjs')
     migrateLegacyArtwork(app.getPath('userData'))
-    relinkAllLocalArtwork(db, app.getPath('userData'))
   } catch (migErr) {
     console.warn('[App] Artwork migration notice:', migErr?.message)
   }
@@ -1251,7 +1256,14 @@ app.whenReady().then(() => {
         return new Response('Access denied: Path outside allowed directories', { status: 403, statusText: 'Forbidden' })
       }
 
-      return net.fetch(pathToFileURL(realDiskPath).href)
+      const response = await net.fetch(pathToFileURL(realDiskPath).href)
+      const headers = new Headers(response.headers)
+      headers.set('Cache-Control', 'public, max-age=31536000, immutable')
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+      })
     } catch (error) {
       return new Response('Internal error loading artwork', { status: 500 })
     }
@@ -1259,6 +1271,12 @@ app.whenReady().then(() => {
 
   if (process.platform === 'win32') app.setAppUserModelId('com.logpile.library')
   db = createDatabase(path.join(app.getPath('userData'), 'logpile.db'))
+  try {
+    const { relinkAllLocalArtwork } = require('../src/main/services/artworkService.cjs')
+    relinkAllLocalArtwork(db, app.getPath('userData'))
+  } catch (migErr) {
+    console.warn('[App] Artwork relink notice:', migErr?.message)
+  }
   repairBrokenArtworkLinks(db, app.getPath('userData'))
   registerIpc()
   createWindow()

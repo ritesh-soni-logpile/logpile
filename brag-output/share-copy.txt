@@ -1,1 +1,0 @@
-Reclaim your PC gaming library with Logpile — sub-second cold boot, 100% offline local SQLite, automated 4K SteamGridDB scraping, and 3 bespoke cinematic layout modes. Built for true collectors, zero store ads.

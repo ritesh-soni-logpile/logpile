@@ -45,6 +45,17 @@ const DLC_TITLE_PATTERNS = Object.freeze([
   /\bbundle\b/i,
   /\bcreator kit\b/i,
   /(?:^|[-:])\s*first response\b/i,
+  // Story expansions and known DLC add-ons:
+  /\b(the assignment|the consequence|the executioner)\b/i,
+  /\b(sam'?s story|the two colonels)\b/i,
+  /\b(burial at sea|clash in the clouds)\b/i,
+  /\b(hearts of stone|blood and wine)\b/i,
+  /\b(the knife of dunwall|the brigmore witches)\b/i,
+  /\b(tiny tina'?s assault on dragon keep)\b/i,
+  /\b(far harbor|nuka[- ]world)\b/i,
+  /\b(dead money|honest hearts|old world blues|lonesome road|point lookout|mothership zeta|broken steel|operation anchorage|the pitt)\b/i,
+  /\b(shadow of the erdtree|phantom liberty|undead nightmare)\b/i,
+  /\b(artorias of the abyss|ashes of ariandel|the ringed city)\b/i,
 ])
 const DLC_TITLE_EXCEPTIONS = new Set([
   'contentwarning',
@@ -54,7 +65,27 @@ const DLC_TITLE_EXCEPTIONS = new Set([
   'hotwheelsunleashed',
   'hotwheelsunleashed2',
   'fallout3',
-  'fallout4'
+  'fallout4',
+  'silenthill',
+  'silenthill2',
+  'silenthill3',
+  'silenthill4',
+  'silenthillf',
+  'silenthilltownfall',
+  'silenthilltheshortmessage',
+  'silenthilldownpour',
+  'silenthillhomecoming',
+  'silenthillshatteredmemories',
+  'thesilentage',
+  'hitman2silentassassin',
+  'theevilwithin',
+  'theevilwithin2',
+  'metro2033',
+  'metro2033redux',
+  'metrolastlight',
+  'metrolastlightredux',
+  'metroexodus',
+  'metroexodusenhancededition',
 ])
 
 function normalizeKey(title) {
@@ -77,13 +108,21 @@ function isHiddenByDefaultTitle(title) {
   return HIDDEN_EXACT_TITLES.has(key) || HIDDEN_TITLE_PATTERNS.some((pattern) => pattern.test(value))
 }
 
-function isDlcTitle(title) {
+function isDlcException(title) {
   const value = String(title || '').trim()
   const key = normalizeKey(value)
-  if (DLC_TITLE_EXCEPTIONS.has(key)) return false
+  if (DLC_TITLE_EXCEPTIONS.has(key)) return true
+  const strippedKey = key.replace(/(gameoftheyear|goty|enhanced|definitive|special|deluxe|standard|edition|remastered|remaster)/g, '')
+  if (DLC_TITLE_EXCEPTIONS.has(strippedKey)) return true
+  return false
+}
+
+function isDlcTitle(title) {
+  const value = String(title || '').trim()
+  if (isDlcException(value)) return false
   if (isUtilityTitle(value)) return false
   return DLC_TITLE_PATTERNS.some((pattern) => pattern.test(value))
 }
 
-module.exports = { UTILITY_TITLES, utilityKey, isUtilityTitle, isHiddenByDefaultTitle, isDlcTitle }
+module.exports = { UTILITY_TITLES, utilityKey, isUtilityTitle, isHiddenByDefaultTitle, isDlcTitle, isDlcException, DLC_TITLE_EXCEPTIONS }
 

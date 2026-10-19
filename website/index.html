@@ -1,0 +1,2973 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Logpile &mdash; Offline-First PC Game Launcher & Backlog Sanctuary</title>
+  <meta name="description" content="A museum-grade, local-first PC game launcher and collector's sanctuary by Corporate Introvert Gamer. Zero telemetry, multi-drive index parsing, fast local startup, and offline SQLite tranquility.">
+  
+  <!-- OpenGraph / Social Metadata -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Logpile &mdash; The Offline-First PC Game Launcher for Collectors">
+  <meta property="og:description" content="Fast local startup, zero telemetry, multi-drive scanning, and five dynamic themes for your PC backlog.">
+  <meta property="og:image" content="assets/logpile-banner.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="assets/logpile-banner.png">
+  <link rel="icon" type="image/jpeg" href="assets/logpile-emblem-3d.jpg">
+
+  <!-- Google Fonts: Cormorant Garamond (Editorial Luxury Serif) + JetBrains Mono + Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,600&family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            void: '#020305',
+            obsidian: '#05070b',
+            slateCustom: '#090d14',
+            emeraldCustom: {
+              300: '#6ee7b7',
+              400: '#34d399',
+              500: '#10b981',
+              600: '#059669',
+            },
+            parchment: '#e0be84',
+          },
+          fontFamily: {
+            serif: ['Cormorant Garamond', 'Georgia', 'serif'],
+            sans: ['Plus Jakarta Sans', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Lenis Smooth Scroll -->
+  <script src="https://unpkg.com/lenis@1/dist/lenis.min.js"></script>
+
+  <!-- GSAP 3.12 & ScrollTrigger -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+
+  <!-- Three.js for 3D Spatial Canvas -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+
+  <style>
+    :root {
+      --bg-void: #020305;
+      --bg-obsidian: #05070b;
+      --bg-slate: #090d14;
+      --emerald-glow: rgba(16, 185, 129, 0.4);
+      --theme-accent: #10b981;
+      --theme-glow: rgba(16, 185, 129, 0.35);
+      --ease-cinematic: cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html.lenis, html.lenis body {
+      height: auto;
+    }
+
+    .lenis.lenis-smooth {
+      scroll-behavior: auto !important;
+    }
+
+    body {
+      background-color: var(--bg-void);
+      color: #e2e8f0;
+      font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      cursor: default;
+      position: relative;
+    }
+
+    /* Three.js Background Canvas STRICTLY IN BACKGROUND */
+    #webgl-canvas {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: -1;
+      opacity: 0.52;
+    }
+
+    /* Film Grain Noise */
+    .film-grain {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.035'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 80;
+    }
+
+    /* Glass Pill Base */
+    .glass-pill {
+      background: rgba(8, 11, 17, 0.85);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.14),
+                  0 20px 45px -10px rgba(0, 0, 0, 0.85);
+    }
+
+    /* Double-Bezel Hardware Architecture */
+    .double-bezel {
+      position: relative;
+      border-radius: 2rem;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 100%);
+      padding: 1px;
+      box-shadow: 0 40px 90px -20px rgba(0, 0, 0, 0.95),
+                  0 0 0 1px rgba(255, 255, 255, 0.06);
+      transition: transform 0.5s var(--ease-cinematic), box-shadow 0.5s var(--ease-cinematic), border-color 0.4s ease;
+      overflow: hidden;
+      --glare-x: 50%;
+      --glare-y: 50%;
+      --glare-opacity: 0;
+    }
+
+    /* Specular dynamic light tracking across double-bezel rim */
+    .double-bezel::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: radial-gradient(
+        circle 440px at var(--glare-x, 50%) var(--glare-y, 50%),
+        rgba(255, 255, 255, 0.38) 0%,
+        rgba(16, 185, 129, 0.28) 32%,
+        transparent 72%
+      );
+      opacity: var(--glare-opacity, 0);
+      transition: opacity 0.35s ease;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .double-bezel-inner {
+      border-radius: calc(2rem - 1px);
+      background: linear-gradient(160deg, rgba(10, 14, 21, 0.98) 0%, rgba(4, 6, 9, 0.99) 100%);
+      box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.16),
+                  inset 0 -1px 2px 0 rgba(0, 0, 0, 0.85);
+      position: relative;
+      overflow: hidden;
+      z-index: 2;
+    }
+
+    .double-bezel:hover {
+      border-color: rgba(255, 255, 255, 0.22);
+      box-shadow: 0 45px 110px -20px rgba(0, 0, 0, 0.98),
+                  0 0 40px -5px rgba(16, 185, 129, 0.15);
+    }
+
+    /* Button-in-Button Architecture */
+    .btn-nested-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.95rem;
+      padding: 0.72rem 0.85rem 0.72rem 1.85rem;
+      border-radius: 9999px;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: #021a10;
+      font-weight: 600;
+      font-size: 0.98rem;
+      letter-spacing: -0.01em;
+      text-decoration: none;
+      box-shadow: 0 0 45px -5px rgba(16, 185, 129, 0.5),
+                  inset 0 1px 1px rgba(255, 255, 255, 0.5);
+      transition: all 0.4s var(--ease-cinematic);
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+      border: none;
+    }
+
+    .btn-nested-primary:hover {
+      transform: translateY(-2px) scale(1.02);
+      box-shadow: 0 15px 55px -5px rgba(16, 185, 129, 0.8),
+                  inset 0 1px 1px rgba(255, 255, 255, 0.7);
+    }
+
+    .btn-nested-primary .btn-icon-wrapper {
+      width: 2.35rem;
+      height: 2.35rem;
+      border-radius: 9999px;
+      background: rgba(2, 26, 16, 0.24);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.4s var(--ease-cinematic);
+    }
+
+    .btn-nested-primary:hover .btn-icon-wrapper {
+      transform: translateX(3px) rotate(4deg);
+    }
+
+    .btn-nested-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.72rem 1.5rem 0.72rem 1.7rem;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #f1f5f9;
+      font-weight: 500;
+      font-size: 0.95rem;
+      text-decoration: none;
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.08);
+      transition: all 0.3s var(--ease-cinematic);
+      cursor: pointer;
+    }
+
+    .btn-nested-secondary:hover {
+      background: rgba(255, 255, 255, 0.09);
+      border-color: rgba(255, 255, 255, 0.28);
+      transform: translateY(-2px);
+      color: #ffffff;
+    }
+
+    /* Eyebrow Badges */
+    .eyebrow-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.55rem;
+      padding: 0.4rem 1.05rem;
+      border-radius: 9999px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.74rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      background: rgba(16, 185, 129, 0.08);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: #34d399;
+      box-shadow: 0 0 25px -4px rgba(16, 185, 129, 0.25);
+    }
+
+    .eyebrow-badge.amber {
+      background: rgba(217, 119, 6, 0.1);
+      border-color: rgba(217, 119, 6, 0.35);
+      color: #fbbf24;
+      box-shadow: 0 0 25px -4px rgba(217, 119, 6, 0.25);
+    }
+
+    .eyebrow-badge.neutral {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.15);
+      color: #94a3b8;
+    }
+
+    /* 3D Perspective Tilt with Specular Mouse Glare */
+    .tilt-card {
+      transform-style: preserve-3d;
+      perspective: 1200px;
+      position: relative;
+      --glare-x: 50%;
+      --glare-y: 50%;
+      --glare-opacity: 0;
+    }
+
+    .tilt-inner {
+      transform-style: preserve-3d;
+      will-change: transform;
+      position: relative;
+    }
+
+    /* Dynamic Radial Specular Highlight Overlay */
+    .specular-glare-overlay {
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      z-index: 25;
+      opacity: var(--glare-opacity, 0);
+      background: radial-gradient(
+        circle 380px at var(--glare-x, 50%) var(--glare-y, 50%),
+        rgba(255, 255, 255, 0.16) 0%,
+        rgba(255, 255, 255, 0.04) 40%,
+        transparent 75%
+      );
+      mix-blend-mode: screen;
+      transition: opacity 0.35s ease;
+    }
+
+    /* Horizontal Scrub Gallery Styles */
+    .horizontal-scroll-wrapper {
+      position: relative;
+      overflow: hidden;
+      background-color: var(--bg-void);
+    }
+
+    .horizontal-scroll-container {
+      display: flex;
+      flex-wrap: nowrap;
+      width: 500vw;
+      height: 100vh;
+      will-change: transform;
+    }
+
+    .horizontal-panel {
+      width: 100vw;
+      height: 100vh;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem 2rem 2rem;
+      position: relative;
+      box-sizing: border-box;
+    }
+
+    /* Pinned Gallery Sticky HUD Strip */
+    .gallery-hud-strip {
+      position: absolute;
+      top: 2rem;
+      left: 50%;
+      transform: translateX(-50%);
+      width: calc(100% - 3rem);
+      max-width: 64rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1.5rem;
+      padding: 0.85rem 1.75rem;
+      border-radius: 9999px;
+      background: rgba(8, 11, 17, 0.85);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.85),
+                  inset 0 1px 1px rgba(255, 255, 255, 0.14);
+      z-index: 30;
+      pointer-events: none;
+    }
+
+    /* Video Theater Frame */
+    .video-theater-frame {
+      position: relative;
+      border-radius: 1.75rem;
+      overflow: hidden;
+      background: #000000;
+      box-shadow: 0 35px 80px -15px rgba(0, 0, 0, 0.98),
+                  inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+    }
+
+    .video-theater-frame video {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: cover;
+      background: #000000;
+    }
+
+    .video-theater-controls {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 1.6rem 2rem;
+      background: linear-gradient(180deg, transparent 0%, rgba(2, 3, 5, 0.8) 35%, rgba(2, 3, 5, 0.97) 100%);
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+      z-index: 20;
+    }
+
+    .video-play-trigger {
+      width: 2.85rem;
+      height: 2.85rem;
+      border-radius: 9999px;
+      background: #10b981;
+      color: #021a10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: transform 0.3s var(--ease-cinematic), background 0.3s ease;
+      box-shadow: 0 0 30px rgba(16, 185, 129, 0.45);
+    }
+
+    .video-play-trigger:hover {
+      transform: scale(1.08);
+      background: #34d399;
+    }
+
+    /* Spec Boxes with Specular Border Glow */
+    .spec-box {
+      background: rgba(255, 255, 255, 0.025);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 1.25rem;
+      padding: 1.5rem;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.3s ease, background 0.3s ease;
+      --glare-x: 50%;
+      --glare-y: 50%;
+      --glare-opacity: 0;
+    }
+
+    .spec-box::before {
+      content: '';
+      position: absolute;
+      inset: -1px;
+      border-radius: inherit;
+      background: radial-gradient(
+        circle 300px at var(--glare-x, 50%) var(--glare-y, 50%),
+        rgba(255, 255, 255, 0.22) 0%,
+        rgba(16, 185, 129, 0.16) 38%,
+        transparent 70%
+      );
+      opacity: var(--glare-opacity, 0);
+      transition: opacity 0.3s ease;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .spec-box:hover {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.18);
+    }
+
+    /* Social Community Pills */
+    .social-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.55rem;
+      padding: 0.45rem 1rem;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      color: #94a3b8;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      text-decoration: none;
+      transition: all 0.3s var(--ease-cinematic);
+    }
+
+    .social-pill:hover {
+      background: rgba(255, 255, 255, 0.09);
+      border-color: rgba(16, 185, 129, 0.4);
+      color: #ffffff;
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px -5px rgba(16, 185, 129, 0.25);
+    }
+
+    /* Dynamic Theme Backdrop */
+    .dynamic-theme-backdrop {
+      position: absolute;
+      inset: -15%;
+      background: radial-gradient(circle at center, var(--theme-glow) 0%, rgba(2, 3, 5, 0) 65%);
+      filter: blur(120px);
+      opacity: 0.8;
+      pointer-events: none;
+      transition: background 0.8s var(--ease-cinematic);
+      z-index: 0;
+    }
+
+    /* Theme Pill Buttons */
+    .theme-pill-btn {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem 1.45rem;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.035);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      color: #94a3b8;
+      font-size: 0.92rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.35s var(--ease-cinematic);
+      white-space: nowrap;
+    }
+
+    .theme-pill-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: #f8fafc;
+      border-color: rgba(255, 255, 255, 0.24);
+    }
+
+    .theme-pill-btn.active {
+      background: rgba(255, 255, 255, 0.14);
+      border-color: rgba(255, 255, 255, 0.45);
+      color: #ffffff;
+      box-shadow: 0 0 35px -4px rgba(255, 255, 255, 0.2),
+                  inset 0 1px 1px rgba(255, 255, 255, 0.3);
+    }
+
+    .theme-pill-btn .indicator-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 10px currentColor;
+    }
+
+    /* FAQ ACCORDION STYLES */
+    .faq-trigger {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1.5rem;
+      padding: 1.6rem 2rem;
+      background: transparent;
+      border: none;
+      color: #f8fafc;
+      cursor: pointer;
+      text-align: left;
+      font-size: 1.15rem;
+      font-weight: 500;
+      transition: background 0.3s ease;
+    }
+
+    .faq-trigger:hover {
+      background: rgba(255, 255, 255, 0.025);
+    }
+
+    .faq-icon {
+      flex-shrink: 0;
+      transition: transform 0.35s var(--ease-cinematic), color 0.3s ease;
+      color: #94a3b8;
+    }
+
+    .faq-content {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.45s var(--ease-cinematic), padding 0.3s ease, opacity 0.3s ease;
+      padding: 0 2rem;
+      opacity: 0;
+      color: #94a3b8;
+      font-size: 0.98rem;
+      line-height: 1.7;
+    }
+
+    .faq-item.active .faq-content {
+      max-height: 380px;
+      padding: 0 2rem 1.6rem 2rem;
+      opacity: 1;
+    }
+
+    .faq-item.active .faq-icon {
+      transform: rotate(180deg);
+      color: #10b981;
+    }
+
+    /* Benchmark Table */
+    .benchmark-row {
+      transition: background-color 0.25s ease;
+    }
+    .benchmark-row:hover {
+      background-color: rgba(255, 255, 255, 0.03);
+    }
+
+    /* Preloader */
+    #preloader {
+      position: fixed;
+      inset: 0;
+      background: #020305;
+      z-index: 99999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.8s var(--ease-cinematic), visibility 0.8s ease;
+    }
+
+    #preloader.loaded {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body class="bg-void text-slate-100 selection:bg-emerald-500/30 selection:text-emerald-300">
+
+  <!-- Awwwards Interactive Preloader -->
+  <div id="preloader">
+    <div class="w-16 h-16 rounded-2xl overflow-hidden border border-emerald-500/40 shadow-[0_0_35px_rgba(16,185,129,0.4)] mb-6 animate-pulse">
+      <img src="assets/logpile-emblem-3d.jpg" alt="Logpile Logo" class="w-full h-full object-cover">
+    </div>
+    <div class="font-serif text-2xl text-white tracking-widest uppercase mb-2">Logpile</div>
+    <div class="font-mono text-xs text-emerald-400 tracking-widest uppercase" id="preloader-counter">INITIALIZING SANCTUARY 0%</div>
+  </div>
+
+  <!-- Film Grain Noise Overlay -->
+  <div class="film-grain" aria-hidden="true"></div>
+
+  <!-- Three.js 3D Spatial Canvas Background -->
+  <canvas id="webgl-canvas" aria-hidden="true"></canvas>
+
+  <!-- =========================================================================
+       FLOATING TITANIUM NAV PILL (CLEAN & DE-CLUTTERED)
+       ========================================================================= -->
+  <header class="fixed top-6 left-0 right-0 z-50 flex justify-center px-4">
+    <nav id="floating-navbar" class="glass-pill px-6 py-2.5 rounded-full flex items-center justify-between gap-6 max-w-5xl w-full transition-all duration-300">
+      
+      <!-- Brand Logo & Title -->
+      <a href="#" class="flex items-center gap-3 group interactive-target">
+        <div class="w-8 h-8 rounded-lg overflow-hidden border border-emerald-500/40 shadow-[0_0_20px_rgba(16,185,129,0.35)] transition-transform duration-300 group-hover:scale-105">
+          <img src="assets/logpile-emblem-3d.jpg" alt="Logpile Emblem" class="w-full h-full object-cover">
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="font-sans font-bold tracking-tight text-white text-base">Logpile</span>
+          <span id="nav-version-badge" class="dynamic-version-tag px-2 py-0.5 rounded-full text-[10px] font-mono tracking-wider bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-medium">Release</span>
+        </div>
+      </a>
+
+      <!-- Desktop Navigation Links (Curated & Spacious) -->
+      <div class="hidden lg:flex items-center gap-7 text-xs uppercase tracking-widest font-mono text-slate-400">
+        <a href="#manifesto" class="nav-spy-link hover:text-white transition-colors interactive-target">Manifesto</a>
+        <a href="#themes" class="nav-spy-link hover:text-white transition-colors interactive-target">Cockpit</a>
+        <a href="#vault" class="nav-spy-link hover:text-white transition-colors interactive-target">Lineage</a>
+        <a href="#benchmarks" class="nav-spy-link hover:text-white transition-colors interactive-target">Specs</a>
+        <a href="#curator-faq" class="nav-spy-link hover:text-white transition-colors interactive-target">FAQ</a>
+      </div>
+
+      <!-- Action Buttons & Audio Toggle -->
+      <div class="flex items-center gap-3">
+        <!-- Tactile Audio Toggle Button (Muted by default) -->
+        <button id="audio-toggle-btn" class="p-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-slate-200 text-xs flex items-center justify-center transition-all interactive-target" title="Tactile Sound Effects: Muted (Click to enable)">
+          <i data-lucide="volume-x" class="w-4 h-4"></i>
+        </button>
+
+        <a href="https://github.com/corporateintrovertgamer/logpile" target="_blank" rel="noopener noreferrer" class="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-mono text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 transition-all interactive-target">
+          <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
+          </svg>
+          <span>GitHub</span>
+        </a>
+        <a href="#download" class="btn-nested-primary text-xs py-1.5 px-4 interactive-target">
+          <span>Download</span>
+          <span class="btn-icon-wrapper w-6 h-6">
+            <i data-lucide="download" class="w-3 h-3 text-emerald-950"></i>
+          </span>
+        </a>
+
+        <!-- Mobile Menu Toggle -->
+        <button id="mobile-menu-toggle" class="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-white bg-white/5 border border-white/10 interactive-target" aria-label="Toggle Navigation Menu">
+          <i data-lucide="menu" class="w-5 h-5"></i>
+        </button>
+      </div>
+    </nav>
+
+    <!-- Mobile Menu Overlay -->
+    <div id="mobile-menu-overlay" class="hidden fixed inset-0 bg-black/95 backdrop-blur-3xl z-40 flex flex-col justify-center items-center gap-8 text-center">
+      <a href="#manifesto" class="text-2xl font-serif tracking-widest uppercase hover:text-emerald-400">The Manifesto</a>
+      <a href="#themes" class="text-2xl font-serif tracking-widest uppercase hover:text-emerald-400">Theme Cockpit</a>
+      <a href="#gallery-pin" class="text-2xl font-serif tracking-widest uppercase hover:text-emerald-400">Vault Gallery</a>
+      <a href="#decision" class="text-2xl font-serif tracking-widest uppercase hover:text-emerald-400">The Sanctuary Wheel</a>
+      <a href="#vault" class="text-2xl font-serif tracking-widest uppercase hover:text-emerald-400">Franchise Lineage</a>
+      <a href="#benchmarks" class="text-2xl font-serif tracking-widest uppercase hover:text-emerald-400">Engineering Benchmarks</a>
+      <a href="#download" class="mt-4 btn-nested-primary">Download for Windows</a>
+    </div>
+  </header>
+
+  <main class="relative z-10">
+
+    <!-- =========================================================================
+         SECTION 1: EDGE-TO-EDGE MONUMENT HERO
+         ========================================================================= -->
+    <section class="min-h-[100dvh] pt-36 pb-24 md:pt-48 md:pb-36 flex flex-col justify-center items-center px-4 relative overflow-hidden">
+      
+      <!-- Top Eyebrow Badge -->
+      <div class="mb-8">
+        <div class="eyebrow-badge">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>Offline-First PC Architecture &bull; Zero Telemetry &bull; Local SQLite</span>
+        </div>
+      </div>
+
+      <!-- Monumental Editorial Headline -->
+      <div class="max-w-6xl text-center mx-auto mb-10">
+        <h1 class="font-serif font-normal text-5xl sm:text-7xl md:text-8xl lg:text-9xl tracking-tight text-white leading-[1.03] mb-8 hero-title">
+          The games you bought. <br>
+          <span class="italic font-serif text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-emerald-300 to-teal-200">
+            The sanctuary they deserved.
+          </span>
+        </h1>
+        <p class="max-w-3xl mx-auto text-slate-300 font-sans text-lg sm:text-xl md:text-2xl font-light leading-relaxed hero-subtitle">
+          Modern launchers are bloated storefronts with an executive browser attached. Logpile is an offline, multi-drive PC game vault built with zero telemetry and instant local execution.
+        </p>
+      </div>
+
+      <!-- Primary Action Cluster -->
+      <div class="flex flex-wrap items-center justify-center gap-4 mb-20 hero-actions">
+        <a href="#download" class="btn-nested-primary interactive-target">
+          <span>Download for Windows</span>
+          <span class="btn-icon-wrapper">
+            <i data-lucide="download" class="w-4 h-4 text-emerald-950"></i>
+          </span>
+        </a>
+        <a href="https://github.com/corporateintrovertgamer/logpile" target="_blank" rel="noopener noreferrer" class="btn-nested-secondary interactive-target">
+          <svg class="w-4 h-4 fill-current text-slate-300" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
+          </svg>
+          <span>Inspect Source (MIT License)</span>
+          <span class="ml-1 text-xs font-mono text-emerald-400 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">Open Source</span>
+        </a>
+      </div>
+
+      <!-- Monumental 3D Emblem Stage Showcase -->
+      <div class="max-w-5xl w-full mx-auto relative tilt-card">
+        <div class="tilt-inner double-bezel">
+          <div class="double-bezel-inner p-4 sm:p-8 bg-obsidian">
+            
+            <!-- Machined Header Bar -->
+            <div class="flex flex-wrap items-center justify-between gap-4 pb-4 px-3 border-b border-white/5 text-xs text-slate-400 font-mono">
+              <div class="flex items-center gap-3">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_#10b981]"></span>
+                <span class="font-bold text-white uppercase tracking-wider">Logpile Architectural Core</span>
+                <span class="text-slate-600">&bull;</span>
+                <span class="text-emerald-400">Windows x64 Native</span>
+              </div>
+              <div class="flex items-center gap-4 text-[11px]">
+                <span class="text-slate-400 flex items-center gap-1.5">
+                  <i data-lucide="hard-drive" class="w-3.5 h-3.5 text-emerald-400"></i> Parallel .acf Parser
+                </span>
+                <span class="text-slate-400 flex items-center gap-1.5">
+                  <i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-400"></i> 100% Offline SQLite WAL
+                </span>
+              </div>
+            </div>
+
+            <!-- Monument Split Stage -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center mt-6">
+              
+              <!-- Left: 3D Glass Emblem Sculpture (5 cols) -->
+              <div class="lg:col-span-5 flex flex-col items-center justify-center p-6 rounded-2xl bg-black/50 border border-white/5 relative overflow-hidden group">
+                <div class="w-48 h-48 sm:w-60 sm:h-60 rounded-3xl overflow-hidden border border-emerald-500/30 shadow-[0_0_50px_rgba(16,185,129,0.3)] transition-transform duration-700 group-hover:scale-105">
+                  <img src="assets/logpile-emblem-3d.jpg" alt="Logpile 3D Glass Emblem" class="w-full h-full object-cover">
+                </div>
+                <div class="mt-4 text-center">
+                  <div class="font-sans font-bold text-white text-lg">Logpile Desktop <span id="hero-version-badge" class="dynamic-version-tag ml-1.5 text-xs font-mono text-emerald-400 font-normal"></span></div>
+                  <div class="font-mono text-xs text-emerald-400 tracking-wider uppercase">The Sanctuary Edition</div>
+                </div>
+              </div>
+
+              <!-- Right: High-Res Interface Banner & Technical Badges (7 cols) -->
+              <div class="lg:col-span-7 flex flex-col justify-between gap-5">
+                <div class="rounded-xl overflow-hidden border border-white/10 aspect-[16/9] bg-black relative group">
+                  <img src="assets/logpile-banner.png" alt="Logpile Interface Banner" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105">
+                  <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-50"></div>
+                </div>
+
+                <!-- Precision Hardware KPI Counters -->
+                <div class="grid grid-cols-2 gap-3 text-xs font-mono">
+                  <div class="p-3.5 rounded-xl bg-white/5 border border-white/5">
+                    <span class="text-slate-400 block text-[10px] uppercase tracking-wider">Startup Velocity</span>
+                    <span class="text-emerald-400 font-bold text-lg">&lt;110ms Cold Launch*</span>
+                  </div>
+                  <div class="p-3.5 rounded-xl bg-white/5 border border-white/5">
+                    <span class="text-slate-400 block text-[10px] uppercase tracking-wider">Installer Footprint</span>
+                    <span class="text-emerald-400 font-bold text-lg">111 MB Setup</span>
+                  </div>
+                  <div class="p-3.5 rounded-xl bg-white/5 border border-white/5">
+                    <span class="text-slate-400 block text-[10px] uppercase tracking-wider">Post-Install Footprint</span>
+                    <span class="text-emerald-400 font-bold text-lg">448 MB (700 MB+ Vault)</span>
+                  </div>
+                  <div class="p-3.5 rounded-xl bg-white/5 border border-white/5">
+                    <span class="text-slate-400 block text-[10px] uppercase tracking-wider">Storage Architecture</span>
+                    <span class="text-emerald-400 font-bold text-lg">logpile_data (Zero C: Bloat)</span>
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- =========================================================================
+         SECTION 2: THE CURATOR MANIFESTO
+         ========================================================================= -->
+    <section id="manifesto" class="py-24 md:py-36 px-4 max-w-5xl mx-auto border-t border-white/5">
+      
+      <div class="text-center max-w-3xl mx-auto mb-16">
+        <div class="eyebrow-badge amber mb-4">
+          <i data-lucide="feather" class="w-3.5 h-3.5"></i>
+          <span>The Curator Manifesto</span>
+        </div>
+        <h2 class="font-serif font-normal text-3xl sm:text-5xl md:text-6xl text-white tracking-tight leading-tight">
+          Why does a game launcher need <br class="hidden sm:inline">
+          <span class="italic font-serif text-amber-400">to spy on you just to launch local files?</span>
+        </h2>
+        <p class="text-slate-400 font-sans text-base sm:text-lg mt-4 font-light">
+          Your PC is a temple of hardware power. Yet every mainstream launcher treats it as a captive advertising screen.
+        </p>
+      </div>
+
+      <!-- High-Contrast Architectural Comparison -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        
+        <!-- The Corporate Storefront -->
+        <div class="tilt-card">
+          <div class="tilt-inner h-full p-7 sm:p-9 rounded-3xl bg-red-950/10 border border-red-500/20 relative overflow-hidden flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between mb-4">
+                <span class="text-xs font-mono uppercase tracking-widest text-red-400 font-bold">The Corporate Storefront</span>
+                <span class="text-xs font-mono text-red-400/80">Steam &bull; Epic &bull; EA &bull; Ubisoft</span>
+              </div>
+              <h3 class="text-2xl font-serif text-white font-bold mb-4">Commercial Bloatware</h3>
+              <ul class="space-y-3.5 text-xs text-slate-300 font-sans">
+                <li class="flex items-start gap-2.5">
+                  <i data-lucide="x-circle" class="w-4 h-4 text-red-400 shrink-0 mt-0.5"></i>
+                  <span><strong>1.8 GB+ Disk Footprint:</strong> Buries gigabytes of hidden caches and WebView runtimes deep into your C: AppData drive.</span>
+                </li>
+                <li class="flex items-start gap-2.5">
+                  <i data-lucide="x-circle" class="w-4 h-4 text-red-400 shrink-0 mt-0.5"></i>
+                  <span><strong>Continuous Telemetry Pings:</strong> Background analytics logging your library activity and browsing habits.</span>
+                </li>
+                <li class="flex items-start gap-2.5">
+                  <i data-lucide="x-circle" class="w-4 h-4 text-red-400 shrink-0 mt-0.5"></i>
+                  <span><strong>Store Feeds on Startup:</strong> Interstitial ads, banner sales, and browser popups before you can play.</span>
+                </li>
+              </ul>
+            </div>
+            <div class="mt-6 pt-4 border-t border-red-500/15 text-[11px] font-mono text-red-400/70">
+              Startup Overhead: Cloud sync, store feed &amp; web runtime delays
+            </div>
+          </div>
+        </div>
+
+        <!-- The Logpile Sanctuary -->
+        <div class="tilt-card">
+          <div class="tilt-inner h-full p-7 sm:p-9 rounded-3xl bg-emerald-950/20 border border-emerald-500/30 relative overflow-hidden flex flex-col justify-between shadow-[0_0_50px_rgba(16,185,129,0.15)]">
+            <div>
+              <div class="flex items-center justify-between mb-4">
+                <span class="text-xs font-mono uppercase tracking-widest text-emerald-400 font-bold">The Collector's Vault</span>
+                <span class="text-xs font-mono text-emerald-400">Logpile Sanctuary</span>
+              </div>
+              <h3 class="text-2xl font-serif text-white font-bold mb-4">Self-Contained Tranquility</h3>
+              <ul class="space-y-3.5 text-xs text-slate-200 font-sans">
+                <li class="flex items-start gap-2.5">
+                  <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400 shrink-0 mt-0.5"></i>
+                  <span><strong>Zero C: Drive AppData Bloat:</strong> Everything lives in <code class="text-emerald-400 font-mono">logpile_data</code> alongside the app (448 MB base, ~700 MB+ with uncompressed artwork).</span>
+                </li>
+                <li class="flex items-start gap-2.5">
+                  <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400 shrink-0 mt-0.5"></i>
+                  <span><strong>0 Outbound Network Packets:</strong> Completely airgapped. No accounts, no user telemetry, no tracking scripts.</span>
+                </li>
+                <li class="flex items-start gap-2.5">
+                  <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400 shrink-0 mt-0.5"></i>
+                  <span><strong>Sub-110ms Cold Launch*:</strong> Opens immediately into your collection. Zero splash delays, zero store interstitials.</span>
+                </li>
+              </ul>
+            </div>
+            <div class="mt-6 pt-4 border-t border-emerald-500/20 text-[11px] font-mono text-emerald-400 font-semibold">
+              Startup Velocity: &lt;110ms* &bull; 100% Offline
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+
+    <!-- =========================================================================
+         SECTION 3: THE THEME COCKPIT
+         ========================================================================= -->
+    <section id="themes" class="py-24 md:py-36 px-4 max-w-6xl mx-auto border-t border-white/5 relative">
+      
+      <!-- Dynamic Chromatic Backdrop Glow -->
+      <div class="dynamic-theme-backdrop"></div>
+
+      <div class="relative z-10 text-center max-w-3xl mx-auto mb-14">
+        <div class="eyebrow-badge amber mb-4">
+          <i data-lucide="palette" class="w-3.5 h-3.5"></i>
+          <span>Dynamic Theme Engine</span>
+        </div>
+        <h2 class="font-serif font-normal text-4xl sm:text-6xl text-white tracking-tight leading-tight">
+          Five expressions of <span class="italic font-serif text-parchment">visual sanctuary.</span>
+        </h2>
+        <p class="text-slate-400 font-sans text-base sm:text-lg mt-4 font-light">
+          Logpile adapts dynamically to your game's aesthetic DNA. Switch themes to see interface palettes and ambient 3D lighting adapt in real time.
+        </p>
+      </div>
+
+      <!-- Theme Switcher Interactive Deck -->
+      <div class="relative z-10 flex flex-wrap justify-center gap-2.5 sm:gap-3 mb-10">
+        <button class="theme-pill-btn active interactive-target" data-theme="kinetic">
+          <span class="indicator-dot text-rose-500"></span>
+          <span>Kinetic</span>
+          <span class="text-[11px] font-mono opacity-60">Spider-Man</span>
+        </button>
+        <button class="theme-pill-btn interactive-target" data-theme="cinematic">
+          <span class="indicator-dot text-amber-500"></span>
+          <span>Cinematic</span>
+          <span class="text-[11px] font-mono opacity-60">Ghost of Tsushima</span>
+        </button>
+        <button class="theme-pill-btn interactive-target" data-theme="atmospheric">
+          <span class="indicator-dot text-red-500"></span>
+          <span>Atmospheric</span>
+          <span class="text-[11px] font-mono opacity-60">The Witcher 3</span>
+        </button>
+        <button class="theme-pill-btn interactive-target" data-theme="playful">
+          <span class="indicator-dot text-orange-500"></span>
+          <span>Playful</span>
+          <span class="text-[11px] font-mono opacity-60">Stray</span>
+        </button>
+        <button class="theme-pill-btn interactive-target" data-theme="competitive">
+          <span class="indicator-dot text-cyan-400"></span>
+          <span>Competitive</span>
+          <span class="text-[11px] font-mono opacity-60">Valorant</span>
+        </button>
+      </div>
+
+      <!-- Theme Cockpit Showcase Frame -->
+      <div class="relative z-10 double-bezel tilt-card">
+        <div class="tilt-inner double-bezel-inner p-4 sm:p-6">
+          
+          <!-- Cockpit Header Strip -->
+          <div class="flex items-center justify-between pb-3 px-2 border-b border-white/5 text-xs text-slate-400 font-mono">
+            <div class="flex items-center gap-3">
+              <span class="text-white font-bold" id="theme-active-title">Kinetic</span>
+              <span class="text-slate-600">&bull;</span>
+              <span class="text-emerald-400" id="theme-active-scheme">The Brutalist Sanctuary</span>
+            </div>
+            <div class="flex items-center gap-4">
+              <span class="hidden md:inline text-slate-500">Palettes: Ash & Ember, Monolith, Obsidian Spire, Velvet Noir</span>
+              <i data-lucide="sliders" class="w-3.5 h-3.5 text-slate-400"></i>
+            </div>
+          </div>
+
+          <!-- Interactive Screenshot View -->
+          <div class="relative mt-4 rounded-2xl overflow-hidden aspect-[16/9] bg-black border border-white/5">
+            <img id="theme-preview-img" src="assets/theme-kinetic-spiderman.png" alt="Theme Preview" class="w-full h-full object-cover transition-all duration-300">
+            
+            <!-- Live Theme HUD Drawer -->
+            <div class="absolute bottom-4 left-4 right-4 sm:right-auto sm:max-w-md p-5 rounded-2xl bg-black/85 backdrop-blur-xl border border-white/10 shadow-2xl">
+              <div class="flex items-center justify-between gap-3 mb-2">
+                <h3 id="theme-active-game" class="font-sans font-bold text-white text-base truncate">Marvel's Spider-Man Remastered</h3>
+                <button id="theme-active-action" class="px-3.5 py-1.5 rounded-lg text-xs font-mono font-bold tracking-wider uppercase transition-colors interactive-target" style="background: #e11d48; color: #ffffff;">
+                  PLAY NOW
+                </button>
+              </div>
+              <p id="theme-active-publisher" class="text-[11px] font-mono text-slate-400 truncate mb-3">Insomniac Games &bull; PlayStation Publishing LLC &bull; 2022</p>
+              <div id="theme-active-badges" class="flex flex-wrap gap-2 mb-3">
+                <span class="px-2.5 py-0.5 rounded text-[10px] font-mono bg-white/10 text-slate-200">STEAM</span>
+                <span class="px-2.5 py-0.5 rounded text-[10px] font-mono bg-white/10 text-slate-200">66.0 GB</span>
+                <span class="px-2.5 py-0.5 rounded text-[10px] font-mono bg-white/10 text-slate-200">3H 59M PLAYED</span>
+              </div>
+              <p id="theme-active-desc" class="text-xs text-slate-300 font-sans leading-relaxed">
+                High-octane scarlet pulse with kinetic accent geometries. Engineered for high-speed action and dynamic player engagement.
+              </p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </section>
+
+    <!-- =========================================================================
+         SECTION 4: HORIZONTAL PINNED GALLERY (GSAP SCROLLTRIGGER MASTERPIECE)
+         ========================================================================= -->
+    <section id="gallery-pin" class="horizontal-scroll-wrapper border-t border-white/5 bg-obsidian">
+      
+      <!-- Pinned Gallery Sticky HUD Navigation / Progress Strip -->
+      <div class="gallery-hud-strip">
+        <div class="flex items-center gap-3">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#10b981]"></span>
+          <span class="font-mono text-xs uppercase tracking-widest text-slate-200 font-semibold">Vault Showcase &bull; Five Expressions of Visual Sanctuary</span>
+        </div>
+        <div class="flex items-center gap-4">
+          <span id="gallery-hud-indicator" class="font-mono text-xs text-emerald-400 font-bold tracking-wider">EXHIBIT 01 / 05</span>
+          <div class="w-28 sm:w-36 h-1.5 bg-white/10 rounded-full overflow-hidden">
+            <div id="gallery-hud-progress" class="h-full bg-emerald-400 rounded-full transition-all duration-200" style="width: 20%;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="horizontal-scroll-container">
+        
+        <!-- Panel 1: Marvel's Spider-Man -->
+        <div class="horizontal-panel" data-theme-key="kinetic">
+          <div class="max-w-5xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+            <div class="lg:col-span-7 tilt-card">
+              <div class="tilt-inner rounded-2xl overflow-hidden aspect-[16/9] border border-white/10 shadow-2xl relative group">
+                <img src="assets/theme-kinetic-spiderman.png" alt="Spider-Man Remastered" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105">
+              </div>
+            </div>
+            <div class="lg:col-span-5">
+              <span class="text-xs font-mono uppercase tracking-widest text-rose-500 font-bold">Exhibit 01 &bull; Kinetic Theme</span>
+              <h3 class="font-serif text-4xl sm:text-5xl text-white font-bold mt-2 mb-4">Marvel's Spider-Man</h3>
+              <p class="text-slate-300 text-sm leading-relaxed mb-6 font-sans">
+                High-energy scarlet pulse designed for velocity. Captures instant status badges, multi-drive launch hooks, and playtime analytics with zero frame rate jitter.
+              </p>
+              <div class="font-mono text-xs text-slate-400">Steam &bull; 66.0 GB &bull; Insomniac Games</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Panel 2: Ghost of Tsushima -->
+        <div class="horizontal-panel" data-theme-key="cinematic">
+          <div class="max-w-5xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+            <div class="lg:col-span-7 tilt-card">
+              <div class="tilt-inner rounded-2xl overflow-hidden aspect-[16/9] border border-white/10 shadow-2xl relative group">
+                <img src="assets/theme-cinematic-tsushima.png" alt="Ghost of Tsushima" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105">
+              </div>
+            </div>
+            <div class="lg:col-span-5">
+              <span class="text-xs font-mono uppercase tracking-widest text-amber-500 font-bold">Exhibit 02 &bull; Cinematic Theme</span>
+              <h3 class="font-serif text-4xl sm:text-5xl text-white font-bold mt-2 mb-4">Ghost of Tsushima</h3>
+              <p class="text-slate-300 text-sm leading-relaxed mb-6 font-sans">
+                Sumi-e ink brush stroke borders with delicate gold leaf overlays. Engineered for grand single-player historical epics and photographic framing.
+              </p>
+              <div class="font-mono text-xs text-slate-400">Steam &bull; 75.0 GB &bull; Sucker Punch Productions</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Panel 3: The Witcher 3 -->
+        <div class="horizontal-panel" data-theme-key="atmospheric">
+          <div class="max-w-5xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+            <div class="lg:col-span-7 tilt-card">
+              <div class="tilt-inner rounded-2xl overflow-hidden aspect-[16/9] border border-white/10 shadow-2xl relative group">
+                <img src="assets/theme-atmospheric-witcher.png" alt="The Witcher 3" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105">
+              </div>
+            </div>
+            <div class="lg:col-span-5">
+              <span class="text-xs font-mono uppercase tracking-widest text-red-500 font-bold">Exhibit 03 &bull; Atmospheric Theme</span>
+              <h3 class="font-serif text-4xl sm:text-5xl text-white font-bold mt-2 mb-4">The Witcher 3</h3>
+              <p class="text-slate-300 text-sm leading-relaxed mb-6 font-sans">
+                Silver moonlight gradients and obsidian shadow depth. High-contrast dark fantasy palette tuned for extensive hundred-hour RPG chronicles.
+              </p>
+              <div class="font-mono text-xs text-slate-400">Epic Games / GOG &bull; 50.4 GB &bull; CD PROJEKT RED</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Panel 4: Stray -->
+        <div class="horizontal-panel" data-theme-key="playful">
+          <div class="max-w-5xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+            <div class="lg:col-span-7 tilt-card">
+              <div class="tilt-inner rounded-2xl overflow-hidden aspect-[16/9] border border-white/10 shadow-2xl relative group">
+                <img src="assets/theme-playful-stray.png" alt="Stray" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105">
+              </div>
+            </div>
+            <div class="lg:col-span-5">
+              <span class="text-xs font-mono uppercase tracking-widest text-orange-500 font-bold">Exhibit 04 &bull; Playful Theme</span>
+              <h3 class="font-serif text-4xl sm:text-5xl text-white font-bold mt-2 mb-4">Stray</h3>
+              <p class="text-slate-300 text-sm leading-relaxed mb-6 font-sans">
+                Warm cyberpunk neon aesthetics with softened tactile curves. Designed for indie masterworks, whimsical explorations, and narrative adventures.
+              </p>
+              <div class="font-mono text-xs text-slate-400">Steam &bull; 9.8 GB &bull; BlueTwelve Studio</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Panel 5: VALORANT -->
+        <div class="horizontal-panel" data-theme-key="competitive">
+          <div class="max-w-5xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+            <div class="lg:col-span-7 tilt-card">
+              <div class="tilt-inner rounded-2xl overflow-hidden aspect-[16/9] border border-white/10 shadow-2xl relative group">
+                <img src="assets/theme-competitive-valorant.png" alt="VALORANT" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105">
+              </div>
+            </div>
+            <div class="lg:col-span-5">
+              <span class="text-xs font-mono uppercase tracking-widest text-rose-400 font-bold">Exhibit 05 &bull; Competitive Theme</span>
+              <h3 class="font-serif text-4xl sm:text-5xl text-white font-bold mt-2 mb-4">VALORANT</h3>
+              <p class="text-slate-300 text-sm leading-relaxed mb-6 font-sans">
+                Minimalist tactical HUD framing with ultra-low visual latency. Pre-load triggers and client status synchronization for competitive shooters.
+              </p>
+              <div class="font-mono text-xs text-slate-400">Epic Games Store &bull; Riot Games &bull; Synced</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+
+    <!-- =========================================================================
+         SECTION 5: EXHIBIT 01 — THE SANCTUARY WHEEL (TODAY'S PICK)
+         ========================================================================= -->
+    <section id="decision" class="py-24 md:py-36 px-4 max-w-6xl mx-auto border-t border-white/5">
+      
+      <div class="text-center max-w-3xl mx-auto mb-16">
+        <div class="eyebrow-badge mb-4">
+          <i data-lucide="dices" class="w-3.5 h-3.5"></i>
+          <span>Exhibit 01 &mdash; Decision & Anti-Paralysis Engine</span>
+        </div>
+        <h2 class="font-serif font-normal text-4xl sm:text-6xl text-white tracking-tight leading-tight">
+          Today's Pick &mdash; <span class="italic font-serif text-emerald-400">Zero choice paralysis.</span>
+        </h2>
+        <p class="text-slate-400 font-sans text-base sm:text-lg mt-4 font-light leading-relaxed">
+          You own 300 games. You stare at your screen for 45 minutes and play nothing. Watch Logpile's native in-app roulette wheel break the paralysis in seconds.
+        </p>
+      </div>
+
+      <!-- Widescreen Cinema Theater (Centerpiece) -->
+      <div class="double-bezel tilt-card mb-10">
+        <div class="tilt-inner double-bezel-inner p-4 sm:p-6 bg-obsidian">
+          
+          <!-- Theater Control Bar -->
+          <div class="flex flex-wrap items-center justify-between gap-4 pb-4 px-2 border-b border-white/5 text-xs font-mono text-slate-400">
+            <div class="flex items-center gap-2.5">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span class="text-slate-100 font-bold uppercase tracking-wider">In-App Capture: "Today's Pick" Roulette Spin</span>
+              <span class="text-slate-600">&bull;</span>
+              <span class="text-emerald-400">1080p 60fps Native Capture</span>
+            </div>
+            
+            <div class="flex items-center gap-3">
+              <button id="trigger-wheel-spin-btn" class="px-4 py-2 rounded-full bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-bold text-xs flex items-center gap-2 transition-all shadow-lg shadow-emerald-500/25 interactive-target">
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                <span>Simulate Wheel Spin & Audio</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Video Theater Viewport -->
+          <div id="sanctuary-wheel-theater" class="video-theater-frame aspect-[16/9] mt-4 relative group">
+            <video src="assets/roulette-demo.webm" autoplay loop muted playsinline preload="auto">
+              Your browser does not support WebM video.
+            </video>
+
+            <!-- Video Player Controls Overlay -->
+            <div class="video-theater-controls">
+              <button class="theater-play-btn video-play-trigger interactive-target" aria-label="Play or Pause Video">
+                <i data-lucide="pause" class="w-5 h-5"></i>
+              </button>
+
+              <div class="theater-progress-track flex-1 h-2 bg-white/20 hover:bg-white/30 rounded-full cursor-pointer relative overflow-hidden transition-colors interactive-target">
+                <div class="theater-progress-fill h-full bg-emerald-400 rounded-full w-0"></div>
+              </div>
+
+              <span class="theater-time-display text-xs font-mono text-slate-300 font-medium tracking-wider">0:00 / 0:21</span>
+
+              <div class="flex items-center gap-2 text-xs font-mono text-slate-400">
+                <i data-lucide="check-circle" class="w-3.5 h-3.5 text-emerald-400"></i>
+                <span class="hidden sm:inline">Installed Games (83)</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Architectural Breakdown Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        
+        <div class="spec-box interactive-target">
+          <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400 mb-4">
+            <i data-lucide="filter" class="w-5 h-5"></i>
+          </div>
+          <h3 class="font-serif text-xl text-white font-bold mb-2">Smart Library Filtering</h3>
+          <p class="text-xs text-slate-400 leading-relaxed font-sans">
+            Only games currently installed on your active SSDs and NVMe partitions enter the rotation. Game tools, benchmarks, and DLC utilities are automatically excluded.
+          </p>
+          <div class="mt-4 pt-4 border-t border-white/5 text-[11px] font-mono text-emerald-400">
+            Filtered: 83 Installed &bull; 7 Utilities Hidden
+          </div>
+        </div>
+
+        <div class="spec-box interactive-target">
+          <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-400 mb-4">
+            <i data-lucide="cpu" class="w-5 h-5"></i>
+          </div>
+          <h3 class="font-serif text-xl text-white font-bold mb-2">Deterministic CSPRNG</h3>
+          <p class="text-xs text-slate-400 leading-relaxed font-sans">
+            No sponsored store placements. No algorithmic monetization feeds. The local randomizer selects from your library with uniform cryptographic randomness.
+          </p>
+          <div class="mt-4 pt-4 border-t border-white/5 text-[11px] font-mono text-amber-400">
+            100% Unbiased &bull; 0 Cloud Tracking
+          </div>
+        </div>
+
+        <div class="spec-box interactive-target">
+          <div class="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/25 flex items-center justify-center text-cyan-400 mb-4">
+            <i data-lucide="play-circle" class="w-5 h-5"></i>
+          </div>
+          <h3 class="font-serif text-xl text-white font-bold mb-2">Instant Launch Protocol</h3>
+          <p class="text-xs text-slate-400 leading-relaxed font-sans">
+            Once the wheel settles on a title, launch with a single click. Logpile delegates the process to Windows directly and remains quiescent in memory.
+          </p>
+          <div class="mt-4 pt-4 border-t border-white/5 text-[11px] font-mono text-cyan-400">
+            Passthrough Execution &bull; &lt;10ms Overhead
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+
+    <!-- =========================================================================
+         SECTION 6: EXHIBIT 02 — THE LINEAGE VAULT (MULTI-DRIVE ARCHITECTURE)
+         ========================================================================= -->
+    <section id="vault" class="py-24 md:py-36 px-4 max-w-6xl mx-auto border-t border-white/5">
+      
+      <div class="text-center max-w-3xl mx-auto mb-16">
+        <div class="eyebrow-badge neutral mb-4">
+          <i data-lucide="library" class="w-3.5 h-3.5 text-slate-300"></i>
+          <span>Exhibit 02 &mdash; Collector's Lineage & Multi-Drive Vault</span>
+        </div>
+        <h2 class="font-serif font-normal text-4xl sm:text-6xl text-white tracking-tight leading-tight">
+          Franchise lineage, local artwork, and <br class="hidden sm:inline">
+          <span class="italic font-serif text-slate-300">multi-drive index parsing.</span>
+        </h2>
+        <p class="text-slate-400 font-sans text-base sm:text-lg mt-4 font-light">
+          Your collection is more than a list of executables. Logpile organizes sequels into chronological lineages, stores uncompressed artwork, and detects games across every internal and external drive.
+        </p>
+      </div>
+
+      <!-- Bento Grid Architecture -->
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch">
+        
+        <!-- Large Showcase Card: In-App Franchise Lineage Screenshot (8 cols) -->
+        <div class="md:col-span-8 double-bezel tilt-card flex flex-col justify-between">
+          <div class="tilt-inner double-bezel-inner p-4 sm:p-6 flex flex-col justify-between flex-1">
+            <div>
+              <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-2">
+                  <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                  <span class="font-mono text-xs text-slate-300 font-semibold uppercase tracking-wider">Lineage Auto-Grouping (83 Titles)</span>
+                </div>
+                <span class="text-xs font-mono text-slate-500">Assassin's Creed & A Plague Tale series</span>
+              </div>
+              <div class="rounded-xl overflow-hidden border border-white/10 bg-black relative group mb-4">
+                <img src="assets/library-franchise-lineage.png" alt="Logpile Franchise Lineage Library View" class="w-full h-auto block transition-transform duration-700 group-hover:scale-105">
+                <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-40 pointer-events-none"></div>
+              </div>
+            </div>
+            <div class="pt-3 border-t border-white/5 flex flex-wrap items-center justify-between gap-4 text-xs font-mono text-slate-400">
+              <span class="flex items-center gap-1.5"><i data-lucide="tag" class="w-3.5 h-3.5 text-emerald-400"></i> Auto-detection via IGDB series IDs</span>
+              <span class="flex items-center gap-1.5"><i data-lucide="image" class="w-3.5 h-3.5 text-emerald-400"></i> SteamGridDB 600x900 Covers Cached</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Stacked Bento Cards (4 cols) -->
+        <div class="md:col-span-4 flex flex-col gap-6 h-full">
+          
+          <div class="tilt-card flex-1 flex flex-col">
+            <div class="tilt-inner flex-1 h-full spec-box p-6 flex flex-col justify-between interactive-target relative z-10">
+              <div>
+                <div class="flex items-center justify-between mb-4">
+                  <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400">
+                    <i data-lucide="hard-drive" class="w-5 h-5"></i>
+                  </div>
+                  <span class="px-2.5 py-1 rounded-full text-[10px] font-mono uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Parallel I/O</span>
+                </div>
+                <h3 class="font-serif text-xl text-white font-bold mb-2">Multi-Drive Detection</h3>
+                <p class="text-xs text-slate-400 leading-relaxed font-sans mb-4">
+                  Parses Steam <code class="text-emerald-400 font-mono">appmanifest_*.acf</code>, Epic manifests, and GOG directories across NVMe, SATA, and external USB drives in parallel.
+                </p>
+                <div class="flex flex-wrap gap-1.5 text-[10px] font-mono text-slate-400">
+                  <span class="px-2 py-0.5 rounded bg-white/5 border border-white/5">NVMe M.2</span>
+                  <span class="px-2 py-0.5 rounded bg-white/5 border border-white/5">SATA SSD</span>
+                  <span class="px-2 py-0.5 rounded bg-white/5 border border-white/5">Hotplug USB</span>
+                </div>
+              </div>
+              <div class="mt-4 pt-4 border-t border-white/5 flex items-center justify-between text-[11px] font-mono text-slate-500">
+                <span>Steam &bull; Epic &bull; GOG</span>
+                <span class="text-emerald-400 font-semibold">18.4ms scan</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="tilt-card flex-1 flex flex-col">
+            <div class="tilt-inner flex-1 h-full spec-box p-6 flex flex-col justify-between interactive-target relative z-10">
+              <div>
+                <div class="flex items-center justify-between mb-4">
+                  <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-400">
+                    <i data-lucide="database" class="w-5 h-5"></i>
+                  </div>
+                  <span class="px-2.5 py-1 rounded-full text-[10px] font-mono uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/20">Offline First</span>
+                </div>
+                <h3 class="font-serif text-xl text-white font-bold mb-2">Self-Contained Data Vault</h3>
+                <p class="text-xs text-slate-400 leading-relaxed font-sans mb-4">
+                  All game metadata, artwork caches, and SQLite databases are stored in <code class="text-amber-400 font-mono">logpile_data</code> directly alongside the executable.
+                </p>
+                <div class="flex flex-wrap gap-1.5 text-[10px] font-mono text-slate-400">
+                  <span class="px-2 py-0.5 rounded bg-white/5 border border-white/5">Zero Registry</span>
+                  <span class="px-2 py-0.5 rounded bg-white/5 border border-white/5">SQLite 3</span>
+                  <span class="px-2 py-0.5 rounded bg-white/5 border border-white/5">100% Portable</span>
+                </div>
+              </div>
+              <div class="mt-4 pt-4 border-t border-white/5 flex items-center justify-between text-[11px] font-mono text-slate-500">
+                <span>Zero C: AppData Bloat</span>
+                <span class="text-amber-400 font-semibold">~716 MB Full Vault</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </section>
+
+    <!-- =========================================================================
+         SECTION 7: ENGINEERING SPEC SHEET (BENCHMARKS)
+         ========================================================================= -->
+    <section id="benchmarks" class="py-24 md:py-36 px-4 max-w-5xl mx-auto border-t border-white/5">
+      
+      <div class="text-center max-w-3xl mx-auto mb-16">
+        <div class="eyebrow-badge mb-4">
+          <i data-lucide="gauge" class="w-3.5 h-3.5"></i>
+          <span>Engineering Spec Sheet</span>
+        </div>
+        <h2 class="font-serif font-normal text-4xl sm:text-6xl text-white tracking-tight leading-tight">
+          Performance without compromise.
+        </h2>
+        <p class="text-slate-400 font-sans text-base sm:text-lg mt-4 font-light">
+          Audited metrics comparing Logpile against bloated modern game launchers. Zero telemetry, local SQLite storage.
+        </p>
+      </div>
+
+      <!-- Swiss Precision Benchmark Matrix -->
+      <div class="double-bezel overflow-hidden">
+        <div class="double-bezel-inner p-6 sm:p-8">
+          
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr class="border-b border-white/10 font-mono text-xs uppercase tracking-wider text-slate-400">
+                  <th class="py-4 px-4 font-medium">Metric / Benchmark</th>
+                  <th class="py-4 px-4 font-medium text-emerald-400">Logpile Native</th>
+                  <th class="py-4 px-4 font-medium text-slate-400">Steam Client</th>
+                  <th class="py-4 px-4 font-medium text-slate-400">GOG Galaxy</th>
+                  <th class="py-4 px-4 font-medium text-slate-400">Playnite</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-white/5 font-sans">
+                
+                <tr class="benchmark-row">
+                  <td class="py-4 px-4 font-medium text-white flex items-center gap-2">
+                    <i data-lucide="zap" class="w-4 h-4 text-emerald-400"></i> Cold Launch Startup
+                  </td>
+                  <td class="py-4 px-4 font-mono font-bold text-emerald-400">
+                    <div>&lt;110ms*</div>
+                    <div class="h-1.5 bg-white/10 rounded-full w-24 mt-1.5 overflow-hidden">
+                      <div class="h-full bg-emerald-400 rounded-full benchmark-bar-fill" data-width="12%" style="width: 0%"></div>
+                    </div>
+                  </td>
+                  <td class="py-4 px-4 font-mono text-slate-400">
+                    <div>2,400ms</div>
+                    <div class="h-1.5 bg-white/10 rounded-full w-24 mt-1.5 overflow-hidden">
+                      <div class="h-full bg-slate-600 rounded-full benchmark-bar-fill" data-width="85%" style="width: 0%"></div>
+                    </div>
+                  </td>
+                  <td class="py-4 px-4 font-mono text-slate-400">
+                    <div>3,100ms</div>
+                    <div class="h-1.5 bg-white/10 rounded-full w-24 mt-1.5 overflow-hidden">
+                      <div class="h-full bg-slate-600 rounded-full benchmark-bar-fill" data-width="100%" style="width: 0%"></div>
+                    </div>
+                  </td>
+                  <td class="py-4 px-4 font-mono text-slate-400">
+                    <div>850ms</div>
+                    <div class="h-1.5 bg-white/10 rounded-full w-24 mt-1.5 overflow-hidden">
+                      <div class="h-full bg-slate-600 rounded-full benchmark-bar-fill" data-width="35%" style="width: 0%"></div>
+                    </div>
+                  </td>
+                </tr>
+
+                <tr class="benchmark-row">
+                  <td class="py-4 px-4 font-medium text-white flex items-center gap-2">
+                    <i data-lucide="download" class="w-4 h-4 text-emerald-400"></i> Installer Package Size
+                  </td>
+                  <td class="py-4 px-4 font-mono font-bold text-emerald-400">
+                    <div>111 MB (.exe)</div>
+                    <div class="h-1.5 bg-white/10 rounded-full w-24 mt-1.5 overflow-hidden">
+                      <div class="h-full bg-emerald-400 rounded-full benchmark-bar-fill" data-width="25%" style="width: 0%"></div>
+                    </div>
+                  </td>
+                  <td class="py-4 px-4 font-mono text-slate-400">
+                    <div>~220 MB + updates</div>
+                    <div class="h-1.5 bg-white/10 rounded-full w-24 mt-1.5 overflow-hidden">
+                      <div class="h-full bg-slate-600 rounded-full benchmark-bar-fill" data-width="50%" style="width: 0%"></div>
+                    </div>
+                  </td>
+                  <td class="py-4 px-4 font-mono text-slate-400">
+                    <div>~280 MB + updates</div>
+                    <div class="h-1.5 bg-white/10 rounded-full w-24 mt-1.5 overflow-hidden">
+                      <div class="h-full bg-slate-600 rounded-full benchmark-bar-fill" data-width="65%" style="width: 0%"></div>
+                    </div>
+                  </td>
+                  <td class="py-4 px-4 font-mono text-slate-400">
+                    <div>~95 MB</div>
+                    <div class="h-1.5 bg-white/10 rounded-full w-24 mt-1.5 overflow-hidden">
+                      <div class="h-full bg-slate-600 rounded-full benchmark-bar-fill" data-width="20%" style="width: 0%"></div>
+                    </div>
+                  </td>
+                </tr>
+
+                <tr class="benchmark-row">
+                  <td class="py-4 px-4 font-medium text-white flex items-center gap-2">
+                    <i data-lucide="hard-drive" class="w-4 h-4 text-emerald-400"></i> Post-Installation Disk
+                  </td>
+                  <td class="py-4 px-4 font-mono font-bold text-emerald-400">
+                    <div>448 MB (700MB+ Vault)</div>
+                    <div class="text-[10px] text-slate-400 font-sans">Zero C: AppData Bloat</div>
+                  </td>
+                  <td class="py-4 px-4 font-mono text-slate-400">
+                    <div>1.8+ GB</div>
+                    <div class="text-[10px] text-slate-500 font-sans">Buries data in C:\AppData</div>
+                  </td>
+                  <td class="py-4 px-4 font-mono text-slate-400">
+                    <div>850+ MB</div>
+                    <div class="text-[10px] text-slate-500 font-sans">Scattered cache files</div>
+                  </td>
+                  <td class="py-4 px-4 font-mono text-slate-400">
+                    <div>350+ MB</div>
+                    <div class="text-[10px] text-slate-500 font-sans">Dependent on extensions</div>
+                  </td>
+                </tr>
+
+                <tr class="benchmark-row">
+                  <td class="py-4 px-4 font-medium text-white flex items-center gap-2">
+                    <i data-lucide="shield" class="w-4 h-4 text-emerald-400"></i> Telemetry Packets
+                  </td>
+                  <td class="py-4 px-4 font-mono font-bold text-emerald-400">0 (Airgapped)</td>
+                  <td class="py-4 px-4 font-mono text-slate-400">Continuous</td>
+                  <td class="py-4 px-4 font-mono text-slate-400">Continuous</td>
+                  <td class="py-4 px-4 font-mono text-slate-400">Opt-in analytics</td>
+                </tr>
+
+                <tr class="benchmark-row">
+                  <td class="py-4 px-4 font-medium text-white flex items-center gap-2">
+                    <i data-lucide="code" class="w-4 h-4 text-emerald-400"></i> Software License
+                  </td>
+                  <td class="py-4 px-4 font-mono font-bold text-emerald-400">MIT (Open Source)</td>
+                  <td class="py-4 px-4 font-mono text-slate-400">Proprietary Closed</td>
+                  <td class="py-4 px-4 font-mono text-slate-400">Proprietary Closed</td>
+                  <td class="py-4 px-4 font-mono text-slate-400">GPL v3.0 (Open)</td>
+                </tr>
+
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Benchmark Rig & Hardware Disclaimer -->
+          <div class="mt-6 pt-4 border-t border-white/10 text-xs font-mono text-slate-400 space-y-1.5 leading-relaxed">
+            <p><span class="text-emerald-400 font-semibold">*Test Rig Reference Specifications:</span> Tested on reference system: Intel Core i5 14th Gen, 32GB DDR5 RAM, NVIDIA GeForce RTX 5060, NVMe SSD. Startup times and memory footprint may vary depending on local storage drive speed and library size.</p>
+            <p><span class="text-slate-500 font-semibold">Third-Party Comparisons:</span> Observed cold start durations and telemetry profiles based on standard storefront clients with cloud sync and online feed dependencies on the reference test system.</p>
+          </div>
+
+        </div>
+
+        </div>
+      </div>
+
+    </section>
+
+    <!-- =========================================================================
+         SECTION 8: CURATOR FAQ
+         ========================================================================= -->
+    <section id="faq" class="py-24 md:py-36 px-4 max-w-4xl mx-auto border-t border-white/5">
+      
+      <div class="text-center max-w-2xl mx-auto mb-16">
+        <div class="eyebrow-badge neutral mb-4">
+          <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+          <span>Curator FAQ</span>
+        </div>
+        <h2 class="font-serif font-normal text-4xl sm:text-5xl text-white tracking-tight">
+          Architecture & Specifications
+        </h2>
+        <p class="text-slate-400 font-sans text-base mt-3 font-light">
+          Everything you need to know about privacy, DRM, disk footprint, and data portability.
+        </p>
+      </div>
+
+      <!-- Expandable Sleek Accordions -->
+      <div class="double-bezel">
+        <div class="double-bezel-inner divide-y divide-white/5">
+          
+          <div class="faq-item active">
+            <button class="faq-trigger interactive-target">
+              <span class="font-serif text-lg text-white">Where is my library metadata and artwork stored?</span>
+              <i data-lucide="chevron-down" class="faq-icon w-5 h-5"></i>
+            </button>
+            <div class="faq-content">
+              Unlike typical Windows applications that quietly dump gigabytes into your <code class="text-emerald-400 font-mono">C:\Users\&lt;user&gt;\AppData</code> partition, Logpile uses a strictly self-contained portable structure. All SQLite databases, artwork caches, and user preferences live in a folder named <code class="text-emerald-400 font-mono">logpile_data</code> right alongside the executable. The base app occupies ~448 MB, expanding to ~700 MB+ as your high-res artwork vault populates. You can place it on an external SSD or secondary game drive with zero C: drive bloat.
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <button class="faq-trigger interactive-target">
+              <span class="font-serif text-lg text-white">How does Logpile index games without logging into Steam or Epic?</span>
+              <i data-lucide="chevron-down" class="faq-icon w-5 h-5"></i>
+            </button>
+            <div class="faq-content">
+              Logpile reads local manifest files already present on your machine&mdash;such as Steam's <code class="text-emerald-400 font-mono">appmanifest_&lt;appid&gt;.acf</code>, Epic Games' installation manifests, and GOG directories. You never enter account credentials or log into third-party servers.
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <button class="faq-trigger interactive-target">
+              <span class="font-serif text-lg text-white">Why does Windows SmartScreen show a prompt when installing?</span>
+              <i data-lucide="chevron-down" class="faq-icon w-5 h-5"></i>
+            </button>
+            <div class="faq-content">
+              Logpile is a 100% free, community-built open-source project. Code signing certificates cost hundreds of dollars per year from commercial certificate authorities. When installing, simply click <strong>"More info"</strong> and then <strong>"Run anyway"</strong> to launch. The entire codebase is open on GitHub for full community inspection.
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <button class="faq-trigger interactive-target">
+              <span class="font-serif text-lg text-white">Does Logpile keep running in the background when I play?</span>
+              <i data-lucide="chevron-down" class="faq-icon w-5 h-5"></i>
+            </button>
+            <div class="faq-content">
+              When launching a game, Logpile delegates the execution directly to the Windows protocol handler and enters a quiescent idle state. It never consumes CPU cycles or GPU render pipelines during gameplay.
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <button class="faq-trigger interactive-target">
+              <span class="font-serif text-lg text-white">How do SteamGridDB and IGDB scrapers work?</span>
+              <i data-lucide="chevron-down" class="faq-icon w-5 h-5"></i>
+            </button>
+            <div class="faq-content">
+              In Settings, you can optionally provide your personal SteamGridDB and IGDB API keys. Artwork queries happen only on demand and are cached permanently to your local <code class="text-emerald-400 font-mono">logpile_data/artwork_database</code> for seamless, permanent offline rendering.
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </section>
+
+    <!-- =========================================================================
+         SECTION 9: THE DOWNLOAD VAULT & FINAL CTA
+         ========================================================================= -->
+    <section id="download" class="py-24 md:py-36 px-4 max-w-5xl mx-auto border-t border-white/5">
+      
+      <div class="double-bezel">
+        <div class="double-bezel-inner p-8 sm:p-14 text-center relative overflow-hidden">
+          
+          <div class="relative z-10 max-w-2xl mx-auto">
+            <div class="eyebrow-badge mb-6">
+              <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+              <span id="download-eyebrow-text">The Sanctuary Update &mdash; Latest Release</span>
+            </div>
+
+            <h2 class="font-serif font-normal text-4xl sm:text-6xl text-white tracking-tight leading-tight mb-6">
+              Reclaim your PC backlog.
+            </h2>
+            <p class="text-slate-300 font-sans text-base sm:text-lg mb-10 font-light">
+              Free, private, and open-source under the MIT License. Created by Corporate Introvert Gamer (Ritesh Soni).
+            </p>
+
+            <!-- Download Packages Grid -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-left mb-10">
+              
+              <!-- Package 1: Installer (Auto-Synced via GitHub Releases API) -->
+              <a id="latest-installer-link" href="https://github.com/corporateintrovertgamer/logpile/releases/latest" target="_blank" rel="noopener noreferrer" class="p-6 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-emerald-500/40 transition-all flex flex-col justify-between group shadow-xl interactive-target">
+                <div>
+                  <div class="flex items-center justify-between text-xs font-mono text-slate-400 mb-2">
+                    <span class="text-emerald-400 font-bold">Standard Windows x64</span>
+                    <span id="card-version-tag" class="dynamic-version-tag text-white font-bold">Release</span>
+                  </div>
+                  <h3 id="card-installer-title" class="text-xl font-bold text-white group-hover:text-emerald-300 transition-colors">Logpile Windows Setup (.exe)</h3>
+                  <p class="text-xs text-slate-400 mt-2">Custom install path support. Installs 448 MB base runtime with self-contained <code class="text-emerald-400 font-mono">logpile_data</code> directory.</p>
+                </div>
+                <div class="mt-6 flex items-center gap-2 text-xs font-mono text-emerald-400 font-semibold">
+                  <span id="card-installer-action">Download Installer (.exe)</span>
+                  <i data-lucide="download" class="w-4 h-4 group-hover:translate-y-0.5 transition-transform"></i>
+                </div>
+              </a>
+
+              <!-- Package 2: Portable Structure -->
+              <a href="https://github.com/corporateintrovertgamer/logpile" target="_blank" rel="noopener noreferrer" class="p-6 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-emerald-500/40 transition-all flex flex-col justify-between group shadow-xl interactive-target">
+                <div>
+                  <div class="flex items-center justify-between text-xs font-mono text-slate-400 mb-2">
+                    <span class="text-amber-400 font-bold">Self-Contained Data</span>
+                    <span class="text-white font-bold">Zero C: Bloat</span>
+                  </div>
+                  <h3 class="text-xl font-bold text-white group-hover:text-amber-300 transition-colors">Portable Vault Architecture</h3>
+                  <p class="text-xs text-slate-400 mt-2">Place on any drive (SSD, HDD, USB pendrive, or external storage). All SQLite databases and artwork caches reside alongside the executable with zero C: drive bloat.</p>
+                </div>
+                <div class="mt-6 flex items-center gap-2 text-xs font-mono text-amber-400 font-semibold">
+                  <span>Explore Source on GitHub</span>
+                  <svg class="w-4 h-4 fill-current group-hover:translate-y-0.5 transition-transform" viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
+                  </svg>
+                </div>
+              </a>
+
+            </div>
+
+            <!-- Terminal Git Clone Quick Copy -->
+            <div class="inline-flex items-center gap-3 px-4 py-2 rounded-xl bg-black/70 border border-white/10 text-xs font-mono text-slate-300 shadow-lg">
+              <span class="text-slate-500">$</span>
+              <span>git clone https://github.com/corporateintrovertgamer/logpile.git</span>
+              <button class="copy-trigger text-emerald-400 hover:text-emerald-300 ml-2 interactive-target" data-copy="git clone https://github.com/corporateintrovertgamer/logpile.git" title="Copy Git Command">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+
+            <!-- Support the Developer Links -->
+            <div class="mt-8 pt-6 border-t border-white/5 flex flex-wrap items-center justify-center gap-4 text-xs font-mono text-slate-400">
+              <span class="text-slate-500">Support Development:</span>
+              <a href="https://ko-fi.com/corporateintrovertgamer" target="_blank" rel="noopener noreferrer" class="hover:text-emerald-400 transition-colors interactive-target">Ko-fi</a>
+              <span class="text-slate-700">&bull;</span>
+              <a href="https://buymeacoffee.com/Corporateintrovertgamer" target="_blank" rel="noopener noreferrer" class="hover:text-amber-400 transition-colors interactive-target">Buy Me a Coffee</a>
+              <span class="text-slate-700">&bull;</span>
+              <a href="https://github.com/corporateintrovertgamer" target="_blank" rel="noopener noreferrer" class="hover:text-white transition-colors interactive-target">GitHub Sponsors</a>
+            </div>
+
+          </div>
+
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- =========================================================================
+       MINIMALIST LUXURY FOOTER (CLEAN & SPACIOUS WITH LEGAL DISCLAIMER)
+       ========================================================================= -->
+  <footer class="border-t border-white/5 py-16 px-6 relative z-10 bg-black/60">
+    <div class="max-w-6xl mx-auto flex flex-col gap-10">
+      
+      <!-- Top Row: Identity & Navigation Links -->
+      <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pb-8 border-b border-white/5">
+        <div class="flex items-center gap-3.5">
+          <div class="w-8 h-8 rounded-lg overflow-hidden border border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.25)]">
+            <img src="assets/logpile-emblem-3d.jpg" alt="Logpile Emblem" class="w-full h-full object-cover">
+          </div>
+          <div>
+            <span class="font-sans font-bold text-white text-base tracking-tight">Logpile Desktop</span>
+            <span id="footer-version-badge" class="dynamic-version-tag ml-2 px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">Release</span>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-6 text-xs font-mono text-slate-400">
+          <a href="https://github.com/corporateintrovertgamer/logpile" target="_blank" rel="noopener noreferrer" class="hover:text-emerald-400 transition-colors">GitHub Repository</a>
+          <a href="https://github.com/corporateintrovertgamer/logpile/releases" target="_blank" rel="noopener noreferrer" class="hover:text-emerald-400 transition-colors">Releases</a>
+          <a href="https://github.com/corporateintrovertgamer/logpile/blob/main/LICENSE" target="_blank" rel="noopener noreferrer" class="hover:text-emerald-400 transition-colors">MIT License</a>
+          <a href="#" class="hover:text-white transition-colors" id="back-to-top-btn">Back to Top &uarr;</a>
+        </div>
+      </div>
+
+      <!-- Middle Row: Community & Creator Socials -->
+      <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5 py-6 border-b border-white/5">
+        <div class="flex items-center gap-3 text-xs font-mono text-slate-400">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span class="text-slate-300 font-semibold uppercase tracking-wider">Community & Socials</span>
+          <span class="text-slate-600">&bull;</span>
+          <span class="text-slate-500">@Corporate_Introvert_Gamer</span>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2.5">
+          <!-- YouTube -->
+          <a href="https://www.youtube.com/@Corporate_Introvert_Gamer" target="_blank" rel="noopener noreferrer" class="social-pill interactive-target" title="Subscribe on YouTube (@Corporate_Introvert_Gamer)">
+            <svg class="w-3.5 h-3.5 fill-current text-[#FF0000]" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+            </svg>
+            <span>YouTube</span>
+          </a>
+
+          <!-- Discord -->
+          <a href="https://discord.gg/byCBtqtWtb" id="discord-social-pill" target="_blank" rel="noopener noreferrer" class="social-pill interactive-target" title="Join Discord Community">
+            <svg class="w-3.5 h-3.5 fill-current text-[#5865F2]" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.894.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
+            </svg>
+            <span>Discord</span>
+          </a>
+
+          <!-- X (Twitter) -->
+          <a href="https://x.com/corporateigamer" target="_blank" rel="noopener noreferrer" class="social-pill interactive-target" title="Follow on X (@corporateigamer)">
+            <svg class="w-3.5 h-3.5 fill-current text-white" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+            </svg>
+            <span>X (Twitter)</span>
+          </a>
+
+          <!-- Instagram -->
+          <a href="https://www.instagram.com/corporate.introvert.gamer" target="_blank" rel="noopener noreferrer" class="social-pill interactive-target" title="Follow on Instagram (@corporate.introvert.gamer)">
+            <svg class="w-3.5 h-3.5 fill-current text-[#E1306C]" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+            </svg>
+            <span>Instagram</span>
+          </a>
+
+          <!-- Threads -->
+          <a href="https://www.threads.net/@corporate.introvert.gamer" target="_blank" rel="noopener noreferrer" class="social-pill interactive-target" title="Follow on Threads (@corporate.introvert.gamer)">
+            <svg class="w-3.5 h-3.5 fill-current text-white" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12.186 24h-.007C5.459 23.978 0 18.605 0 12.011 0 5.4 5.44.022 12.16 0c3.559.011 6.84 1.543 9.24 4.316l-2.48 2.054c-1.8-2.073-4.25-3.224-6.8-3.232-4.996 0-9.04 3.99-9.04 8.873 0 4.896 4.04 8.887 9.07 8.87 2.7-.01 5.16-1.14 6.83-3.13-.59-.28-1.22-.52-1.89-.73-1.07-.33-2.26-.52-3.52-.55-3.32-.08-5.75-1.92-5.75-4.38 0-2.47 2.37-4.35 5.61-4.35 3.51 0 5.68 2.14 5.8 5.72.01.21.01.43.01.65 0 1.05-.14 2.11-.42 3.14 1.44.8 2.76 1.83 3.91 3.05l-2.26 2.04c-.87-.93-1.88-1.72-2.98-2.34-1.98 2.37-4.87 3.75-8.08 3.77zm.25-11.83c-1.63 0-2.67.84-2.67 1.95 0 1.11 1.05 1.95 2.7 1.99 1.12.03 2.16.2 3.05.49.19-.88.29-1.8.29-2.73-.08-1.04-.99-1.7-3.37-1.7z"/>
+            </svg>
+            <span>Threads</span>
+          </a>
+
+          <!-- Facebook -->
+          <a href="https://www.facebook.com/share/1C27mCT8xA/" target="_blank" rel="noopener noreferrer" class="social-pill interactive-target" title="Connect on Facebook">
+            <svg class="w-3.5 h-3.5 fill-current text-[#1877F2]" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+            </svg>
+            <span>Facebook</span>
+          </a>
+
+          <!-- Reddit -->
+          <a href="https://www.reddit.com/user/CorpIntroGamer/" target="_blank" rel="noopener noreferrer" class="social-pill interactive-target" title="Join discussion on Reddit (u/CorpIntroGamer)">
+            <svg class="w-3.5 h-3.5 fill-current text-[#FF4500]" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.703zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.688-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.197-2.512-.73a.326.326 0 0 0-.232-.095z"/>
+            </svg>
+            <span>Reddit</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Bottom Row: Trademark & Intellectual Property Disclaimer + Copyright -->
+      <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 text-xs text-slate-500 leading-relaxed font-sans">
+        <p class="max-w-3xl text-[11px] text-slate-500 leading-relaxed">
+          <strong class="text-slate-400 font-medium">Disclaimer:</strong> All game titles, box art, screenshots, developer names, and related trademarks are the intellectual property of their respective copyright holders and publishers. Logpile is an independent, offline-first open-source utility and claims rights solely to the Logpile application software, code, and logo.
+        </p>
+        <div class="text-[11px] font-mono text-slate-500 shrink-0">
+          &copy; 2026 Corporate Introvert Gamer (Ritesh Soni)
+        </div>
+      </div>
+
+    </div>
+  </footer>
+
+  <!-- =========================================================================
+       AWWWARDS JAVASCRIPT MASTER CHOREOGRAPHY
+       ========================================================================= -->
+  <script>
+    let soundEnabled = false;
+
+    /* 1. Web Audio API Tactile Mechanical Sound Engine */
+    class TactileAudioEngine {
+      constructor() {
+        this.ctx = null;
+        this.lastHoverTime = 0;
+      }
+      init() {
+        if (!this.ctx) {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          if (AudioContextClass) {
+            this.ctx = new AudioContextClass();
+          }
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+      // Microscopic acoustic tick on hovering major showcase cards
+      playHoverTick() {
+        if (!soundEnabled) return;
+        const nowMs = performance.now();
+        if (nowMs - this.lastHoverTime < 38) return;
+        this.lastHoverTime = nowMs;
+
+        this.init();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1750, now);
+        osc.frequency.exponentialRampToValueAtTime(520, now + 0.012);
+        gain.gain.setValueAtTime(0.015, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.012);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.012);
+      }
+      // Muted tactile thud/click on button presses and theme tab changes
+      playMechanicalClick(pitch = 145) {
+        if (!soundEnabled) return;
+        this.init();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+
+        // Sub-body acoustic thud
+        const subOsc = this.ctx.createOscillator();
+        const subGain = this.ctx.createGain();
+        subOsc.type = 'triangle';
+        subOsc.frequency.setValueAtTime(pitch, now);
+        subOsc.frequency.exponentialRampToValueAtTime(36, now + 0.042);
+        subGain.gain.setValueAtTime(0.24, now);
+        subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.042);
+        subOsc.connect(subGain);
+        subGain.connect(this.ctx.destination);
+        subOsc.start(now);
+        subOsc.stop(now + 0.042);
+
+        // Tactile contact snap
+        const snapOsc = this.ctx.createOscillator();
+        const snapFilter = this.ctx.createBiquadFilter();
+        const snapGain = this.ctx.createGain();
+        snapOsc.type = 'square';
+        snapOsc.frequency.setValueAtTime(940, now);
+        snapOsc.frequency.exponentialRampToValueAtTime(220, now + 0.018);
+
+        snapFilter.type = 'bandpass';
+        snapFilter.frequency.setValueAtTime(1250, now);
+        snapFilter.Q.setValueAtTime(3.2, now);
+
+        snapGain.gain.setValueAtTime(0.07, now);
+        snapGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.018);
+
+        snapOsc.connect(snapFilter);
+        snapFilter.connect(snapGain);
+        snapGain.connect(this.ctx.destination);
+        snapOsc.start(now);
+        snapOsc.stop(now + 0.018);
+      }
+      // Pitch-modulated roulette tick for wheel spin
+      playRouletteTick(freq = 680) {
+        if (!soundEnabled) return;
+        this.init();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, now);
+        osc.frequency.exponentialRampToValueAtTime(freq * 0.42, now + 0.024);
+        gain.gain.setValueAtTime(0.18, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.024);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.024);
+      }
+      // Resonant luxury chime when roulette lands
+      playChime() {
+        if (!soundEnabled) return;
+        this.init();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const freqs = [523.25, 659.25, 783.99, 1046.50];
+        freqs.forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.06);
+          gain.gain.setValueAtTime(0.12, now + idx * 0.06);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.85 + idx * 0.12);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now + idx * 0.06);
+          osc.stop(now + 1.2);
+        });
+      }
+    }
+
+    const audioEngine = new TactileAudioEngine();
+
+    /* 2. Magnetic Cursor Physics (GSAP quickTo with 40px Proximity Threshold) */
+    function initMagneticPhysics() {
+      const magneticElements = document.querySelectorAll(
+        '.btn-nested-primary, .btn-nested-secondary, .theme-pill-btn, .nav-spy-link, #trigger-wheel-spin-btn, #audio-toggle-btn, .copy-trigger, a[href^="#download"], .video-play-trigger, #mobile-menu-toggle, .social-pill'
+      );
+
+      const items = [];
+      magneticElements.forEach(el => {
+        const xTo = gsap.quickTo(el, "x", { duration: 0.38, ease: "power3.out" });
+        const yTo = gsap.quickTo(el, "y", { duration: 0.38, ease: "power3.out" });
+        const rotTo = gsap.quickTo(el, "rotation", { duration: 0.38, ease: "power3.out" });
+
+        const icon = el.querySelector('.btn-icon-wrapper, [data-lucide], svg');
+        let iconXTo = null, iconYTo = null;
+        if (icon) {
+          iconXTo = gsap.quickTo(icon, "x", { duration: 0.26, ease: "power3.out" });
+          iconYTo = gsap.quickTo(icon, "y", { duration: 0.26, ease: "power3.out" });
+        }
+
+        items.push({
+          el,
+          icon,
+          xTo,
+          yTo,
+          rotTo,
+          iconXTo,
+          iconYTo,
+          rect: null,
+          isActive: false
+        });
+      });
+
+      function updateRects() {
+        items.forEach(item => {
+          item.rect = item.el.getBoundingClientRect();
+        });
+      }
+
+      updateRects();
+      window.addEventListener('resize', updateRects);
+      window.addEventListener('scroll', updateRects, { passive: true });
+      if (typeof lenisInstance !== 'undefined' && lenisInstance) {
+        lenisInstance.on('scroll', updateRects);
+      }
+
+      const PROXIMITY_THRESHOLD = 42; // 40-42px magnetic threshold
+      let ticking = false;
+
+      window.addEventListener('mousemove', (e) => {
+        if (!ticking) {
+          requestAnimationFrame(() => {
+            const mouseX = e.clientX;
+            const mouseY = e.clientY;
+
+            items.forEach(item => {
+              if (!item.rect || item.rect.width === 0) {
+                item.rect = item.el.getBoundingClientRect();
+              }
+              const r = item.rect;
+
+              // Distance from cursor to bounding box
+              const closestX = Math.max(r.left, Math.min(mouseX, r.right));
+              const closestY = Math.max(r.top, Math.min(mouseY, r.bottom));
+              const distX = mouseX - closestX;
+              const distY = mouseY - closestY;
+              const distance = Math.hypot(distX, distY);
+
+              if (distance <= PROXIMITY_THRESHOLD) {
+                if (!item.isActive) {
+                  item.isActive = true;
+                  audioEngine.playHoverTick();
+                }
+
+                const centerX = r.left + r.width / 2;
+                const centerY = r.top + r.height / 2;
+                const deltaX = (mouseX - centerX) * 0.35;
+                const deltaY = (mouseY - centerY) * 0.35;
+
+                const clampX = Math.max(-22, Math.min(22, deltaX));
+                const clampY = Math.max(-22, Math.min(22, deltaY));
+
+                item.xTo(clampX);
+                item.yTo(clampY);
+                item.rotTo(clampX * 0.045);
+
+                if (item.iconXTo && item.iconYTo) {
+                  item.iconXTo(clampX * 0.22);
+                  item.iconYTo(clampY * 0.22);
+                }
+              } else if (item.isActive) {
+                item.isActive = false;
+                gsap.to(item.el, {
+                  x: 0,
+                  y: 0,
+                  rotation: 0,
+                  duration: 0.85,
+                  ease: "elastic.out(1.1, 0.38)",
+                  overwrite: "auto"
+                });
+
+                if (item.icon) {
+                  gsap.to(item.icon, {
+                    x: 0,
+                    y: 0,
+                    duration: 0.7,
+                    ease: "elastic.out(1.1, 0.38)",
+                    overwrite: "auto"
+                  });
+                }
+              }
+            });
+
+            ticking = false;
+          });
+          ticking = true;
+        }
+      });
+    }
+
+    /* 3. Three.js 3D Spatial Canvas: WebGL Liquid Mouse Shader & 3D Depth */
+    let threeLight, emberMat, liquidMat;
+    function initThreeJS() {
+      const canvas = document.getElementById('webgl-canvas');
+      if (!canvas) return;
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.position.z = 30;
+
+      const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+      // Background liquid refraction shader plane
+      const planeDistance = 45;
+      const vFovRad = (camera.fov * Math.PI) / 180;
+      const planeH = 2 * Math.tan(vFovRad / 2) * planeDistance;
+      const planeW = planeH * (window.innerWidth / window.innerHeight);
+
+      const liquidGeo = new THREE.PlaneGeometry(planeW * 1.35, planeH * 1.35, 1, 1);
+      const liquidUniforms = {
+        u_time: { value: 0.0 },
+        u_mouse: { value: new THREE.Vector2(0.5, 0.5) },
+        u_mouse_vel: { value: new THREE.Vector2(0.0, 0.0) },
+        u_resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+        u_theme_color: { value: new THREE.Color(0x10b981) } // Logpile Signature Emerald
+      };
+
+      const liquidVert = `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `;
+
+      const liquidFrag = `
+        uniform float u_time;
+        uniform vec2 u_mouse;
+        uniform vec2 u_mouse_vel;
+        uniform vec2 u_resolution;
+        uniform vec3 u_theme_color;
+        varying vec2 vUv;
+
+        vec3 permute(vec3 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
+        float snoise(vec2 v){
+          const vec4 C = vec4(0.211324865405187, 0.366025403784439,
+                   -0.577350269189626, 0.024390243902439);
+          vec2 i  = floor(v + dot(v, C.yy) );
+          vec2 x0 = v -   i + dot(i, C.xx);
+          vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+          vec4 x12 = x0.xyxy + C.xxzz;
+          x12.xy -= i1;
+          i = mod(i, 289.0);
+          vec3 p = permute( permute( i.y + vec3(0.0, i1.y, 1.0 ))
+          + i.x + vec3(0.0, i1.x, 1.0 ));
+          vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy),
+            dot(x12.zw,x12.zw)), 0.0);
+          m = m*m; m = m*m;
+          vec3 x = 2.0 * fract(p * C.www) - 1.0;
+          vec3 h = abs(x) - 0.5;
+          vec3 ox = floor(x + 0.5);
+          vec3 a0 = x - ox;
+          m *= 1.79284291400159 - 0.85373472095314 * ( a0*a0 + h*h );
+          vec3 g;
+          g.x  = a0.x  * x0.x  + h.x  * x0.y;
+          g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+          return 130.0 * dot(m, g);
+        }
+
+        float fbm(vec2 p) {
+          float f = 0.0;
+          f += 0.5000 * snoise(p); p = p * 2.02;
+          f += 0.2500 * snoise(p); p = p * 2.03;
+          f += 0.1250 * snoise(p); p = p * 2.01;
+          f += 0.0625 * snoise(p);
+          return f;
+        }
+
+        void main() {
+          vec2 st = gl_FragCoord.xy / u_resolution.xy;
+          float aspect = u_resolution.x / u_resolution.y;
+          vec2 aspectSt = vec2(st.x * aspect, st.y);
+          vec2 mouseAspect = vec2(u_mouse.x * aspect, u_mouse.y);
+
+          // Liquid dual-harmonic ripple expanding from cursor
+          float dist = distance(aspectSt, mouseAspect);
+          float ripple = (sin(dist * 26.0 - u_time * 2.4) * exp(-dist * 3.6)) + (cos(dist * 16.0 - u_time * 1.5) * exp(-dist * 2.4) * 0.45);
+
+          // Domain warping for viscous flow
+          vec2 q = vec2(fbm(aspectSt * 1.3 + u_time * 0.035), fbm(aspectSt * 1.3 - u_time * 0.03));
+          vec2 r = vec2(fbm(aspectSt * 2.1 + q + u_time * 0.05), fbm(aspectSt * 2.1 + q - u_time * 0.045));
+
+          vec2 liquidUv = aspectSt + r * 0.15 + (aspectSt - mouseAspect) * ripple * 0.12;
+          float f = fbm(liquidUv * 2.0);
+
+          // Specular highlights & caustics
+          float caustic = pow(clamp(f * 0.5 + 0.5, 0.0, 1.0), 3.5) * 1.4;
+          float mouseSpeed = length(u_mouse_vel);
+          float cursorGlow = smoothstep(0.42, 0.0, dist) * (0.15 + mouseSpeed * 1.4);
+
+          // Base luxury obsidian / slate tone (#020305 to #05070b)
+          vec3 obsidian = vec3(0.008, 0.012, 0.018);
+          vec3 slate = vec3(0.016, 0.024, 0.034);
+          vec3 baseLiquid = mix(obsidian, slate, clamp(f * 0.45 + 0.5, 0.0, 1.0));
+
+          // Theme refraction luminescence - delicate, whisper-quiet luxury
+          vec3 themeGlow = u_theme_color * (caustic * 0.12 + cursorGlow * 0.18 + ripple * 0.06);
+          vec3 finalColor = baseLiquid + themeGlow;
+
+          // Cinematic soft vignette
+          float vignette = smoothstep(1.3, 0.25, length(st - 0.5));
+          finalColor *= vignette;
+
+          gl_FragColor = vec4(finalColor, 0.85);
+        }
+      `;
+
+      liquidMat = new THREE.ShaderMaterial({
+        vertexShader: liquidVert,
+        fragmentShader: liquidFrag,
+        uniforms: liquidUniforms,
+        depthWrite: false,
+        transparent: true
+      });
+
+      const liquidMesh = new THREE.Mesh(liquidGeo, liquidMat);
+      liquidMesh.position.z = -15; // Placed at background depth behind particles and monolith
+      scene.add(liquidMesh);
+
+      // Procedural soft circular blurred alpha texture to prevent square point artifacts
+      function createSoftCircleTexture() {
+        const c = document.createElement('canvas');
+        c.width = 64;
+        c.height = 64;
+        const cCtx = c.getContext('2d');
+        const grad = cCtx.createRadialGradient(32, 32, 0, 32, 32, 32);
+        grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+        grad.addColorStop(0.2, 'rgba(255, 255, 255, 0.7)');
+        grad.addColorStop(0.55, 'rgba(255, 255, 255, 0.2)');
+        grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        cCtx.fillStyle = grad;
+        cCtx.fillRect(0, 0, 64, 64);
+        return new THREE.CanvasTexture(c);
+      }
+
+      // Elegant Veil of 380 ethereal floating particles with physics displacement
+      const particleCount = 380;
+      const particleGeo = new THREE.BufferGeometry();
+      const positions = new Float32Array(particleCount * 3);
+      const originalPositions = new Float32Array(particleCount * 3);
+      const velocities = new Float32Array(particleCount * 3);
+      const naturalDriftSpeed = new Float32Array(particleCount);
+
+      for (let i = 0; i < particleCount; i++) {
+        const i3 = i * 3;
+        const px = (Math.random() - 0.5) * 85;
+        const py = (Math.random() - 0.5) * 65;
+        const pz = -10 - Math.random() * 35; // Behind camera plane
+
+        positions[i3] = px;
+        positions[i3 + 1] = py;
+        positions[i3 + 2] = pz;
+
+        originalPositions[i3] = px;
+        originalPositions[i3 + 1] = py;
+        originalPositions[i3 + 2] = pz;
+
+        velocities[i3] = 0;
+        velocities[i3 + 1] = 0;
+        velocities[i3 + 2] = 0;
+
+        naturalDriftSpeed[i] = 0.012 + Math.random() * 0.022;
+      }
+
+      particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      emberMat = new THREE.PointsMaterial({
+        map: createSoftCircleTexture(),
+        size: 1.25,
+        color: 0x10b981,
+        transparent: true,
+        opacity: 0.45,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+      const particleVeil = new THREE.Points(particleGeo, emberMat);
+      scene.add(particleVeil);
+
+      // Central geometric monolith wireframe (floating luxury artifact)
+      const monolithGeo = new THREE.DodecahedronGeometry(11, 1);
+      const monolithMat = new THREE.MeshStandardMaterial({
+        color: 0x090d14,
+        roughness: 0.4,
+        metalness: 0.85,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.16
+      });
+      const monolith = new THREE.Mesh(monolithGeo, monolithMat);
+      scene.add(monolith);
+
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.25);
+      scene.add(ambientLight);
+
+      threeLight = new THREE.PointLight(0x10b981, 2.2, 90);
+      threeLight.position.set(0, 10, 20);
+      scene.add(threeLight);
+
+      // Mouse tracking & projection into 3D world space
+      let mouseNDC = new THREE.Vector2(-999, -999);
+      let targetMouseX = 0, targetMouseY = 0;
+      let mouseWorld = new THREE.Vector3(0, 0, -20);
+      const raycaster = new THREE.Raycaster();
+      const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 20);
+
+      window.addEventListener('mousemove', (e) => {
+        mouseNDC.x = (e.clientX / window.innerWidth) * 2 - 1;
+        mouseNDC.y = -(e.clientY / window.innerHeight) * 2 + 1;
+        targetMouseX = mouseNDC.x * 5;
+        targetMouseY = mouseNDC.y * 3;
+      });
+
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+
+        liquidUniforms.u_resolution.value.set(window.innerWidth, window.innerHeight);
+        const newH = 2 * Math.tan(vFovRad / 2) * planeDistance;
+        const newW = newH * camera.aspect;
+        liquidMesh.geometry.dispose();
+        liquidMesh.geometry = new THREE.PlaneGeometry(newW * 1.35, newH * 1.35, 1, 1);
+      });
+
+      function animate() {
+        requestAnimationFrame(animate);
+
+        const clockTime = performance.now() * 0.001;
+        liquidUniforms.u_time.value = clockTime;
+
+        // Smooth mouse lerp for viscous liquid inertia
+        const targetNormX = (mouseNDC.x + 1) * 0.5;
+        const targetNormY = (mouseNDC.y + 1) * 0.5;
+
+        const prevX = liquidUniforms.u_mouse.value.x;
+        const prevY = liquidUniforms.u_mouse.value.y;
+
+        liquidUniforms.u_mouse.value.x += (targetNormX - liquidUniforms.u_mouse.value.x) * 0.09;
+        liquidUniforms.u_mouse.value.y += (targetNormY - liquidUniforms.u_mouse.value.y) * 0.09;
+
+        const velX = (liquidUniforms.u_mouse.value.x - prevX);
+        const velY = (liquidUniforms.u_mouse.value.y - prevY);
+        liquidUniforms.u_mouse_vel.value.set(velX * 12, velY * 12);
+
+        raycaster.setFromCamera(mouseNDC, camera);
+        raycaster.ray.intersectPlane(plane, mouseWorld);
+
+        monolith.rotation.x += 0.0018;
+        monolith.rotation.y += 0.0022;
+        monolith.position.x += (targetMouseX - monolith.position.x) * 0.03;
+        monolith.position.y += (targetMouseY - monolith.position.y) * 0.03;
+
+        const posAttr = particleVeil.geometry.attributes.position;
+        const pos = posAttr.array;
+
+        for (let i = 0; i < particleCount; i++) {
+          const i3 = i * 3;
+
+          originalPositions[i3 + 1] += naturalDriftSpeed[i];
+          if (originalPositions[i3 + 1] > 32) originalPositions[i3 + 1] = -32;
+
+          const dx = pos[i3] - mouseWorld.x;
+          const dy = pos[i3 + 1] - mouseWorld.y;
+          const distSq = dx * dx + dy * dy;
+          const repulsionRadius = 14;
+
+          if (distSq < repulsionRadius * repulsionRadius && distSq > 0.001) {
+            const dist = Math.sqrt(distSq);
+            const force = (1 - dist / repulsionRadius) * 0.45;
+            velocities[i3] += (dx / dist) * force;
+            velocities[i3 + 1] += (dy / dist) * force;
+          }
+
+          velocities[i3] *= 0.88;
+          velocities[i3 + 1] *= 0.88;
+
+          pos[i3] += (originalPositions[i3] - pos[i3]) * 0.045 + velocities[i3];
+          pos[i3 + 1] += (originalPositions[i3 + 1] - pos[i3 + 1]) * 0.045 + velocities[i3 + 1];
+        }
+
+        posAttr.needsUpdate = true;
+        renderer.render(scene, camera);
+      }
+      animate();
+    }
+
+    /* 4. Lenis Smooth Scroll Synchronized with GSAP & Smooth Anchor Navigation */
+    let lenisInstance = null;
+    function initLenisAndGSAP() {
+      lenisInstance = new Lenis({
+        duration: 1.35,
+        easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+        smoothWheel: true,
+        wheelMultiplier: 0.95,
+        touchMultiplier: 2,
+        infinite: false
+      });
+
+      lenisInstance.on('scroll', ScrollTrigger.update);
+
+      gsap.ticker.add((time) => {
+        lenisInstance.raf(time * 1000);
+      });
+      gsap.ticker.lagSmoothing(0);
+
+      // Smooth anchor links gliding via Lenis
+      document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', (e) => {
+          const targetId = anchor.getAttribute('href');
+          if (targetId && targetId !== '#') {
+            const targetEl = document.querySelector(targetId);
+            if (targetEl) {
+              e.preventDefault();
+              lenisInstance.scrollTo(targetEl, {
+                offset: -40,
+                duration: 1.35,
+                easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t))
+              });
+              audioEngine.playMechanicalClick(780);
+            }
+          }
+        });
+      });
+
+      // Hero Entrance Choreography
+      gsap.timeline()
+        .from(".eyebrow-badge", { opacity: 0, y: -20, duration: 0.8, ease: "power3.out" })
+        .from(".hero-title", { opacity: 0, y: 40, duration: 1, ease: "power3.out" }, "-=0.4")
+        .from(".hero-subtitle", { opacity: 0, y: 30, duration: 0.9, ease: "power3.out" }, "-=0.6")
+        .from(".hero-actions", { opacity: 0, y: 25, duration: 0.8, ease: "power3.out" }, "-=0.6")
+        .from(".tilt-card", { opacity: 0, y: 50, duration: 1.2, ease: "power3.out" }, "-=0.7");
+
+      // Horizontal Scroll Pinned Gallery (GSAP ScrollTrigger Masterpiece)
+      const container = document.querySelector('.horizontal-scroll-container');
+      const panels = gsap.utils.toArray('.horizontal-panel');
+      const hudIndicator = document.getElementById('gallery-hud-indicator');
+      const hudProgress = document.getElementById('gallery-hud-progress');
+
+      const THEME_PANEL_COLORS = [
+        { r: 0.88, g: 0.11, b: 0.28 }, // Kinetic: #e11d48
+        { r: 0.85, g: 0.47, b: 0.02 }, // Cinematic: #d97706
+        { r: 0.94, g: 0.27, b: 0.27 }, // Atmospheric: #ef4444
+        { r: 0.98, g: 0.45, b: 0.09 }, // Playful: #f97316
+        { r: 0.02, g: 0.71, b: 0.83 }  // Competitive: #06b6d4
+      ];
+
+      if (container && panels.length) {
+        const scrollDistance = () => container.scrollWidth - window.innerWidth;
+
+        const horizontalTween = gsap.to(container, {
+          x: () => -scrollDistance(),
+          ease: "none",
+          scrollTrigger: {
+            trigger: "#gallery-pin",
+            pin: true,
+            scrub: 1,
+            anticipatePin: 1,
+            snap: {
+              snapTo: 1 / (panels.length - 1),
+              duration: { min: 0.2, max: 0.5 },
+              ease: "power2.inOut"
+            },
+            end: () => "+=" + scrollDistance(),
+            invalidateOnRefresh: true,
+            onUpdate: (self) => {
+              const p = self.progress;
+              const idx = Math.min(Math.floor(p * panels.length + 0.1), panels.length - 1);
+              if (hudIndicator) {
+                hudIndicator.textContent = `EXHIBIT 0${idx + 1} / 05`;
+              }
+              if (hudProgress) {
+                hudProgress.style.width = `${Math.max(20, (p * 80 + 20)).toFixed(1)}%`;
+              }
+
+              // Seamlessly tint WebGL liquid shader to match active horizontal panel
+              const col = THEME_PANEL_COLORS[idx];
+              if (col && liquidMat && liquidMat.uniforms.u_theme_color) {
+                gsap.to(liquidMat.uniforms.u_theme_color.value, {
+                  r: col.r,
+                  g: col.g,
+                  b: col.b,
+                  duration: 0.6,
+                  ease: "power1.out",
+                  overwrite: "auto"
+                });
+              }
+              if (col && threeLight) {
+                gsap.to(threeLight.color, {
+                  r: col.r,
+                  g: col.g,
+                  b: col.b,
+                  duration: 0.6,
+                  ease: "power1.out",
+                  overwrite: "auto"
+                });
+              }
+            },
+            onLeaveBack: () => {
+              // Restore Signature Emerald when scrolling back above gallery
+              const targetR = 0.063, targetG = 0.725, targetB = 0.506; // #10b981
+              if (liquidMat && liquidMat.uniforms.u_theme_color) {
+                gsap.to(liquidMat.uniforms.u_theme_color.value, { r: targetR, g: targetG, b: targetB, duration: 0.8 });
+              }
+              if (threeLight) {
+                gsap.to(threeLight.color, { r: targetR, g: targetG, b: targetB, duration: 0.8 });
+              }
+            }
+          }
+        });
+
+        // Parallax depth offset inside each panel's game artwork
+        panels.forEach((panel) => {
+          const img = panel.querySelector('img');
+          if (img) {
+            gsap.fromTo(img,
+              { xPercent: -12, scale: 1.08 },
+              {
+                xPercent: 12,
+                ease: "none",
+                scrollTrigger: {
+                  trigger: panel,
+                  containerAnimation: horizontalTween,
+                  start: "left right",
+                  end: "right left",
+                  scrub: true
+                }
+              }
+            );
+          }
+        });
+      }
+
+      // Benchmark Gauges Trigger
+      const benchmarkBars = document.querySelectorAll('.benchmark-bar-fill');
+      if (benchmarkBars.length) {
+        ScrollTrigger.create({
+          trigger: "#benchmarks",
+          start: "top 75%",
+          onEnter: () => {
+            benchmarkBars.forEach(bar => {
+              bar.style.width = bar.dataset.width || '100%';
+            });
+          }
+        });
+      }
+
+      // Back to top link
+      const backToTop = document.getElementById('back-to-top-btn');
+      if (backToTop) {
+        backToTop.addEventListener('click', (e) => {
+          e.preventDefault();
+          lenisInstance.scrollTo(0, { duration: 1.5 });
+        });
+      }
+    }
+
+    /* 5. 3D Perspective Tilt with Dynamic Specular Mouse Glare */
+    function initTiltCards() {
+      const cards = document.querySelectorAll('.tilt-card, .spec-box');
+      cards.forEach(card => {
+        const inner = card.querySelector('.tilt-inner') || card;
+        
+        // Dynamically inject specular glare overlay if not present
+        let glare = inner.querySelector('.specular-glare-overlay');
+        if (!glare) {
+          glare = document.createElement('div');
+          glare.className = 'specular-glare-overlay';
+          inner.appendChild(glare);
+        }
+
+        let targetRotX = 0, targetRotY = 0;
+        let currentRotX = 0, currentRotY = 0;
+        let isHovering = false;
+        let rafId = null;
+
+        function updateTilt() {
+          currentRotX += (targetRotX - currentRotX) * 0.14;
+          currentRotY += (targetRotY - currentRotY) * 0.14;
+          
+          if (inner !== card) {
+            inner.style.transform = `perspective(1200px) rotateX(${currentRotX.toFixed(2)}deg) rotateY(${currentRotY.toFixed(2)}deg) scale3d(1.015, 1.015, 1.015)`;
+          } else {
+            inner.style.transform = `perspective(1200px) rotateX(${currentRotX.toFixed(2)}deg) rotateY(${currentRotY.toFixed(2)}deg)`;
+          }
+
+          if (isHovering || Math.abs(targetRotX - currentRotX) > 0.02 || Math.abs(targetRotY - currentRotY) > 0.02) {
+            rafId = requestAnimationFrame(updateTilt);
+          } else {
+            inner.style.transform = 'perspective(1200px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)';
+            rafId = null;
+          }
+        }
+
+        card.addEventListener('mouseenter', () => {
+          isHovering = true;
+          card.style.setProperty('--glare-opacity', '1');
+          if (!rafId) rafId = requestAnimationFrame(updateTilt);
+        });
+
+        card.addEventListener('mousemove', (e) => {
+          const rect = card.getBoundingClientRect();
+          const mouseX = e.clientX - rect.left;
+          const mouseY = e.clientY - rect.top;
+          const xPct = (mouseX / rect.width - 0.5) * 2;
+          const yPct = (mouseY / rect.height - 0.5) * 2;
+
+          targetRotX = -yPct * 6.8;
+          targetRotY = xPct * 6.8;
+
+          card.style.setProperty('--glare-x', `${mouseX}px`);
+          card.style.setProperty('--glare-y', `${mouseY}px`);
+          card.style.setProperty('--glare-opacity', '1');
+
+          if (!rafId) rafId = requestAnimationFrame(updateTilt);
+        });
+
+        card.addEventListener('mouseleave', () => {
+          isHovering = false;
+          targetRotX = 0;
+          targetRotY = 0;
+          card.style.setProperty('--glare-opacity', '0');
+        });
+      });
+    }
+
+    /* 6. Dynamic Theme Engine */
+    const THEMES_DATA = {
+      kinetic: {
+        name: "Kinetic",
+        game: "Marvel's Spider-Man Remastered",
+        publisher: "Insomniac Games • PlayStation Publishing LLC • 2022",
+        scheme: "The Brutalist Sanctuary",
+        accent: "#e11d48",
+        glow: "rgba(225, 29, 72, 0.35)",
+        hex: 0xe11d48,
+        image: "assets/theme-kinetic-spiderman.png",
+        actionText: "PLAY NOW",
+        metaBadges: ["STEAM", "66.0 GB", "3H 59M PLAYED"],
+        description: "High-octane scarlet pulse with kinetic accent geometries. Engineered for high-speed action and dynamic player engagement."
+      },
+      cinematic: {
+        name: "Cinematic",
+        game: "Ghost of Tsushima Director's Cut",
+        publisher: "Sucker Punch Productions • Nixxes Software • PlayStation • 2024",
+        scheme: "The Ash & Ember",
+        accent: "#d97706",
+        glow: "rgba(217, 119, 6, 0.35)",
+        hex: 0xd97706,
+        image: "assets/theme-cinematic-tsushima.png",
+        actionText: "PLAY NOW",
+        metaBadges: ["STEAM", "INSTALLED", "PLAYING"],
+        description: "Monochrome sumi-e ink craftsmanship fused with warm gold-leaf motifs. Celebrates single-player grandeur and photographic framing."
+      },
+      atmospheric: {
+        name: "Atmospheric",
+        game: "The Witcher 3: Wild Hunt — Game of the Year",
+        publisher: "CD PROJEKT RED • 2026 • Epic Games / GOG",
+        scheme: "The Brutalist Sanctuary",
+        accent: "#ef4444",
+        glow: "rgba(239, 68, 68, 0.32)",
+        hex: 0xef4444,
+        image: "assets/theme-atmospheric-witcher.png",
+        actionText: "PLAY",
+        metaBadges: ["EPIC GAMES", "GOG", "INSTALLED"],
+        description: "Silver moonlight and deep obsidian gradients. High-contrast dark fantasy palette tuned for immersive RPG chronicles."
+      },
+      playful: {
+        name: "Playful",
+        game: "Stray",
+        publisher: "BlueTwelve Studio • Annapurna Interactive • 2022",
+        scheme: "The Ash & Ember",
+        accent: "#f97316",
+        glow: "rgba(249, 115, 22, 0.35)",
+        hex: 0xf97316,
+        image: "assets/theme-playful-stray.png",
+        actionText: "PRESS START",
+        metaBadges: ["STEAM", "INSTALLED", "UNPLAYED"],
+        description: "Warm cyberpunk neon accents and softened tactile curves. Designed for indie gems, narrative journeys, and whimsical adventures."
+      },
+      competitive: {
+        name: "Competitive",
+        game: "VALORANT",
+        publisher: "Riot Games • Epic Games Store • 2020",
+        scheme: "The Brutalist Sanctuary",
+        accent: "#06b6d4",
+        glow: "rgba(6, 182, 212, 0.35)",
+        hex: 0x06b6d4,
+        image: "assets/theme-competitive-valorant.png",
+        actionText: "PRE-LOAD",
+        metaBadges: ["EPIC GAMES", "SYNCED", "LOGGED: 0H"],
+        description: "Ultra-low visual latency, precision tactical HUD framing, and instant status triggers for competitive team shooters."
+      }
+    };
+
+    function initThemeEngine() {
+      const buttons = document.querySelectorAll('.theme-pill-btn');
+      const previewImage = document.getElementById('theme-preview-img');
+      const themeTitle = document.getElementById('theme-active-title');
+      const themeGame = document.getElementById('theme-active-game');
+      const themePublisher = document.getElementById('theme-active-publisher');
+      const themeScheme = document.getElementById('theme-active-scheme');
+      const themeDesc = document.getElementById('theme-active-desc');
+      const themeBadges = document.getElementById('theme-active-badges');
+      const themeActionBtn = document.getElementById('theme-active-action');
+
+      if (!buttons.length || !previewImage) return;
+
+      function switchTheme(key, updateGlobalAmbient = true) {
+        const data = THEMES_DATA[key];
+        if (!data) return;
+
+        buttons.forEach(b => b.classList.toggle('active', b.dataset.theme === key));
+
+        if (updateGlobalAmbient) {
+          document.documentElement.style.setProperty('--theme-accent', data.accent);
+          document.documentElement.style.setProperty('--theme-glow', data.glow);
+
+          const targetR = ((data.hex >> 16) & 255) / 255;
+          const targetG = ((data.hex >> 8) & 255) / 255;
+          const targetB = (data.hex & 255) / 255;
+
+          if (threeLight) {
+            gsap.to(threeLight.color, {
+              r: targetR,
+              g: targetG,
+              b: targetB,
+              duration: 1.1,
+              ease: "power2.out"
+            });
+          }
+          if (emberMat) {
+            gsap.to(emberMat.color, {
+              r: targetR,
+              g: targetG,
+              b: targetB,
+              duration: 1.1,
+              ease: "power2.out"
+            });
+          }
+          if (liquidMat && liquidMat.uniforms.u_theme_color) {
+            gsap.to(liquidMat.uniforms.u_theme_color.value, {
+              r: targetR,
+              g: targetG,
+              b: targetB,
+              duration: 1.2,
+              ease: "power2.out"
+            });
+          }
+        }
+
+        previewImage.style.opacity = '0.35';
+        previewImage.style.transform = 'scale(0.985)';
+
+        setTimeout(() => {
+          previewImage.src = data.image;
+          if (themeTitle) themeTitle.textContent = data.name;
+          if (themeGame) themeGame.textContent = data.game;
+          if (themePublisher) themePublisher.textContent = data.publisher;
+          if (themeScheme) themeScheme.textContent = data.scheme;
+          if (themeDesc) themeDesc.textContent = data.description;
+          if (themeActionBtn) {
+            themeActionBtn.textContent = data.actionText;
+            themeActionBtn.style.background = data.accent;
+          }
+          if (themeBadges) {
+            themeBadges.innerHTML = data.metaBadges.map(b => 
+              `<span class="px-2.5 py-0.5 rounded text-[10px] font-mono bg-white/10 text-slate-200">${b}</span>`
+            ).join('');
+          }
+          previewImage.style.opacity = '1';
+          previewImage.style.transform = 'scale(1)';
+        }, 180);
+      }
+
+      buttons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          audioEngine.playMechanicalClick(145);
+          switchTheme(btn.dataset.theme, true);
+        });
+      });
+
+      // Preserve signature Logpile emerald ambient on initial load
+      switchTheme('kinetic', false);
+    }
+
+    /* 7. Exhibit 01: Sanctuary Wheel Theater */
+    function initSanctuaryWheelTheater() {
+      const container = document.getElementById('sanctuary-wheel-theater');
+      if (!container) return;
+
+      const video = container.querySelector('video');
+      const playBtn = container.querySelector('.theater-play-btn');
+      const progressBar = container.querySelector('.theater-progress-fill');
+      const progressTrack = container.querySelector('.theater-progress-track');
+      const timeDisplay = container.querySelector('.theater-time-display');
+      const spinTriggerBtn = document.getElementById('trigger-wheel-spin-btn');
+      let audioTimer = null;
+
+      if (!video) return;
+
+      function togglePlay() {
+        if (video.paused || video.ended) {
+          video.play();
+          if (playBtn) playBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+        } else {
+          video.pause();
+          if (playBtn) playBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
+        }
+      }
+
+      if (playBtn) playBtn.addEventListener('click', togglePlay);
+      video.addEventListener('click', togglePlay);
+
+      video.addEventListener('timeupdate', () => {
+        if (video.duration) {
+          const pct = (video.currentTime / video.duration) * 100;
+          if (progressBar) progressBar.style.width = `${pct}%`;
+          if (timeDisplay) {
+            const curM = Math.floor(video.currentTime / 60);
+            const curS = Math.floor(video.currentTime % 60).toString().padStart(2, '0');
+            const durM = Math.floor(video.duration / 60);
+            const durS = Math.floor(video.duration % 60).toString().padStart(2, '0');
+            timeDisplay.textContent = `${curM}:${curS} / ${durM}:${durS}`;
+          }
+        }
+      });
+
+      if (progressTrack) {
+        progressTrack.addEventListener('click', (e) => {
+          const rect = progressTrack.getBoundingClientRect();
+          const clickX = e.clientX - rect.left;
+          const pct = clickX / rect.width;
+          if (video.duration) {
+            video.currentTime = pct * video.duration;
+          }
+        });
+      }
+
+      if (spinTriggerBtn) {
+        spinTriggerBtn.addEventListener('click', () => {
+          audioEngine.init();
+          video.currentTime = 0;
+          video.play();
+          if (playBtn) playBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+
+          if (audioTimer) clearTimeout(audioTimer);
+          let clicks = 0;
+          let interval = 65;
+
+          function scheduleTick() {
+            if (clicks < 42) {
+              const progress = clicks / 42;
+              // Smooth pitch modulation: rises towards apex velocity, then smoothly descends as it decelerates
+              const pitch = 580 + Math.sin(progress * Math.PI) * 480 + (Math.random() - 0.5) * 35;
+              audioEngine.playRouletteTick(pitch);
+              clicks++;
+              if (progress < 0.28) {
+                interval = Math.max(50, interval * 0.94);
+              } else {
+                interval = Math.min(interval * 1.085, 480);
+              }
+              audioTimer = setTimeout(scheduleTick, interval);
+            } else {
+              audioEngine.playChime();
+            }
+          }
+          scheduleTick();
+        });
+      }
+    }
+
+    /* 8. FAQ Accordions */
+    function initFaqAccordions() {
+      const items = document.querySelectorAll('.faq-item');
+      items.forEach(item => {
+        const trigger = item.querySelector('.faq-trigger');
+        if (!trigger) return;
+        trigger.addEventListener('click', () => {
+          const isOpen = item.classList.contains('active');
+          items.forEach(other => other.classList.remove('active'));
+          if (!isOpen) {
+            item.classList.add('active');
+            audioEngine.playMechanicalClick(140);
+          } else {
+            audioEngine.playHoverTick();
+          }
+        });
+      });
+    }
+
+    /* 9. Audio Toggle & Clipboard */
+    function initAudioAndClipboard() {
+      const audioToggle = document.getElementById('audio-toggle-btn');
+      if (audioToggle) {
+        function updateAudioToggleUI() {
+          audioToggle.innerHTML = soundEnabled 
+            ? '<i data-lucide="volume-2" class="w-4 h-4 text-emerald-400"></i>' 
+            : '<i data-lucide="volume-x" class="w-4 h-4 text-slate-400"></i>';
+          audioToggle.setAttribute('title', soundEnabled ? 'Audio: Active (Click to mute)' : 'Audio: Muted (Click to enable)');
+          if (soundEnabled) {
+            audioToggle.classList.add('text-emerald-400');
+            audioToggle.classList.remove('text-slate-400');
+          } else {
+            audioToggle.classList.remove('text-emerald-400');
+            audioToggle.classList.add('text-slate-400');
+          }
+          if (window.lucide) lucide.createIcons();
+        }
+        updateAudioToggleUI();
+
+        audioToggle.addEventListener('click', () => {
+          soundEnabled = !soundEnabled;
+          updateAudioToggleUI();
+          if (soundEnabled) {
+            audioEngine.init();
+            audioEngine.playMechanicalClick(180);
+          }
+        });
+      }
+
+      const copyButtons = document.querySelectorAll('.copy-trigger');
+      copyButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const text = btn.dataset.copy;
+          if (!text) return;
+          navigator.clipboard.writeText(text).then(() => {
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = `<span class="text-emerald-400 font-mono text-xs">Copied!</span>`;
+            audioEngine.playMechanicalClick(1200);
+            setTimeout(() => {
+              btn.innerHTML = originalHtml;
+              lucide.createIcons();
+            }, 1600);
+          });
+        });
+      });
+    }
+
+    /* 10. Automated Dynamic GitHub Release Auto-Sync */
+    function initDynamicReleaseSync() {
+      const GITHUB_REPO = 'corporateintrovertgamer/logpile';
+      const CACHE_KEY = 'logpile_latest_release_cache';
+      const CACHE_EXPIRY = 10 * 60 * 1000; // 10 minutes cache to avoid GitHub rate limits
+
+      function applyRelease(data) {
+        if (!data) return;
+        const tag = data.tag_name || '';
+        const cleanTag = tag.startsWith('v') ? tag : (tag ? `v${tag}` : '');
+
+        // Update all elements with the dynamic-version-tag class
+        if (cleanTag) {
+          document.querySelectorAll('.dynamic-version-tag').forEach(el => {
+            el.textContent = cleanTag;
+          });
+        }
+
+        const eyebrow = document.getElementById('download-eyebrow-text');
+        if (eyebrow && cleanTag) {
+          eyebrow.innerHTML = `The Sanctuary Update &mdash; <span class="text-emerald-400 font-mono font-bold">${cleanTag}</span>`;
+        }
+
+        // Find .exe asset if uploaded in release assets
+        let exeAsset = null;
+        if (Array.isArray(data.assets) && data.assets.length > 0) {
+          exeAsset = data.assets.find(a => a.name && a.name.toLowerCase().endsWith('.exe'));
+        }
+
+        const titleEl = document.getElementById('card-installer-title');
+        const linkEl = document.getElementById('latest-installer-link');
+        const actionEl = document.getElementById('card-installer-action');
+
+        if (exeAsset) {
+          if (titleEl) titleEl.textContent = exeAsset.name;
+          if (linkEl && exeAsset.browser_download_url) linkEl.href = exeAsset.browser_download_url;
+          if (actionEl) actionEl.textContent = `Download ${exeAsset.name}`;
+        } else if (cleanTag) {
+          if (titleEl) titleEl.textContent = `Logpile Setup ${cleanTag.replace(/^v/, '')}.exe`;
+          if (linkEl && data.html_url) linkEl.href = data.html_url;
+        }
+      }
+
+      // Check cache first
+      try {
+        const cached = sessionStorage.getItem(CACHE_KEY);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Date.now() - parsed.timestamp < CACHE_EXPIRY && parsed.data) {
+            applyRelease(parsed.data);
+            return;
+          }
+        }
+      } catch (err) {}
+
+      // Fetch live GitHub Release API
+      fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`, {
+        headers: { 'Accept': 'application/vnd.github.v3+json' }
+      })
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then(data => {
+        applyRelease(data);
+        try {
+          sessionStorage.setItem(CACHE_KEY, JSON.stringify({
+            timestamp: Date.now(),
+            data: data
+          }));
+        } catch (err) {}
+      })
+      .catch(err => {
+        console.info('Logpile: Using fallback release link (offline / rate-limited).');
+      });
+    }
+
+    /* DOM Ready */
+    document.addEventListener('DOMContentLoaded', () => {
+      const preloader = document.getElementById('preloader');
+      const counter = document.getElementById('preloader-counter');
+      let progress = 0;
+      const interval = setInterval(() => {
+        progress += Math.floor(Math.random() * 20) + 15;
+        if (progress >= 100) {
+          progress = 100;
+          clearInterval(interval);
+          if (counter) counter.textContent = 'SANCTUARY READY 100%';
+          setTimeout(() => {
+            if (preloader) preloader.classList.add('loaded');
+          }, 350);
+        } else {
+          if (counter) counter.textContent = `INITIALIZING SANCTUARY ${progress}%`;
+        }
+      }, 70);
+
+      initMagneticPhysics();
+      initThreeJS();
+      initLenisAndGSAP();
+      initTiltCards();
+      initThemeEngine();
+      initSanctuaryWheelTheater();
+      initFaqAccordions();
+      initAudioAndClipboard();
+      initDynamicReleaseSync();
+
+      // Tactile acoustic feedback for showcase cards, benchmark rows, and buttons
+      document.querySelectorAll('.tilt-card, .spec-box, .benchmark-row, .theme-pill-btn, .btn-nested-primary, .btn-nested-secondary, .social-pill').forEach(card => {
+        card.addEventListener('mouseenter', () => {
+          audioEngine.playHoverTick();
+        });
+      });
+
+      document.querySelectorAll('.btn-nested-primary, .btn-nested-secondary, .theme-pill-btn, .social-pill').forEach(btn => {
+        btn.addEventListener('click', () => {
+          audioEngine.playMechanicalClick(145);
+        });
+      });
+
+      if (window.lucide) {
+        window.lucide.createIcons();
+      }
+    });
+  </script>
+</body>
+</html>
