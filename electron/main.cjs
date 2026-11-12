@@ -24,6 +24,20 @@ app.setPath('temp', path.join(APP_DATA_DIR, 'temp'));
 process.env.HF_HOME = path.join(APP_DATA_DIR, 'cache');
 process.env.XDG_CACHE_HOME = path.join(APP_DATA_DIR, 'cache');
 
+// Enforce single instance lock
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      if (!mainWindow.isVisible()) mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
 protocol.registerSchemesAsPrivileged([
   {
     scheme: 'local-file',
@@ -573,6 +587,12 @@ function startTrackingGameSession(gameId, title, executablePath = null, installP
 }
 
 function endGameSession(session) {
+  if (!session || session.isEnded) return;
+  session.isEnded = true;
+  if (session.timer) {
+    clearInterval(session.timer);
+    session.timer = null;
+  }
   if (mainWindow && !mainWindow.isDestroyed()) {
     try { mainWindow.webContents.send('game:sessionEnded', { gameId: session.gameId, title: session.title }) } catch {}
     try { mainWindow.webContents.send('game:promptCheckpointNote', { gameId: session.gameId, title: session.title }) } catch {}

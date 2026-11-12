@@ -697,6 +697,8 @@ function updateGameMetadata(db, gameId, fields = {}) {
   const isFavorite = hasFavorite ? (Boolean(fields.is_favorite ?? fields.isFavorite) ? 1 : 0) : (current.is_favorite ? 1 : 0)
   const hasBacklog = fields.backlog_status !== undefined || fields.backlogStatus !== undefined
   const backlogStatus = hasBacklog ? String(fields.backlog_status ?? fields.backlogStatus).trim().toLowerCase() : (current.backlog_status || 'unplayed')
+  const hasPlayTime = fields.play_time_seconds !== undefined || fields.playTimeSeconds !== undefined
+  const playTimeSeconds = hasPlayTime ? Math.max(0, parseInt(fields.play_time_seconds ?? fields.playTimeSeconds, 10) || 0) : (current.play_time_seconds || 0)
   const hasSteamGridDbField = fields.steamGridDbId !== undefined || fields.steamgriddbId !== undefined
   const steamGridDbId = hasSteamGridDbField ? String(fields.steamGridDbId ?? fields.steamgriddbId ?? '').trim().slice(0, 120) : String(current.steamgriddb_id || '')
   const steamGridDbIdChanged = hasSteamGridDbField && steamGridDbId !== String(current.steamgriddb_id || '')
@@ -716,6 +718,7 @@ function updateGameMetadata(db, gameId, fields = {}) {
     tags = @tags,
     steamgriddb_id = @steamGridDbId,
     is_favorite = @isFavorite,
+    play_time_seconds = CASE WHEN @hasPlayTime = 1 THEN @playTimeSeconds ELSE play_time_seconds END,
     backlog_status = CASE WHEN @backlogStatus IN ('unplayed', 'playing', 'completed', 'dropped') THEN @backlogStatus ELSE backlog_status END,
     cover_url = CASE 
       WHEN @explicitCover IS NOT NULL AND @explicitCover != '' THEN @explicitCover
@@ -724,7 +727,12 @@ function updateGameMetadata(db, gameId, fields = {}) {
     END,
     metadata_sync_status = CASE WHEN @steamGridDbIdChanged THEN 'pending' ELSE metadata_sync_status END,
     updated_at = CURRENT_TIMESTAMP
-    WHERE id = @id`).run({ id: gameId, title, normalizedTitle: normalizeTitle(title), description, genres, developer, publisher, releaseDate, storeName, executablePath, launchArguments, tags, steamGridDbId, steamGridDbIdChanged: steamGridDbIdChanged ? 1 : 0, explicitCover, isFavorite, backlogStatus })
+    WHERE id = @id`).run({ id: gameId, title, normalizedTitle: normalizeTitle(title), description, genres, developer, publisher, releaseDate, storeName, executablePath, launchArguments, tags, steamGridDbId, steamGridDbIdChanged: steamGridDbIdChanged ? 1 : 0, explicitCover, isFavorite, backlogStatus, hasPlayTime: hasPlayTime ? 1 : 0, playTimeSeconds })
+  if (hasPlayTime) {
+    try {
+      db.prepare('UPDATE game_sources SET play_time_seconds = ? WHERE game_id = ?').run(playTimeSeconds, gameId)
+    } catch {}
+  }
   return db.prepare('SELECT * FROM games WHERE id = ?').get(gameId)
 }
 

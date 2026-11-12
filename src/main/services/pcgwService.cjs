@@ -4,7 +4,7 @@ const fs = require('node:fs')
 const { updateGameSavePath, insertTechKnowledge } = require('../../../electron/db.cjs')
 
 const HEADERS = {
-  'User-Agent': 'Logpile/1.3.0 (Offline Game Launcher; https://github.com/ritesh-soni-logpile/logpile)',
+  'User-Agent': 'Logpile/1.3.2 (Offline Game Launcher; https://github.com/ritesh-soni-logpile/logpile)',
   'Accept': 'application/json',
 }
 

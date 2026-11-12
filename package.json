@@ -1,6 +1,6 @@
 {
   "name": "logpile",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "private": true,
   "description": "Desktop game library with local storefront scanning and catalog import",
   "author": "Corporate Introvert Gamer (Ritesh Soni)",
@@ -84,7 +84,10 @@
       "!**/*.log"
     ],
     "win": {
-      "target": "nsis",
+      "target": [
+        "nsis",
+        "zip"
+      ],
       "icon": "build/icon.ico"
     },
     "nsis": {

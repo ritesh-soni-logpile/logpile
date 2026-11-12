@@ -123,7 +123,13 @@ async function collectSteamPlaytime(steamRoots) {
           for (const [key, value] of Object.entries(node)) {
             if (value && typeof value === 'object') {
               if (/^\d+$/.test(key)) {
-                const minutes = Array.isArray(value) ? Math.max(...value.map((item) => toNumber(item?.Playtime, 0))) : toNumber(value.Playtime, 0)
+                const getPlaytimeMinutes = (item) => {
+                  if (!item || typeof item !== 'object') return 0
+                  const onlineMinutes = toNumber(item.Playtime, 0)
+                  const offlineMinutes = toNumber(item.PlaytimeDisconnected, 0)
+                  return onlineMinutes + offlineMinutes
+                }
+                const minutes = Array.isArray(value) ? Math.max(...value.map(getPlaytimeMinutes)) : getPlaytimeMinutes(value)
                 if (minutes > 0) playtimeByApp.set(key, Math.max(playtimeByApp.get(key) || 0, minutes * 60))
               }
               visit(value)

@@ -32,16 +32,16 @@ export function AboutView() {
                   Logpile Desktop
                 </h1>
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.12)] text-[var(--accent)] shadow-[0_0_14px_var(--accent-glow)]">
-                  v1.3.0 The Companion Update
+                  v1.3.2
                 </span>
               </div>
               <p className="text-lg text-[var(--text-secondary)] mt-1.5">An offline-first, private personal game sanctuary &amp; library manager.</p>
             </div>
             <div className="flex flex-col items-start sm:items-end gap-1.5 shrink-0 pt-1">
               <div className="flex items-center gap-3">
-                <span className="text-xs font-medium text-[var(--text-muted)]">Current build: 1.3.0</span>
+                <span className="text-xs font-medium text-[var(--text-muted)]">Current build: 1.3.2</span>
                 <a
-                  href="https://github.com/corporateintrovertgamer/logpile/releases"
+                  href="https://github.com/ritesh-soni-logpile/logpile/releases"
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-[rgba(255,255,255,0.04)] hover:bg-[rgba(255,255,255,0.08)] text-[var(--text-primary)] border border-[rgba(255,255,255,0.1)] hover:border-[var(--accent)] shadow-[0_4px_14px_rgba(0,0,0,0.25)] transition-all cursor-pointer group"
