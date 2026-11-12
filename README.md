@@ -7,11 +7,11 @@
 [![Zero Cloud](https://img.shields.io/badge/Telemetry-0%25%20Offline-emerald?style=for-the-badge)](#)
 
 <p align="center">
-  <a href="https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.0/Logpile.Setup.1.3.0.exe">
+  <a href="https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.1/Logpile.Setup.1.3.1.exe">
     <img src="https://img.shields.io/badge/Download-Installer%20(.exe)%20--%20166%20MB-2ea44f?style=for-the-badge&logo=windows" alt="Download Installer" />
   </a>
   &nbsp;&nbsp;
-  <a href="https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.0/Logpile-v1.3.0-Portable.zip">
+  <a href="https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.1/Logpile-v1.3.1-Portable.zip">
     <img src="https://img.shields.io/badge/Download-Portable%20(.zip)%20--%20210%20MB-0969da?style=for-the-badge&logo=zip" alt="Download Portable" />
   </a>
 </p>
@@ -30,7 +30,7 @@ Logpile stores everything—databases, artwork, and save backups—inside a sing
 
 ## At a Glance: Feature Comparison
 
-| Capability | Logpile v1.3.0 | Playnite | LaunchBox |
+| Capability | Logpile v1.3.1 | Playnite | LaunchBox |
 | :--- | :--- | :--- | :--- |
 | **Storefront Auto-Detection** | **8 Native Sources** (Steam, Epic, GOG, Xbox, EA, Ubisoft, Amazon, Standalone) + automatic DLC/Utility filtering | Requires 3rd-party community plugins that break on API updates | Limited native store sync |
 | **Steam Family Sharing Status** | **Yes (Exclusive)** Detects live playing & availability status of shared family titles before launch | No (Library detection only; no in-use/active player status) | No |
@@ -94,8 +94,8 @@ Configure 1440p hero backdrops, toggle the offline engine with automatic 30-seco
 
 ### For Gamers
 1. Grab the latest installer or portable archive from [Releases](../../releases/latest):
-   - **Installer:** [`Logpile.Setup.1.3.0.exe`](https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.0/Logpile.Setup.1.3.0.exe) (166 MB)
-   - **Portable (.zip):** [`Logpile-v1.3.0-Portable.zip`](https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.0/Logpile-v1.3.0-Portable.zip) (210 MB)
+   - **Installer:** [`Logpile.Setup.1.3.1.exe`](https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.1/Logpile.Setup.1.3.1.exe) (166 MB)
+   - **Portable (.zip):** [`Logpile-v1.3.1-Portable.zip`](https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.1/Logpile-v1.3.1-Portable.zip) (210 MB)
 2. Extract or install to any internal drive or portable SSD (`logpile_data/` stores all assets self-contained).
 3. *(Optional)* Drop any quantized `.gguf` model into the `/models` directory to enable conversational backlog guidance.
 

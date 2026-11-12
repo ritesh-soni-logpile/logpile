@@ -361,14 +361,37 @@ async function restoreDatabaseBackup(targetBackupPath, userDataPath) {
 let tray = null;
 const activeGameSessions = new Map();
 
+function getAppIconPath() {
+  const packagedPath = path.join(process.resourcesPath, 'icon.ico');
+  const devPath = path.join(__dirname, '..', 'build', 'icon.ico');
+  if (app.isPackaged) {
+    if (fs.existsSync(packagedPath)) return packagedPath;
+    if (fs.existsSync(devPath)) return devPath;
+    return packagedPath;
+  }
+  if (fs.existsSync(devPath)) return devPath;
+  if (fs.existsSync(packagedPath)) return packagedPath;
+  return devPath;
+}
+
 function setupTray(win, database) {
   if (tray) return;
-  const iconPath = app.isPackaged
-    ? path.join(process.resourcesPath, 'icon.ico')
-    : path.join(__dirname, '..', 'build', 'icon.ico');
+  const iconPath = getAppIconPath();
 
-  const trayIcon = fs.existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : nativeImage.createEmpty();
-  tray = new Tray(trayIcon);
+  let trayImage;
+  if (fs.existsSync(iconPath)) {
+    try {
+      const img = nativeImage.createFromPath(iconPath);
+      trayImage = (!img.isEmpty()) ? img : iconPath;
+    } catch {
+      trayImage = iconPath;
+    }
+  } else {
+    console.warn('[Tray] Icon not found at:', iconPath);
+    trayImage = nativeImage.createEmpty();
+  }
+
+  tray = new Tray(trayImage);
   tray.setToolTip('Logpile');
 
   const contextMenu = Menu.buildFromTemplate([
@@ -695,7 +718,7 @@ function createWindow() {
     frame: false,
     titleBarStyle: 'hidden',
     backgroundColor: '#0c0d10',
-    icon: app.isPackaged ? path.join(process.resourcesPath, 'icon.ico') : path.join(__dirname, '..', 'build', 'icon.ico'),
+    icon: getAppIconPath(),
     autoHideMenuBar: true,
     show: false,
     webPreferences: {
