@@ -3,7 +3,7 @@ const { getUninstallRegistryEntries, fileExists, getDriveLetter, emitProgress } 
 const { directorySize } = require('./gogScanner.cjs')
 
 function scanRepacks(onProgress) {
-  emitProgress(onProgress, { source: 'repack', phase: 'scanning', current: 0, total: 1, message: 'Scanning for Repack installations...' })
+  emitProgress(onProgress, { source: 'repack', phase: 'scanning', current: 0, total: 1, message: 'Scanning for standalone game installations...' })
   
   const entries = getUninstallRegistryEntries()
   const records = []
@@ -54,7 +54,7 @@ function scanRepacks(onProgress) {
         normalizedTitle: cleanTitle || displayName.trim(),
         description: null,
         developer: null,
-        publisher: publisher.trim() || 'Repack',
+        publisher: publisher.trim() || 'Standalone',
         releaseDate: null,
         coverUrl: null,
         heroUrl: null,
@@ -70,14 +70,14 @@ function scanRepacks(onProgress) {
         idSource: 'repack-registry:uninstall-key',
         launchUri: null,
         installUri: null,
-        executable: displayIcon ? displayIcon.replace(/,\d+$/, '') : null,
+        executable: (displayIcon && /\.exe$/i.test(displayIcon.replace(/,\d+$/, '').replace(/^["']|["']$/g, '').trim())) ? displayIcon.replace(/,\d+$/, '').replace(/^["']|["']$/g, '').trim() : null,
         source: 'local-scan',
         driveStatus: isOnline ? 'online' : 'offline',
       })
     }
   })
 
-  emitProgress(onProgress, { source: 'repack', phase: 'complete', current: 1, total: 1, message: `Found ${records.length} repacks.` })
+  emitProgress(onProgress, { source: 'repack', phase: 'complete', current: 1, total: 1, message: `Found ${records.length} standalone installations.` })
   return { source: 'repack', records }
 }
 

@@ -2,147 +2,59 @@ import { Component, useEffect, useLayoutEffect, useMemo, useRef, useState, useCa
 import { createPortal } from 'react-dom'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
-  Activity, Archive, ArrowDownAZ, ArrowLeft, ArrowUpAZ, Check, ChevronDown, CircleHelp, Clock, Cpu, Database, Download,
-  FileSpreadsheet, Filter, FolderOpen, Gamepad2, HardDrive, LayoutGrid, ListFilter, Maximize2, Minimize2, Minus,
+  Activity, Archive, ArrowDownAZ, ArrowLeft, Check, ChevronDown, CircleHelp, Clock, Cpu, Database, Download,
+  FileSpreadsheet, Filter, FolderOpen, Gamepad2, HardDrive, LayoutGrid, Maximize2, Minimize2, Minus,
   Monitor, PackageCheck, PackageOpen, Palette, Play, Search, ScanLine, Settings2,
-  ShieldCheck, Sparkles, Star, Sun, TerminalSquare, UploadCloud, Wrench, X, Moon, SlidersHorizontal,
-  Dices, KeyRound, RefreshCw, ImagePlus, Trophy, WandSparkles, EyeOff, Eye, FileDown, Trash2, AlertTriangle, ArrowRightLeft,
-  Bookmark, MoreHorizontal, Building2, Calendar, PlugZap, Info, Film, Camera, ChevronRight, ZoomIn,
-  PanelLeftClose, PanelLeft, ChevronUp,
+  ShieldCheck, Smartphone, Sparkles, Square, Star, TerminalSquare, UploadCloud, Wrench, X, Moon, SlidersHorizontal,
+  Dices, KeyRound, RefreshCw, RotateCw, ImagePlus, Trophy, WandSparkles, EyeOff, Eye, FileDown, Trash2, AlertTriangle, ArrowRightLeft,
+  Bookmark, MoreHorizontal, PlugZap, Info, Film, Camera, ChevronRight, ZoomIn,
+  PanelLeftClose, PanelLeft, Shuffle, Layers, Users, LayoutDashboard, BookOpen,
+  Mic, MicOff,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 import './styles/tokens.css'
 import './styles.css'
 import '@fontsource/outfit'
+import '@fontsource/outfit/500.css'
+import '@fontsource/outfit/600.css'
 import { normalizeArtworkUrl } from './utils/artworkUrl'
 import { SourceIcon } from './components/SourceIcons'
 import { CustomDropdown } from './components/CustomDropdown'
 import { AboutView } from './components/views/AboutView'
+import { DashboardView } from './components/views/DashboardView'
+import { InGameOverlayView } from './components/views/InGameOverlayView'
+import { LAYOUT_PALETTES, themeVars } from './utils/themePalettes'
+import { PcgwTechSyncButton, SaveBackupsPanel, ModProfilePanel, JumpBackInCard } from './components/views/GameDossierView'
+import { AiAssistantDrawer, parseAiResponse } from './components/AiAssistantDrawer'
+import { speakConfirmation, getVoiceSettings, saveVoiceSettings } from './utils/voiceService'
+import { useGamepad } from './utils/useGamepad'
+import { generateBragCollage } from './utils/generateBragCollage'
 import logoDark from './assets/logo.png'
 import logoLight from './assets/logo-light.png'
 const logo = logoDark
 
 const fallbackApi = {
+  async invoke() { return null },
   async clearArtCache() { return 0 },
   async selectCustomArtwork() { return null },
   async setGameCategory() { return null },
   async updateGameStatus() { return null },
-  window: { minimize() {}, maximize() {}, close() {} },
-  database: { async seedCheck() { return { seeded: false, count: 0 } }, async getGames() { return [] }, async getLibraryStats() { return { totalGames: 0, installedGames: 0, utilityTools: 0, installedUtilities: 0, visibleGames: 0, visibleInstalledGames: 0, dlcGames: 0, installedDlc: 0, hiddenGames: 0, hiddenInstalledGames: 0, hiddenDlc: 0, hiddenInstalledDlc: 0, readyToInstallCount: 0, artworkCovered: 0, missingArtwork: 0, totalStorageGb: 0, platformBreakdown: [] } }, async getLibrarySettings() { return { autoHideSupportEntries: true, steamGridDbApiKey: '', preferAnimatedArtwork: false } }, async getActivityLog() { return [] }, async getLibraryHealth() { return { totalGames: 0, installedGames: 0, lastBackupTimestamp: null, lastBackupPath: null, lastScanTimestamp: null, backupsDirectory: null } }, async backupNow() { return { ok: true, backupPath: '' } }, async listBackups() { return { directory: 'UserData/backups', backups: [] } }, async openBackupsFolder() { return { success: true } }, async chooseBackupFile() { return null }, async restoreBackup() { return { success: true } }, async setLibrarySettings() { return { autoHideSupportEntries: true, steamGridDbApiKey: '', preferAnimatedArtwork: false } }, async setGameHidden() { return null }, async updateGameStatus() { return null }, async updateGameMetadata() { return null }, async deleteGames() { return null }, async bulkUpdateGames() { return null }, async bulkMoveGameCategory() { return null }, async bulkSetGameHidden() { return null }, async moveGameCategory() { return null }, async exportCsv() { return null }, async exportSelectedCsv() { return null }, async purgeLibrary() { return { deletedGames: 0 } }, async backupArtworkCache() { return null }, async restoreArtworkCache() { return null }, onUpdated() { return () => {} } },
+  async openExternal(url) { window.open(url, '_blank'); return { success: true } },
+  window: { minimize() {}, maximize() {}, close() {}, async captureScreen() { return { success: true } }, async captureRect() { return { success: true, dataUrl: '' } }, async saveBragCollage() { return { success: true } }, async openCapturesFolder() { return { success: true } }, async openPicturesFolder() { return { success: true } } },
+  database: { async seedCheck() { return { seeded: false, count: 0 } }, async getGames() { return [] }, async getLibraryStats() { return { totalGames: 0, installedGames: 0, utilityTools: 0, installedUtilities: 0, visibleGames: 0, visibleInstalledGames: 0, dlcGames: 0, installedDlc: 0, hiddenGames: 0, hiddenInstalledGames: 0, hiddenDlc: 0, hiddenInstalledDlc: 0, readyToInstallCount: 0, artworkCovered: 0, missingArtwork: 0, totalStorageGb: 0, platformBreakdown: [] } }, async getLibrarySettings() { return { autoHideSupportEntries: true, steamGridDbApiKey: '', preferAnimatedArtwork: false, preferAnimatedCovers: false } }, async getActivityLog() { return [] }, async getLibraryHealth() { return { totalGames: 0, installedGames: 0, lastBackupTimestamp: null, lastBackupPath: null, lastScanTimestamp: null, backupsDirectory: null } }, async backupNow() { return { ok: true, backupPath: '' } }, async listBackups() { return { directory: 'UserData/backups', backups: [] } }, async openBackupsFolder() { return { success: true } }, async chooseBackupFile() { return null }, async restoreBackup() { return { success: true } }, async setLibrarySettings() { return { autoHideSupportEntries: true, steamGridDbApiKey: '', preferAnimatedArtwork: false, preferAnimatedCovers: false } }, async setGameHidden() { return null }, async updateGameStatus() { return null }, async updateGameMetadata() { return null }, async deleteGames() { return null }, async bulkUpdateGames() { return null }, async bulkMoveGameCategory() { return null }, async bulkSetGameHidden() { return null }, async moveGameCategory() { return null }, async exportCsv() { return null }, async exportSelectedCsv() { return null }, async purgeLibrary() { return { deletedGames: 0 } }, async backupArtworkCache() { return null }, async restoreArtworkCache() { return null }, onUpdated() { return () => {} } },
   scanner: { async scanAll() { return {} }, async chooseImportFile() { return null }, async importFile() { return {} }, async importBuffer() { return {} }, onProgress() { return () => {} } },
-  games: { async openUri() {}, async getMedia() { return { success: false, screenshots: [], movies: [] } }, async changeArtwork() { return null }, async refetchArtwork() { return null }, async refetchSelectedArtwork() { return null }, async chooseAndSaveArtwork() { return null }, async chooseExecutable() { return null }, async launchExecutable() { return null } },
+  games: { async openUri() {}, async getMedia() { return { success: false, screenshots: [], movies: [] } }, async changeArtwork() { return null }, async refetchArtwork() { return null }, async refetchSelectedArtwork() { return null }, async chooseAndSaveArtwork() { return null }, async chooseExecutable() { return null }, async launchExecutable() { return null }, async addCustomGame() { return null }, async updateModProfile() { return true } },
   roulette: { async pick() { return null } },
   scraper: { async isSyncing() { return false }, async fetchMissingArt() { return { candidates: 0, matched: 0, covers: 0, heroes: 0 } }, async runBulkArtworkSync() { return { candidates: 0, updated: 0, matched: 0, skipped: 0, failed: 0 } }, async cancelSync() { return { cancelled: false } }, async syncMetadataAndArt() { return { candidates: 0, fastTracked: 0, updated: 0, metadataUpdated: 0, heroesUpdated: 0, matched: 0, skipped: 0, failed: 0 } }, async syncMetadata() { return { candidates: 0, metadataUpdated: 0, heroesUpdated: 0, matched: 0, skipped: 0, failed: 0 } }, async generateAutomaticFallbacks() { return { candidates: 0, fallbackCovers: 0, fallbackHeroes: 0, steamAssets: 0 } }, async testIgdb() { return { success: false, error: 'Unavailable' } }, async fetchGameMetadata() { return null }, async backupCache() { return null }, async restoreCache() { return null }, onProgress() { return () => {} }, onUpdated() { return () => {} }, async chooseOverride() { return null } },
+  steam: { async getFamilyLocks() { return {} }, onFamilyLocksUpdated() { return () => {} } },
+  ai: { async getStatus() { return { installed: false, modelName: '', sizeMb: 0 } }, async askQuestion() { return '' }, async openFolder() {}, async parseFilter() { return {} } },
+  guides: { async getStatus() { return { running: false, progress: null } }, async cancelBatch() { return true }, onBatchProgress() { return () => {} } },
+  pcgw: { async fetchManual() { return { success: false, error: 'Unavailable' } } },
+  saves: { async list() { return [] }, async backupNow() { return { success: false } } },
 }
 const api = window.api || fallbackApi
 
-const LAYOUT_PALETTES = {
-  cinematic: {
-    base: '#000000',
-    surface: '#080808',
-    surfaceHover: '#121212',
-    card: '#0a0a0a',
-    textPrimary: '#ffffff',
-    textSecondary: '#a1a1aa',
-    textMuted: '#71717a',
-    accent: '#38bdf8',
-    accentGlow: 'rgba(56, 189, 248, 0.25)',
-    accentContrast: '#041017',
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    borderHover: 'rgba(56, 189, 248, 0.40)',
-    badgeBg: 'rgba(56, 189, 248, 0.12)',
-    badgeText: '#bae6fd',
-  },
-  kinetic: {
-    base: '#000000',
-    surface: '#080808',
-    surfaceHover: '#121212',
-    card: '#0a0a0a',
-    textPrimary: '#ffffff',
-    textSecondary: '#a1a1aa',
-    textMuted: '#71717a',
-    accent: '#f97316',
-    accentGlow: 'rgba(249, 115, 22, 0.28)',
-    accentContrast: '#180700',
-    borderColor: 'rgba(255, 255, 255, 0.09)',
-    borderHover: 'rgba(249, 115, 22, 0.45)',
-    badgeBg: 'rgba(249, 115, 22, 0.14)',
-    badgeText: '#fed7aa',
-  },
-  atmospheric: {
-    base: '#000000',
-    surface: '#060807',
-    surfaceHover: '#0d1310',
-    card: '#080b09',
-    textPrimary: '#f0fdf4',
-    textSecondary: '#a1a1aa',
-    textMuted: '#71717a',
-    accent: '#10b981',
-    accentGlow: 'rgba(16, 185, 129, 0.22)',
-    accentContrast: '#021810',
-    borderColor: 'rgba(255, 255, 255, 0.07)',
-    borderHover: 'rgba(16, 185, 129, 0.40)',
-    badgeBg: 'rgba(16, 185, 129, 0.12)',
-    badgeText: '#a7f3d0',
-  },
-  playful: {
-    base: '#000000',
-    surface: '#080808',
-    surfaceHover: '#121212',
-    card: '#0a0a0a',
-    textPrimary: '#ffffff',
-    textSecondary: '#a1a1aa',
-    textMuted: '#71717a',
-    accent: '#d6ff4b',
-    accentGlow: 'rgba(214, 255, 75, 0.25)',
-    accentContrast: '#121703',
-    borderColor: 'rgba(255, 255, 255, 0.10)',
-    borderHover: 'rgba(214, 255, 75, 0.45)',
-    badgeBg: 'rgba(214, 255, 75, 0.12)',
-    badgeText: '#ecfccb',
-  },
-  competitive: {
-    base: '#000000',
-    surface: '#080808',
-    surfaceHover: '#121212',
-    card: '#0a0a0a',
-    textPrimary: '#ffffff',
-    textSecondary: '#a1a1aa',
-    textMuted: '#71717a',
-    accent: '#f59e0b',
-    accentGlow: 'rgba(245, 158, 11, 0.26)',
-    accentContrast: '#180e00',
-    borderColor: 'rgba(255, 255, 255, 0.09)',
-    borderHover: 'rgba(245, 158, 11, 0.45)',
-    badgeBg: 'rgba(245, 158, 11, 0.14)',
-    badgeText: '#fde68a',
-  },
-}
-
-function themeVars(layoutKey = 'cinematic') {
-  const p = LAYOUT_PALETTES[layoutKey] || LAYOUT_PALETTES.cinematic
-  return {
-    '--bg-base': p.base,
-    '--bg-primary': p.base,
-    '--bg-app': p.base,
-    '--bg-surface': p.surface,
-    '--bg-surface-hover': p.surfaceHover,
-    '--bg-card': p.card || p.surface,
-    '--text-primary': p.textPrimary,
-    '--text-secondary': p.textSecondary,
-    '--text-muted': p.textMuted,
-    '--text-highlight': p.accent,
-    '--accent': p.accent,
-    '--accent-color': p.accent,
-    '--accent-glow': p.accentGlow,
-    '--accent-contrast': p.accentContrast,
-    '--border-color': p.borderColor,
-    '--border-hover': p.borderHover,
-    '--badge-bg': p.badgeBg,
-    '--badge-text': p.badgeText,
-  }
-}
 function cn(...inputs) { return twMerge(clsx(inputs)) }
 function formatGb(value) { return `${Number(value || 0).toFixed(value < 10 ? 2 : 1)} GB` }
 function formatBytes(bytes) {
@@ -158,6 +70,60 @@ function normalizePlatform(platform) { const key = String(platform || '').toLowe
 function platformLabel(platform) { return ({ steam: 'Steam', epic: 'Epic Games', gog: 'GOG', amazon: 'Amazon Games', custom: 'Custom' })[normalizePlatform(platform)] || platform }
 function platformClass(platform) { return ({ steam: 'platform-steam', epic: 'platform-epic', gog: 'platform-gog', amazon: 'platform-amazon', custom: 'platform-custom' })[normalizePlatform(platform)] || 'platform-custom' }
 function sourcePlatforms(sources = []) { if (!Array.isArray(sources)) return []; return [...new Set(sources.filter(Boolean).map((source) => normalizePlatform(source?.platform)))] }
+function getFamilyLockForGame(game, familyLocks) {
+  if (!game || !familyLocks || Object.keys(familyLocks).length === 0) return null
+  const candidates = game.variants || [game]
+  for (const item of candidates) {
+    for (const source of (item.sources || [])) {
+      const isSteam = String(source.platform || '').toLowerCase().includes('steam') ||
+                      String(source.sourceName || '').toLowerCase().includes('steam') ||
+                      String(source.launchUri || '').toLowerCase().includes('steam://') ||
+                      String(source.installUri || '').toLowerCase().includes('steam://')
+      if (isSteam) {
+        const id = source.platformGameId || source.platformLaunchId ||
+                   source.launchUri?.match(/rungameid\/(\d+)/)?.[1] ||
+                   source.installUri?.match(/install\/(\d+)/)?.[1]
+        if (id && familyLocks[id]?.isLocked) {
+          return familyLocks[id]
+        }
+      }
+    }
+  }
+
+  // Fallback: match by normalized game title if source ID was not numeric
+  const title = String(game.canonical_title || game.normalized_title || '').trim()
+  if (title) {
+    const norm = title
+      .replace(/[®™©]/g, '')
+      .replace(/[:\-_.,!?]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase()
+
+    if (norm) {
+      if (familyLocks.byNormTitle && familyLocks.byNormTitle[norm]?.isLocked) {
+        return familyLocks.byNormTitle[norm]
+      }
+      if (familyLocks.byTitle && familyLocks.byTitle[norm]?.isLocked) {
+        return familyLocks.byTitle[norm]
+      }
+      for (const key of Object.keys(familyLocks)) {
+        const lock = familyLocks[key]
+        if (lock?.isLocked && lock.gameTitle) {
+          const lockNorm = lock.gameTitle
+            .replace(/[®™©]/g, '')
+            .replace(/[:\-_.,!?]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .toLowerCase()
+          if (lockNorm === norm) return lock
+        }
+      }
+    }
+  }
+
+  return null
+}
 const MENU_WIDTH = 220
 const MENU_HEIGHT = 280
 const MENU_PADDING = 12
@@ -314,7 +280,7 @@ function normalizeStoreLabel(label) {
   if (lower === 'gog' || lower === 'gog galaxy') return 'GOG'
   if (lower === 'steam') return 'Steam'
   if (lower === 'xbox' || lower === 'microsoft' || lower === 'ms-xbl' || lower === 'ms-windows-store') return 'Xbox'
-  if (lower === 'repack') return 'Repack'
+  if (lower === 'repack' || lower === 'standalone') return 'Standalone'
   if (lower === 'amazon' || lower === 'amazon games') return 'Amazon Games'
   if (lower === 'battlenet' || lower === 'battle.net') return 'Battle.net'
   if (lower === 'itch' || lower === 'itch.io') return 'Itch.io'
@@ -430,7 +396,7 @@ function gameYear(game) {
 }
 function greetingForHour(hour) { return hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening' }
 function cleanDriveLabel(drive) { const value = String(drive || '').trim().replace(/:+$/, ''); return value ? `${value}:` : '—' }
-const EMPTY_LIBRARY_STATS = { totalGames: 0, installedGames: 0, utilityTools: 0, installedUtilities: 0, visibleGames: 0, visibleInstalledGames: 0, dlcGames: 0, installedDlc: 0, hiddenGames: 0, hiddenInstalledGames: 0, hiddenDlc: 0, hiddenInstalledDlc: 0, readyToInstallCount: 0, artworkCovered: 0, missingArtwork: 0, totalStorageGb: 0, platformBreakdown: [], systemSpecs: null }
+const EMPTY_LIBRARY_STATS = { totalGames: 0, installedGames: 0, utilityTools: 0, installedUtilities: 0, visibleGames: 0, visibleInstalledGames: 0, dlcGames: 0, installedDlc: 0, hiddenGames: 0, hiddenInstalledGames: 0, hiddenDlc: 0, hiddenInstalledDlc: 0, readyToInstallCount: 0, artworkCovered: 0, missingArtwork: 0, totalStorageGb: 0, platformBreakdown: [], systemSpecs: null, gamesWithGuides: 0, missingGuidesCount: 0, installedWithGuides: 0, missingInstalledGuidesCount: 0, totalKnowledgeChunks: 0 }
 function safeInteger(value) { return Number.isInteger(value) ? value : 0 }
 function safeText(value, fallback = '') { return typeof value === 'string' || typeof value === 'number' ? String(value) : fallback }
 function safeFiniteNumber(value, fallback = 0) { return typeof value === 'number' && Number.isFinite(value) ? value : fallback }
@@ -671,12 +637,29 @@ function LibraryHealthSection({
   )
 }
 
-function MetadataProvidersSection({ onRefresh }) {
+function MetadataProvidersSection({ onRefresh, globalSyncRunning = false, globalSyncProgress = null, onCancelSync }) {
   const [steamGridDbApiKey, setSteamGridDbApiKey] = useState('')
   const [igdbClientId, setIgdbClientId] = useState('')
   const [igdbClientSecret, setIgdbClientSecret] = useState('')
   const [heroResolution, setHeroResolution] = useState('2.5k')
   const [preferAnimatedArtwork, setPreferAnimatedArtwork] = useState(false)
+  const [preferAnimatedCovers, setPreferAnimatedCovers] = useState(false)
+  const [minimizeToTray, setMinimizeToTray] = useState(false)
+  const [aiStatus, setAiStatus] = useState(null)
+  const [aiPersonality, setAiPersonality] = useState(() => {
+    try {
+      return localStorage.getItem('logpile-ai-personality') || 'auto'
+    } catch {
+      return 'auto'
+    }
+  })
+  const [voiceSettings, setVoiceSettings] = useState(getVoiceSettings)
+
+  useEffect(() => {
+    api.ai?.getStatus?.().then((st) => {
+      if (st) setAiStatus(st)
+    }).catch(() => {})
+  }, [])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [savedNotice, setSavedNotice] = useState(false)
@@ -721,6 +704,8 @@ function MetadataProvidersSection({ onRefresh }) {
       setIgdbClientSecret(typeof settings.igdbClientSecret === 'string' ? settings.igdbClientSecret : '')
       setHeroResolution(typeof settings.heroResolution === 'string' && settings.heroResolution ? settings.heroResolution : '2.5k')
       setPreferAnimatedArtwork(Boolean(settings.preferAnimatedArtwork))
+      setPreferAnimatedCovers(Boolean(settings.preferAnimatedCovers))
+      setMinimizeToTray(Boolean(settings.minimizeToTray))
       setLoading(false)
     }).catch(() => {
       if (active) setLoading(false)
@@ -784,6 +769,8 @@ function MetadataProvidersSection({ onRefresh }) {
         igdbClientSecret: igdbClientSecret.trim(),
         heroResolution,
         preferAnimatedArtwork,
+        preferAnimatedCovers,
+        minimizeToTray,
       })
       setSavedNotice(true)
       setTimeout(() => setSavedNotice(false), 3000)
@@ -797,7 +784,22 @@ function MetadataProvidersSection({ onRefresh }) {
     }
   }
 
-  const isBusy = activeSync !== 'none' || Boolean(syncProgress?.total > 0 && syncProgress?.current > 0 && syncProgress?.current < syncProgress?.total)
+  const displayProgress = globalSyncProgress || syncProgress
+  const isBusy = globalSyncRunning || activeSync !== 'none' || Boolean(displayProgress?.total > 0 && displayProgress?.current > 0 && displayProgress?.current < displayProgress?.total)
+
+  const handleGenerateFallbacks = async () => {
+    setActiveSync('fallbacks')
+    setSyncNotice('')
+    try {
+      const res = await api.scraper.generateAutomaticFallbacks?.()
+      setSyncNotice(`Fallback art generated: ${res?.fallbackCovers || 0} covers, ${res?.fallbackHeroes || 0} heroes.`)
+      await onRefresh?.()
+    } catch (err) {
+      setSyncNotice(err?.message || 'Fallback generation failed.')
+    } finally {
+      setActiveSync('none')
+    }
+  }
 
   const handleSyncMetadata = async () => {
     setActiveSync('metadata')
@@ -809,6 +811,7 @@ function MetadataProvidersSection({ onRefresh }) {
         igdbClientSecret: igdbClientSecret.trim(),
         heroResolution,
         preferAnimatedArtwork,
+        preferAnimatedCovers,
       })
       const res = await api.scraper.syncMetadata?.(steamGridDbApiKey.trim())
       setSyncNotice(`Metadata synced: ${res?.metadataUpdated ?? 0} titles updated${res?.matched ? `, ${res.matched} matched` : ''}.`)
@@ -834,6 +837,7 @@ function MetadataProvidersSection({ onRefresh }) {
         igdbClientSecret: igdbClientSecret.trim(),
         heroResolution,
         preferAnimatedArtwork,
+        preferAnimatedCovers,
       })
       const res = await api.scraper.runBulkArtworkSync?.(steamGridDbApiKey.trim())
       setSyncNotice(`Artwork synced: ${res?.updated ?? 0} items updated.`)
@@ -855,6 +859,7 @@ function MetadataProvidersSection({ onRefresh }) {
         igdbClientSecret: igdbClientSecret.trim(),
         heroResolution,
         preferAnimatedArtwork,
+        preferAnimatedCovers,
       })
       const res = await api.scraper.syncMetadataAndArt?.(steamGridDbApiKey.trim())
       const artCount = res?.updated || res?.heroesUpdated || 0
@@ -863,6 +868,58 @@ function MetadataProvidersSection({ onRefresh }) {
       await onRefresh?.()
     } catch (err) {
       setSyncNotice(err?.message || 'Sync failed.')
+    } finally {
+      setActiveSync('none')
+    }
+  }
+
+    const handleSyncAnimatedArtwork = async () => {
+    if (!steamGridDbApiKey.trim()) {
+      setSyncNotice('SteamGridDB API key is required to sync artwork.')
+      return
+    }
+    setActiveSync('animated')
+    setSyncNotice('')
+    try {
+      setPreferAnimatedArtwork(true)
+      setPreferAnimatedCovers(false)
+      await api.database.setLibrarySettings?.({
+        steamGridDbApiKey: steamGridDbApiKey.trim(),
+        igdbClientId: igdbClientId.trim(),
+        igdbClientSecret: igdbClientSecret.trim(),
+        heroResolution: heroResolution === 'animated' ? 'animated' : heroResolution,
+        preferAnimatedArtwork: true,
+        preferAnimatedCovers: false,
+      })
+      const res = await api.scraper.runBulkArtworkSync?.(steamGridDbApiKey.trim(), {
+        preferAnimated: true,
+        preferAnimatedCovers: false,
+        forceAll: true,
+      })
+      setSyncNotice(`Animated hero sync complete: ${res?.updated ?? 0} motion items updated.`)
+      await onRefresh?.()
+    } catch (err) {
+      setSyncNotice(err?.message || 'Animated artwork sync failed.')
+    } finally {
+      setActiveSync('none')
+    }
+  }
+
+  const handleRestoreSmoothStaticCovers = async () => {
+    setActiveSync('static-covers')
+    setSyncNotice('')
+    try {
+      setPreferAnimatedArtwork(false)
+      setPreferAnimatedCovers(false)
+      await api.database.setLibrarySettings?.({
+        preferAnimatedArtwork: false,
+        preferAnimatedCovers: false,
+      })
+      const res = await api.scraper.restoreStaticCoversLocal?.()
+      setSyncNotice(`Smooth static artwork restored: ${res?.updated ?? 0} titles updated for instant 120+ FPS grid scrolling and zero lag.`)
+      await onRefresh?.()
+    } catch (err) {
+      setSyncNotice(err?.message || 'Failed to restore static artwork.')
     } finally {
       setActiveSync('none')
     }
@@ -878,7 +935,7 @@ function MetadataProvidersSection({ onRefresh }) {
   }
 
   return (
-    <section className="metadata-providers-section">
+    <section className="metadata-providers-section" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <div className="section-header compact">
         <div>
           <div className="eyebrow">
@@ -886,28 +943,41 @@ function MetadataProvidersSection({ onRefresh }) {
             <span>INTEGRATIONS &amp; ENRICHMENT</span>
             <span className="eyebrow-line" />
           </div>
-          <h2>Metadata Providers</h2>
-          <p>Configure credentials for dual-fetch metadata: IGDB for textual lore &amp; credits, SteamGridDB for high-resolution heroes and transparent logos.</p>
+          <h2>Settings &amp; Library Enrichment</h2>
+          <p>Configure provider credentials, customize visual quality, and enrich your library with high-res covers, motion hero backdrops, and lore.</p>
         </div>
-        <div className="heading-actions">
+      </div>
+
+      {/* CARD 1: API Credentials & Provider Keys */}
+      <form onSubmit={handleSave} className="metadata-providers-card" style={{ margin: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', paddingBottom: '12px', borderBottom: '1px solid rgba(255, 255, 255, 0.07)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(214, 255, 75, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent, #d6ff4b)' }}>
+              <KeyRound size={16} />
+            </div>
+            <div>
+              <strong style={{ fontSize: '14px', color: 'var(--text-primary)', display: 'block' }}>API Credentials &amp; Provider Keys</strong>
+              <small style={{ color: 'var(--text-muted)', fontSize: '11px' }}>SteamGridDB for posters and motion heroes, IGDB for synopsis and genres</small>
+            </div>
+          </div>
           <button
             type="button"
             className="outline-button small-button"
             onClick={() => setShowKeys(!showKeys)}
             title={showKeys ? 'Hide masked keys' : 'Reveal keys'}
+            style={{ height: '28px', padding: '0 10px', fontSize: '11px' }}
           >
             {showKeys ? <EyeOff size={13} /> : <Eye size={13} />}
-            <span>{showKeys ? 'Hide' : 'Reveal'}</span>
+            <span>{showKeys ? 'Hide Keys' : 'Reveal Keys'}</span>
           </button>
         </div>
-      </div>
 
-      <form onSubmit={handleSave} className="metadata-providers-card">
-        <div className="provider-fields-grid">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '18px' }}>
+          {/* SteamGridDB API Key (Full Width) */}
           <div className="provider-field-block">
             <label className="provider-label">
               <span>SteamGridDB API Key</span>
-              <small>Visual assets: 16:9 heroes, grid covers, transparent logos</small>
+              <small>Visual assets: 16:9 heroes, 600×900 covers, transparent logos</small>
             </label>
             <input
               type={showKeys ? 'text' : 'password'}
@@ -920,90 +990,56 @@ function MetadataProvidersSection({ onRefresh }) {
             />
           </div>
 
-          <div className="provider-field-block">
-            <label className="provider-label">
-              <span>Hero Image Quality</span>
-              <small>Preferred SteamGridDB resolution for hero landscape backdrops</small>
-            </label>
-            <select
-              value={heroResolution}
-              onChange={(e) => setHeroResolution(e.target.value)}
-              className="provider-select"
-            >
-              <option value="720p">720p / Compact (Lowest Storage ~200-400 KB)</option>
-              <option value="1080p">1080p / Full HD (Balanced ~600 KB-1.2 MB)</option>
-              <option value="2.5k">2.5K / 1440p (High Quality - Recommended)</option>
-              <option value="4k">4K / 2160p (Ultra HD - Maximum Quality)</option>
-            </select>
-          </div>
-
-          <div className="provider-field-block">
-            <label className="provider-label">
-              <span>Animated Artwork</span>
-              <small>Prefer animated WebP heroes on game details screen (Single hero only, zero library grid lag)</small>
-            </label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
+          {/* IGDB Credentials (2 Columns side by side) */}
+          <div className="provider-fields-grid" style={{ marginBottom: 0 }}>
+            <div className="provider-field-block">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label className="provider-label">
+                  <span>IGDB Client ID</span>
+                  <small>Twitch Developer Application Client ID</small>
+                </label>
+                <button
+                  type="button"
+                  className="outline-button small-button"
+                  style={{ height: '22px', padding: '0 8px', fontSize: '11px', gap: '4px' }}
+                  disabled={igdbTestStatus?.testing || !igdbClientId.trim()}
+                  onClick={handleTestIgdb}
+                  title="Test whether these credentials authenticate with Twitch OAuth"
+                >
+                  {igdbTestStatus?.testing ? <RefreshCw size={11} className="spin-icon" /> : <PlugZap size={11} />}
+                  <span>{igdbTestStatus?.testing ? 'Testing…' : 'Test Connection'}</span>
+                </button>
+              </div>
               <input
-                id="prefer-animated-artwork-toggle"
-                type="checkbox"
-                checked={preferAnimatedArtwork}
-                onChange={(e) => setPreferAnimatedArtwork(e.target.checked)}
-                style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: 'var(--accent, #6366f1)' }}
+                type={showKeys ? 'text' : 'password'}
+                value={igdbClientId}
+                onChange={(e) => { setIgdbClientId(e.target.value); setIgdbTestStatus(null); }}
+                placeholder="Paste IGDB / Twitch Client ID"
+                className="provider-input"
+                autoComplete="off"
+                spellCheck="false"
               />
-              <label htmlFor="prefer-animated-artwork-toggle" style={{ fontSize: '13px', cursor: 'pointer', userSelect: 'none', color: preferAnimatedArtwork ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-                {preferAnimatedArtwork ? 'Enabled (Animated WebP heroes on Game Details)' : 'Disabled (High-res static WebP — ultra-smooth)'}
-              </label>
             </div>
-          </div>
 
-          <div className="provider-field-block">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="provider-field-block">
               <label className="provider-label">
-                <span>IGDB Client ID</span>
-                <small>Twitch Developer Application Client ID</small>
+                <span>IGDB Client Secret</span>
+                <small>Twitch Developer Application Client Secret</small>
               </label>
-              <button
-                type="button"
-                className="outline-button small-button"
-                style={{ height: '24px', padding: '0 8px', fontSize: '11px', gap: '4px' }}
-                disabled={igdbTestStatus?.testing || !igdbClientId.trim()}
-                onClick={handleTestIgdb}
-                title="Test whether these credentials authenticate with Twitch OAuth"
-              >
-                {igdbTestStatus?.testing ? <RefreshCw size={11} className="spin-icon" /> : <PlugZap size={11} />}
-                <span>{igdbTestStatus?.testing ? 'Testing…' : 'Test Connection'}</span>
-              </button>
+              <input
+                type={showKeys ? 'text' : 'password'}
+                value={igdbClientSecret}
+                onChange={(e) => { setIgdbClientSecret(e.target.value); setIgdbTestStatus(null); }}
+                placeholder="Paste IGDB / Twitch Client Secret"
+                className="provider-input"
+                autoComplete="off"
+                spellCheck="false"
+              />
             </div>
-            <input
-              type={showKeys ? 'text' : 'password'}
-              value={igdbClientId}
-              onChange={(e) => { setIgdbClientId(e.target.value); setIgdbTestStatus(null); }}
-              placeholder="Paste IGDB / Twitch Client ID"
-              className="provider-input"
-              autoComplete="off"
-              spellCheck="false"
-            />
-          </div>
-
-          <div className="provider-field-block">
-            <label className="provider-label">
-              <span>IGDB Client Secret</span>
-              <small>Twitch Developer Application Client Secret</small>
-            </label>
-            <input
-              type={showKeys ? 'text' : 'password'}
-              value={igdbClientSecret}
-              onChange={(e) => { setIgdbClientSecret(e.target.value); setIgdbTestStatus(null); }}
-              placeholder="Paste IGDB / Twitch Client Secret"
-              className="provider-input"
-              autoComplete="off"
-              spellCheck="false"
-            />
           </div>
 
           {igdbTestStatus && (
             <div style={{
-              gridColumn: '1 / -1',
               padding: '8px 12px',
               borderRadius: '6px',
               fontSize: '12px',
@@ -1020,105 +1056,415 @@ function MetadataProvidersSection({ onRefresh }) {
           )}
         </div>
 
-        <div className="provider-actions-footer" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '10px' }}>
+        <div className="provider-actions-footer" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button
             type="submit"
             disabled={saving || loading || isBusy}
             className="primary-button"
+            style={{ padding: '0 18px', height: '36px' }}
           >
             {saving ? <RefreshCw size={14} className="spin-icon" /> : <Check size={14} />}
             <span>{saving ? 'Saving...' : 'Save Keys'}</span>
           </button>
-
-          <button
-            type="button"
-            disabled={isBusy || saving || loading}
-            className="outline-button"
-            onClick={handleSyncMetadata}
-            title="Scan games missing metadata and fetch lore, developer, publisher, and genres from IGDB & Steam without touching artwork"
-          >
-            {activeSync === 'metadata' ? <RefreshCw size={14} className="spin-icon" /> : <Database size={14} />}
-            <span>
-              {activeSync === 'metadata' && syncProgress?.total
-                ? `Syncing Metadata ${syncProgress.current} / ${syncProgress.total}…`
-                : activeSync === 'metadata'
-                ? 'Syncing metadata…'
-                : 'Sync Library Metadata'}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            disabled={isBusy || saving || loading}
-            className="outline-button"
-            onClick={handleSyncArtwork}
-            title="Scan games missing artwork and fetch 600x900 covers, heroes, and logos from SteamGridDB"
-          >
-            {activeSync === 'artwork' ? <RefreshCw size={14} className="spin-icon" /> : <ImagePlus size={14} />}
-            <span>
-              {activeSync === 'artwork' && syncProgress?.total
-                ? `Syncing Artwork ${syncProgress.current} / ${syncProgress.total}…`
-                : activeSync === 'artwork'
-                ? 'Syncing artwork…'
-                : 'Sync Missing Artwork'}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            disabled={isBusy || saving || loading}
-            className="outline-button"
-            onClick={handleSyncAll}
-            title="Comprehensive full scan of all games in your library for both metadata and visual artwork"
-          >
-            {activeSync === 'all' ? <RefreshCw size={14} className="spin-icon" /> : <RefreshCw size={14} />}
-            <span>
-              {activeSync === 'all' && syncProgress?.total
-                ? `Syncing ${syncProgress.current} / ${syncProgress.total}…`
-                : activeSync === 'all'
-                ? 'Syncing library…'
-                : 'Sync Artwork & Metadata for All Games'}
-            </span>
-          </button>
-
-          {isBusy && (
-            <button
-              type="button"
-              className="danger-button"
-              onClick={handleCancelSync}
-              title="Cancel the running sync"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-            >
-              <X size={14} />
-              <span>Cancel Sync</span>
-            </button>
-          )}
-
           {savedNotice && !isBusy && (
             <span className="provider-saved-badge">
               <Check size={13} /> Keys saved to local settings.
             </span>
           )}
+        </div>
+      </form>
 
-          {syncNotice && !isBusy && (
-            <span className="provider-saved-badge" style={{ color: 'var(--accent, #d6ff4b)' }}>
-              <Sparkles size={13} /> {syncNotice}
-            </span>
+      {/* CARD 2: App Preferences & Visual Quality */}
+      <div className="metadata-providers-card" style={{ margin: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '18px', paddingBottom: '12px', borderBottom: '1px solid rgba(255, 255, 255, 0.07)' }}>
+          <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(99, 102, 241, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#818cf8' }}>
+            <SlidersHorizontal size={16} />
+          </div>
+          <div>
+            <strong style={{ fontSize: '14px', color: 'var(--text-primary)', display: 'block' }}>App Preferences &amp; Visual Quality</strong>
+            <small style={{ color: 'var(--text-muted)', fontSize: '11px' }}>Tune artwork resolution, frame rates, window behavior, and offline AI personality</small>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          {/* Row 1: Dropdowns side by side */}
+          <div className="provider-fields-grid" style={{ marginBottom: 0 }}>
+            <div className="provider-field-block">
+              <label className="provider-label">
+                <span>Hero Backdrop Quality</span>
+                <small>Preferred resolution for widescreen landscape hero backdrops</small>
+              </label>
+              <select
+                value={heroResolution}
+                onChange={(e) => {
+                  const val = e.target.value
+                  setHeroResolution(val)
+                  api.database.setLibrarySettings?.({ heroResolution: val }).catch(() => {})
+                }}
+                className="provider-select"
+              >
+                <option value="2.5k">2.5K / 1440p (High Quality — Recommended)</option>
+                <option value="1080p">1080p / Full HD (Fast &amp; Crisp ~800 KB)</option>
+                <option value="4k">4K / 2160p (Ultra HD — Maximum Detail)</option>
+                <option value="720p">720p / Compact (Low Storage footprint)</option>
+                <option value="animated">Animated / Motion Hero (WebM / MP4)</option>
+              </select>
+            </div>
+
+            <div className="provider-field-block">
+              <label className="provider-label">
+                <span>Gaming AI Personality</span>
+                <small>Set offline AI persona (or automatically match your active theme)</small>
+              </label>
+              <select
+                value={aiPersonality}
+                onChange={(e) => {
+                  const val = e.target.value
+                  setAiPersonality(val)
+                  try { localStorage.setItem('logpile-ai-personality', val) } catch {}
+                }}
+                className="provider-select"
+              >
+                <option value="auto">Auto — Match Active Theme</option>
+                <option value="storyteller">🎬 The Storyteller (Cinematic — Narrative &amp; Lore)</option>
+                <option value="speedrunner">⚡ Action Speedrunner (Kinetic — High Tempo &amp; Direct)</option>
+                <option value="lorekeeper">🌿 The Lore-Keeper (Atmospheric — Deep RPG &amp; Exploration)</option>
+                <option value="coop">🎮 The Co-op Buddy (Playful — Sarcastic, Blunt &amp; Uncensored)</option>
+                <option value="coach">🏆 The Tactical Coach (Competitive — Meta, Builds &amp; Mechanics)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* AI Model Status & Explorer */}
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.02)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            borderRadius: '10px',
+            padding: '12px 14px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+            flexWrap: 'wrap'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{
+                width: '10px',
+                height: '10px',
+                borderRadius: '50%',
+                background: aiStatus?.installed ? '#22c55e' : '#eab308',
+                boxShadow: aiStatus?.installed ? '0 0 10px #22c55e' : 'none',
+                flexShrink: 0
+              }} />
+              <div>
+                <strong style={{ fontSize: '13px', color: 'var(--text-primary)', display: 'block' }}>
+                  {aiStatus?.installed
+                    ? `Offline Engine: Ready (${aiStatus.sizeMb ? (aiStatus.sizeMb / 1024).toFixed(1) + ' GB' : ''})`
+                    : 'Offline Engine: Not Installed (Bring Your Own Model)'}
+                </strong>
+                <small style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  {aiStatus?.installed
+                    ? '100% private local CPU/GPU execution · Auto-unloads from RAM after 30s of inactivity to preserve 100% gaming FPS.'
+                    : 'Drop any standard .gguf model file into your models folder to enable offline game strategy, lore, and backlog picks.'}
+                </small>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="outline-button small-button"
+              onClick={() => api.ai?.openFolder?.()}
+              style={{ height: '28px', padding: '0 10px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}
+              title="Open local models directory in Windows Explorer"
+            >
+              <FolderOpen size={13} />
+              <span>Open Models Folder</span>
+            </button>
+          </div>
+
+          {/* Hands-Free Voice Control & Wake Word */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '12px' }}>
+            <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.07)', borderRadius: '10px', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <input
+                id="voice-tts-toggle"
+                type="checkbox"
+                checked={voiceSettings.ttsEnabled}
+                onChange={(e) => {
+                  const val = e.target.checked
+                  const next = saveVoiceSettings({ ttsEnabled: val })
+                  setVoiceSettings(next)
+                }}
+                style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: 'var(--accent, #d6ff4b)', flexShrink: 0 }}
+              />
+              <label htmlFor="voice-tts-toggle" style={{ cursor: 'pointer', userSelect: 'none' }}>
+                <strong style={{ fontSize: '13px', color: 'var(--text-primary)', display: 'block' }}>Voice Feedback (TTS)</strong>
+                <small style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  {voiceSettings.ttsEnabled ? 'Enabled (Spoken launch & guide confirmations)' : 'Disabled (Silent operation)'}
+                </small>
+              </label>
+            </div>
+
+            <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.07)', borderRadius: '10px', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <input
+                id="voice-wake-word-toggle"
+                type="checkbox"
+                checked={voiceSettings.wakeWordEnabled}
+                onChange={(e) => {
+                  const val = e.target.checked
+                  const next = saveVoiceSettings({ wakeWordEnabled: val })
+                  setVoiceSettings(next)
+                  window.api?.voice?.setWakeWord?.(val)
+                }}
+                style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: 'var(--accent, #d6ff4b)', flexShrink: 0 }}
+              />
+              <label htmlFor="voice-wake-word-toggle" style={{ cursor: 'pointer', userSelect: 'none' }}>
+                <strong style={{ fontSize: '13px', color: 'var(--text-primary)', display: 'block' }}>"Hey Logpile" Wake Word</strong>
+                <small style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  {voiceSettings.wakeWordEnabled ? 'Active (Continuous offline mic listening)' : 'Off (Use Gamepad R3 or mic icon to talk)'}
+                </small>
+              </label>
+            </div>
+          </div>
+
+          {/* Row 2: 3 Clean Toggle Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '12px' }}>
+            {/* Toggle 1: Motion Hero Banners */}
+            <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.07)', borderRadius: '10px', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <input
+                id="prefer-animated-artwork-toggle"
+                type="checkbox"
+                checked={preferAnimatedArtwork}
+                onChange={(e) => {
+                  const val = e.target.checked
+                  setPreferAnimatedArtwork(val)
+                  api.database.setLibrarySettings?.({ preferAnimatedArtwork: val }).catch(() => {})
+                }}
+                style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: 'var(--accent, #d6ff4b)', flexShrink: 0 }}
+              />
+              <label htmlFor="prefer-animated-artwork-toggle" style={{ cursor: 'pointer', userSelect: 'none' }}>
+                <strong style={{ fontSize: '13px', color: 'var(--text-primary)', display: 'block' }}>Motion Hero Banners</strong>
+                <small style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  {preferAnimatedArtwork ? 'Enabled (Smooth WebM video in Spotlight & Details)' : 'Disabled (Static high-res hero banners)'}
+                </small>
+              </label>
+            </div>
+
+            {/* Toggle 2: Animated Vertical Posters */}
+            <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.07)', borderRadius: '10px', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <input
+                id="prefer-animated-covers-toggle"
+                type="checkbox"
+                checked={preferAnimatedCovers}
+                onChange={(e) => {
+                  const val = e.target.checked
+                  setPreferAnimatedCovers(val)
+                  api.database.setLibrarySettings?.({ preferAnimatedCovers: val }).catch(() => {})
+                }}
+                style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: 'var(--accent, #d6ff4b)', flexShrink: 0 }}
+              />
+              <label htmlFor="prefer-animated-covers-toggle" style={{ cursor: 'pointer', userSelect: 'none' }}>
+                <strong style={{ fontSize: '13px', color: 'var(--text-primary)', display: 'block' }}>Animated Grid Posters</strong>
+                <small style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  {preferAnimatedCovers ? 'Enabled (Animated covers — may drop FPS)' : 'Disabled (Smooth static covers — 120+ FPS guaranteed)'}
+                </small>
+              </label>
+            </div>
+
+            {/* Toggle 3: Minimize to System Tray */}
+            <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.07)', borderRadius: '10px', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <input
+                id="minimize-to-tray-toggle"
+                type="checkbox"
+                checked={minimizeToTray}
+                onChange={(e) => {
+                  const val = e.target.checked
+                  setMinimizeToTray(val)
+                  api.database.setLibrarySettings?.({ minimizeToTray: val }).catch(() => {})
+                }}
+                style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: 'var(--accent, #d6ff4b)', flexShrink: 0 }}
+              />
+              <label htmlFor="minimize-to-tray-toggle" style={{ cursor: 'pointer', userSelect: 'none' }}>
+                <strong style={{ fontSize: '13px', color: 'var(--text-primary)', display: 'block' }}>Minimize to System Tray</strong>
+                <small style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  {minimizeToTray ? 'Enabled (Hides to notification tray near clock)' : 'Disabled (Standard Windows taskbar behavior)'}
+                </small>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* CARD 3: Library Enrichment Hub */}
+      <div className="metadata-providers-card" style={{ margin: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', paddingBottom: '12px', borderBottom: '1px solid rgba(255, 255, 255, 0.07)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(56, 189, 248, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#38bdf8' }}>
+              <Sparkles size={16} />
+            </div>
+            <div>
+              <strong style={{ fontSize: '14px', color: 'var(--text-primary)', display: 'block' }}>Library Enrichment Hub</strong>
+              <small style={{ color: 'var(--text-muted)', fontSize: '11px' }}>High-speed concurrent sync for posters, logos, hero backdrops, and IGDB synopsis</small>
+            </div>
+          </div>
+          {isBusy && (
+            <button
+              type="button"
+              className="danger-button small-button"
+              onClick={onCancelSync || handleCancelSync}
+              title="Cancel the running sync"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', height: '28px', padding: '0 10px', fontSize: '11px' }}
+            >
+              <X size={13} />
+              <span>Cancel Sync</span>
+            </button>
           )}
         </div>
 
-        {isBusy && syncProgress?.total > 0 && (
-          <div style={{ marginTop: '14px', width: '100%', background: 'rgba(255, 255, 255, 0.035)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', padding: '14px', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.08)', boxShadow: 'inset 0 1px 1px rgba(255, 255, 255, 0.05)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-secondary, #cbd5e1)', marginBottom: '8px' }}>
-              <span style={{ fontWeight: 600 }}>{syncProgress.title ? `Syncing: ${syncProgress.current} / ${syncProgress.total} — ${syncProgress.title}` : (syncProgress.message || 'Processing...')}</span>
-              <span style={{ color: 'var(--accent, #d6ff4b)', fontWeight: 700 }}>{Math.round((syncProgress.current / syncProgress.total) * 100)}%</span>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px', marginBottom: '14px' }}>
+          {/* Action 1: Sync Missing Artwork & Data */}
+          <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.07)', borderRadius: '10px', padding: '14px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '12px' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                <ImagePlus size={15} style={{ color: 'var(--accent, #d6ff4b)' }} />
+                <strong style={{ fontSize: '13px', color: 'var(--text-primary)' }}>Sync Missing Artwork &amp; Data</strong>
+              </div>
+              <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.4 }}>
+                Scans games missing covers, heroes, logos, or IGDB lore and fills only missing slots.
+              </p>
             </div>
-            <div style={{ height: '6px', background: 'rgba(255,255,255,0.08)', borderRadius: '9999px', overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `${Math.round((syncProgress.current / syncProgress.total) * 100)}%`, background: 'var(--accent, #d6ff4b)', boxShadow: '0 0 10px var(--accent-glow)', transition: 'width 0.25s ease' }} />
+            <button
+              type="button"
+              disabled={isBusy || saving || loading || !steamGridDbApiKey.trim()}
+              className="outline-button"
+              onClick={handleSyncArtwork}
+              style={{ borderColor: 'var(--accent, #d6ff4b)', color: 'var(--accent, #d6ff4b)', width: '100%', justifyContent: 'center' }}
+            >
+              {activeSync === 'artwork' ? <RefreshCw size={13} className="spin-icon" /> : <ImagePlus size={13} />}
+              <span>{activeSync === 'artwork' ? 'Syncing Missing…' : 'Sync Missing Artwork'}</span>
+            </button>
+          </div>
+
+          {/* Action 2: Download Motion Heroes */}
+          <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.07)', borderRadius: '10px', padding: '14px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '12px' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                <Film size={15} style={{ color: '#a5b4fc' }} />
+                <strong style={{ fontSize: '13px', color: 'var(--text-primary)' }}>Download Motion Heroes</strong>
+              </div>
+              <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.4 }}>
+                Bulk upgrades existing hero backdrops to high-framerate WebM video for Spotlight &amp; Details.
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={isBusy || saving || loading || !steamGridDbApiKey.trim()}
+              className="outline-button"
+              onClick={handleSyncAnimatedArtwork}
+              style={{ borderColor: '#6366f1', color: '#a5b4fc', width: '100%', justifyContent: 'center' }}
+            >
+              {activeSync === 'animated' ? <RefreshCw size={13} className="spin-icon" /> : <Film size={13} />}
+              <span>{activeSync === 'animated' ? 'Downloading Heroes…' : '🎬 Motion Heroes Sync'}</span>
+            </button>
+          </div>
+
+          {/* Action 3: Restore 120+ FPS Static Covers & Heroes */}
+          <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.07)', borderRadius: '10px', padding: '14px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '12px' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                <RefreshCw size={15} style={{ color: '#38bdf8' }} />
+                <strong style={{ fontSize: '13px', color: 'var(--text-primary)' }}>Restore Static Artwork (120+ FPS)</strong>
+              </div>
+              <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.4 }}>
+                Restores crisp static 600×900 covers and static hero backdrops for instant 120+ FPS grid scrolling with zero lag or freezes.
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={isBusy || saving || loading}
+              className="outline-button"
+              onClick={handleRestoreSmoothStaticCovers}
+              style={{ width: '100%', justifyContent: 'center' }}
+            >
+              {activeSync === 'static-covers' ? <RefreshCw size={13} className="spin-icon" /> : <RefreshCw size={13} />}
+              <span>{activeSync === 'static-covers' ? 'Restoring Artwork…' : '🖼️ Restore Smooth Static Artwork'}</span>
+            </button>
+          </div>
+
+          {/* Action 4: Full Library Re-Scan */}
+          <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.07)', borderRadius: '10px', padding: '14px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '12px' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                <Database size={15} style={{ color: 'var(--text-secondary)' }} />
+                <strong style={{ fontSize: '13px', color: 'var(--text-primary)' }}>Full Library Re-Scan</strong>
+              </div>
+              <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.4 }}>
+                Comprehensive concurrent scan of all games for both IGDB lore and high-resolution artwork.
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                type="button"
+                disabled={isBusy || saving || loading}
+                className="outline-button"
+                onClick={handleSyncAll}
+                style={{ flex: 1, justifyContent: 'center' }}
+                title="Full library rescan"
+              >
+                {activeSync === 'all' ? <RefreshCw size={13} className="spin-icon" /> : <RefreshCw size={13} />}
+                <span>{activeSync === 'all' ? 'Scanning All…' : '🔄 Full Re-Scan'}</span>
+              </button>
+              <button
+                type="button"
+                disabled={isBusy || saving || loading}
+                className="outline-button"
+                onClick={handleGenerateFallbacks}
+                title="Generate stylized local fallback artwork for unlisted titles"
+                style={{ padding: '0 10px' }}
+              >
+                {activeSync === 'fallbacks' ? <RefreshCw size={13} className="spin-icon" /> : <WandSparkles size={13} />}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Progress Bar (Visible during sync) */}
+        {isBusy && displayProgress?.total > 0 && (
+          <div style={{ marginTop: '12px', width: '100%', background: 'rgba(255, 255, 255, 0.035)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', padding: '14px', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.08)', boxShadow: 'inset 0 1px 1px rgba(255, 255, 255, 0.05)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: 'var(--text-secondary, #cbd5e1)', marginBottom: '4px' }}>
+              <span style={{ fontWeight: 600 }}>
+                {displayProgress.gameTitle || displayProgress.title
+                  ? `Syncing Artwork: ${displayProgress.gameTitle || displayProgress.title} (${displayProgress.current} / ${displayProgress.total})`
+                  : (displayProgress.message || 'Processing…')}
+              </span>
+              <span style={{ color: 'var(--accent, #d6ff4b)', fontWeight: 700, fontSize: '11px', background: 'rgba(214, 255, 75, 0.1)', padding: '2px 8px', borderRadius: '999px', border: '1px solid rgba(214, 255, 75, 0.25)' }}>
+                {Math.round((displayProgress.current / displayProgress.total) * 100)}%
+              </span>
+            </div>
+            {(displayProgress.subMessage || displayProgress.formattedTransfer) && (
+              <div style={{ fontSize: '11px', color: 'var(--text-muted, #94a3b8)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className="pulse-dot" style={{ width: '4px', height: '4px', background: '#38bdf8' }} />
+                <span>
+                  {displayProgress.subMessage || (
+                    displayProgress.formattedCurrentFile && displayProgress.currentAsset
+                      ? `Current: ${displayProgress.formattedCurrentFile} (${displayProgress.currentAsset}) • Total Transferred: ${displayProgress.formattedTransfer || '0 KB'}`
+                      : `Total Transferred: ${displayProgress.formattedTransfer || '0 KB'}`
+                  )}
+                </span>
+              </div>
+            )}
+            <div style={{ height: '6px', background: 'rgba(255, 255, 255, 0.08)', borderRadius: '9999px', overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${Math.round((displayProgress.current / displayProgress.total) * 100)}%`, background: 'var(--accent, #d6ff4b)', boxShadow: '0 0 10px var(--accent-glow)', transition: 'width 0.25s ease' }} />
             </div>
           </div>
         )}
-      </form>
+
+        {syncNotice && !isBusy && (
+          <div style={{ marginTop: '10px' }}>
+            <span className="provider-saved-badge" style={{ color: 'var(--accent, #d6ff4b)' }}>
+              <Sparkles size={13} /> {syncNotice}
+            </span>
+          </div>
+        )}
+      </div>
     </section>
   )
 }
@@ -1242,11 +1588,26 @@ function RecentActivitySection({ activityLog, loading, onRefresh }) {
 }
 function normalizeLibraryStats(value) {
   const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {}
-  return { totalGames: safeInteger(source.totalGames), installedGames: safeInteger(source.installedGames), utilityTools: safeInteger(source.utilityTools), installedUtilities: safeInteger(source.installedUtilities), visibleGames: safeInteger(source.visibleGames), visibleInstalledGames: safeInteger(source.visibleInstalledGames), dlcGames: safeInteger(source.dlcGames), installedDlc: safeInteger(source.installedDlc), hiddenGames: safeInteger(source.hiddenGames), hiddenInstalledGames: safeInteger(source.hiddenInstalledGames), hiddenDlc: safeInteger(source.hiddenDlc), hiddenInstalledDlc: safeInteger(source.hiddenInstalledDlc), readyToInstallCount: safeInteger(source.readyToInstallCount), artworkCovered: safeInteger(source.artworkCovered), missingArtwork: safeInteger(source.missingArtwork), totalStorageGb: typeof source.totalStorageGb === 'number' && Number.isFinite(source.totalStorageGb) ? source.totalStorageGb : 0, platformBreakdown: Array.isArray(source.platformBreakdown) ? source.platformBreakdown : [], systemSpecs: source.systemSpecs || null }
+  return { totalGames: safeInteger(source.totalGames), installedGames: safeInteger(source.installedGames), utilityTools: safeInteger(source.utilityTools), installedUtilities: safeInteger(source.installedUtilities), visibleGames: safeInteger(source.visibleGames), visibleInstalledGames: safeInteger(source.visibleInstalledGames), dlcGames: safeInteger(source.dlcGames), installedDlc: safeInteger(source.installedDlc), hiddenGames: safeInteger(source.hiddenGames), hiddenInstalledGames: safeInteger(source.hiddenInstalledGames), hiddenDlc: safeInteger(source.hiddenDlc), hiddenInstalledDlc: safeInteger(source.hiddenInstalledDlc), readyToInstallCount: safeInteger(source.readyToInstallCount), artworkCovered: safeInteger(source.artworkCovered), missingArtwork: safeInteger(source.missingArtwork), gamesWithGuides: safeInteger(source.gamesWithGuides), missingGuidesCount: safeInteger(source.missingGuidesCount), installedWithGuides: safeInteger(source.installedWithGuides), missingInstalledGuidesCount: safeInteger(source.missingInstalledGuidesCount), totalKnowledgeChunks: safeInteger(source.totalKnowledgeChunks), totalStorageGb: typeof source.totalStorageGb === 'number' && Number.isFinite(source.totalStorageGb) ? source.totalStorageGb : 0, platformBreakdown: Array.isArray(source.platformBreakdown) ? source.platformBreakdown : [], systemSpecs: source.systemSpecs || null }
 }
 function normalizeSyncProgress(value) {
   const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {}
-  return { message: typeof source.message === 'string' ? source.message : '', title: typeof source.title === 'string' ? source.title : '', source: typeof source.source === 'string' ? source.source : 'sync', current: safeInteger(source.current), total: safeInteger(source.total) }
+  return {
+    message: typeof source.message === 'string' ? source.message : '',
+    subMessage: typeof source.subMessage === 'string' ? source.subMessage : '',
+    title: typeof source.title === 'string' ? source.title : '',
+    gameTitle: typeof source.gameTitle === 'string' ? source.gameTitle : (typeof source.title === 'string' ? source.title : ''),
+    source: typeof source.source === 'string' ? source.source : 'sync',
+    phase: typeof source.phase === 'string' ? source.phase : '',
+    current: safeInteger(source.current),
+    total: safeInteger(source.total),
+    currentAsset: typeof source.currentAsset === 'string' ? source.currentAsset : '',
+    fileSizeBytes: typeof source.fileSizeBytes === 'number' ? source.fileSizeBytes : 0,
+    formattedCurrentFile: typeof source.formattedCurrentFile === 'string' ? source.formattedCurrentFile : '',
+    totalBytes: typeof source.totalBytes === 'number' ? source.totalBytes : 0,
+    formattedTransfer: typeof source.formattedTransfer === 'string' ? source.formattedTransfer : '',
+    assetsUpdated: safeInteger(source.assetsUpdated),
+  }
 }
 function normalizeSyncResult(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
@@ -1264,36 +1625,58 @@ function StatusDot({ tone = 'green' }) { return <span className={cn('status-dot'
 function PlatformBadge({ platform, label }) { return <span className={cn('platform-badge', platformClass(platform))}><span className="platform-mark" />{label || platformLabel(platform)}</span> }
 function PosterImage({ game, className = '', onImageError }) {
   const [failed, setFailed] = useState(false)
-  const [loaded, setLoaded] = useState(false)
-  const imgRef = useRef(null)
+  const [candidateIndex, setCandidateIndex] = useState(0)
+
+  const coverUrl = String(game?.cover_url || '').trim()
+  const heroUrl = String(game?.hero_url || '').trim()
+
+  // Build clean static candidate URLs for robust, fail-safe rendering
+  const candidates = useMemo(() => {
+    const list = []
+    if (coverUrl) {
+      if (coverUrl.includes('.webm') || coverUrl.includes('.mp4')) {
+        list.push(coverUrl.replace(/\.(webm|mp4)(\?.*)?$/i, '.jpg$2'))
+      } else {
+        list.push(coverUrl)
+      }
+    }
+    if (heroUrl && !heroUrl.includes('.webm') && !heroUrl.includes('.mp4')) {
+      list.push(heroUrl)
+    }
+    return list.filter(Boolean)
+  }, [coverUrl, heroUrl])
 
   useEffect(() => {
     setFailed(false)
-    if (imgRef.current?.complete && imgRef.current.naturalWidth > 0) {
-      setLoaded(true)
-    } else {
-      setLoaded(false)
-    }
-  }, [game.cover_url])
+    setCandidateIndex(0)
+  }, [coverUrl, heroUrl])
 
-  return failed || !game.cover_url ? (
-    <div className={cn('poster-fallback', className)}>
-      <span>{game.canonical_title.slice(0, 1)}</span>
-      <strong>{game.canonical_title}</strong>
-      <small>{game.developer || 'Local collection'}</small>
-    </div>
-  ) : (
+  const activeSrc = candidates[candidateIndex] || null
+
+  if (failed || !activeSrc) {
+    return (
+      <div className={cn('poster-fallback', className)}>
+        <span>{String(game?.canonical_title || '').slice(0, 1) || '?'}</span>
+        <strong>{game?.canonical_title || 'Unknown Title'}</strong>
+        <small>{game?.developer || 'Local collection'}</small>
+      </div>
+    )
+  }
+
+  return (
     <img
-      ref={imgRef}
-      className={cn(className, loaded && 'is-loaded')}
-      src={normalizeArtworkUrl(game.cover_url)}
-      alt={`${game.canonical_title} cover`}
+      className={className}
+      src={normalizeArtworkUrl(activeSrc)}
+      alt={`${game?.canonical_title || 'Game'} cover`}
       loading="eager"
       decoding="sync"
-      onLoad={() => setLoaded(true)}
       onError={() => {
-        setFailed(true)
-        onImageError?.(game.id)
+        if (candidateIndex + 1 < candidates.length) {
+          setCandidateIndex((prev) => prev + 1)
+        } else {
+          setFailed(true)
+          if (game?.id) onImageError?.(game.id)
+        }
       }}
     />
   )
@@ -1362,7 +1745,7 @@ function GameEditorModal({ game, onClose, onSaved }) {
     setCurrentGame(game)
     const steam = game.sources?.find((source) => normalizePlatform(source.platform) === 'steam')
     const initialId = String(game.steamgriddb_id || game.steamGridDbId || steam?.platformGameId || '')
-    setForm({ title: game.canonical_title || '', description: game.description || '', genres: game.genres || game.genre || '', developer: game.developer || '', publisher: game.publisher || '', releaseDate: game.release_date || '', storeName: game.store_name || game.storeName || sourceLabelForGame(game), executablePath: game.executable_path || game.executablePath || '', launchArguments: game.launch_arguments || game.launchArguments || '', steamGridDbId: initialId })
+    setForm({ title: game.canonical_title || '', description: game.description || '', genres: game.genres || game.genre || '', developer: game.developer || '', publisher: game.publisher || '', releaseDate: game.release_date || '', storeName: game.store_name || game.storeName || sourceLabelForGame(game), executablePath: (() => { const e = String(game.executable_path || game.executablePath || '').replace(/^[\x22\x27]|[\x22\x27]$/g, '').trim(); return /\.exe$/i.test(e) ? e : '' })(), launchArguments: game.launch_arguments || game.launchArguments || '', steamGridDbId: initialId })
     setMatchId(initialId)
     setError('')
     setSuccessMsg('')
@@ -1401,7 +1784,8 @@ function GameEditorModal({ game, onClose, onSaved }) {
         }
       }
 
-      const dataToSend = { ...form, steamGridDbId: idToUse }
+      const cleanExe = (form.executablePath || '').replace(/^[\x22\x27]|[\x22\x27]$/g, '').trim()
+      const dataToSend = { ...form, executablePath: /\.exe$/i.test(cleanExe) ? cleanExe : '', steamGridDbId: idToUse }
       const finalUpdated = await api.database.updateGameMetadata(game.id, dataToSend)
       onSaved?.(finalUpdated || updatedGame || game, true)
       onClose()
@@ -1424,7 +1808,11 @@ function GameEditorModal({ game, onClose, onSaved }) {
           developer: meta.developer || prev.developer,
           publisher: meta.publisher || prev.publisher,
           releaseDate: meta.releaseDate || prev.releaseDate,
+          steamGridDbId: meta.steamGridDbId || prev.steamGridDbId,
         }))
+        if (meta.steamGridDbId) {
+          setMatchId(meta.steamGridDbId)
+        }
         const filled = []
         if (meta.developer) filled.push('developer')
         if (meta.publisher) filled.push('publisher')
@@ -1444,14 +1832,15 @@ function GameEditorModal({ game, onClose, onSaved }) {
 
   const refetch = async () => {
     const idToUse = (matchId || form.steamGridDbId || '').trim()
-    if (!idToUse) { setError('Enter a Steam App ID or SteamGridDB game ID first.'); return }
     setBusy(true); setError(''); setSuccessMsg('')
     try {
       const updated = await api.games.refetchArtwork(game.id, idToUse, apiKey.trim())
       if (updated) {
         setCurrentGame(updated)
-        setForm((current) => ({ ...current, steamGridDbId: idToUse }))
-        setMatchId(idToUse)
+        if (updated.steamgriddb_id) {
+          setForm((current) => ({ ...current, steamGridDbId: updated.steamgriddb_id }))
+          setMatchId(updated.steamgriddb_id)
+        }
         setSuccessMsg('Artwork and hero banner fetched and saved locally!')
         onSaved?.(updated, false)
       }
@@ -1571,26 +1960,45 @@ function GameEditorModal({ game, onClose, onSaved }) {
   )
 }
 
-function ContextMenu({ menu, menuRef, onClose, onMoveCategory, onEditGame, onHideGame, onArtworkChanged, onArtworkError }) {
+function ContextMenu({ menu, menuRef, onClose, onMoveCategory, onEditGame, onHideGame, onArtworkChanged, onArtworkError, onToggleFavorite }) {
   if (!menu) return null
   const game = menu.game
   const run = (action) => { onClose?.(); action?.(); }
-  return <div ref={menuRef} className="art-context-menu" style={{ position: 'fixed', left: menu.x, top: menu.y, zIndex: 9999 }} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation() }}><button onClick={() => run(() => onMoveCategory?.(game, 'main'))}><LayoutGrid size={14} /> Move to Main Games</button><button onClick={() => run(() => onMoveCategory?.(game, 'dlc'))}><PackageOpen size={14} /> Move to DLC & Add-ons</button><button onClick={() => run(() => onMoveCategory?.(game, 'utility'))}><Wrench size={14} /> Move to Utility Tools</button><div className="context-divider" /><button onClick={() => run(() => onEditGame?.(game))}><SlidersHorizontal size={14} /> Edit Metadata & Artwork</button><button onClick={() => run(async () => { try { const result = await api.selectCustomArtwork(game.id); if (result) onArtworkChanged?.(result, game) } catch (error) { onArtworkError?.(error) } })}><ImagePlus size={14} /> Change cover artwork</button><button onClick={() => run(() => onHideGame?.(game))}><EyeOff size={14} /> Hide from library</button></div>
+  return (
+    <div ref={menuRef} className="art-context-menu" style={{ position: 'fixed', left: menu.x, top: menu.y, zIndex: 9999 }} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation() }}>
+      <button onClick={() => run(() => onToggleFavorite?.(game))}>
+        <Star size={14} fill={game.is_favorite ? '#f59e0b' : 'none'} color={game.is_favorite ? '#f59e0b' : 'currentColor'} />
+        <span>{game.is_favorite ? 'Remove from Favorites' : 'Add to Favorites'}</span>
+      </button>
+      <div className="context-divider" />
+      <button onClick={() => run(() => onMoveCategory?.(game, 'main'))}><LayoutGrid size={14} /> Move to Main Games</button>
+      <button onClick={() => run(() => onMoveCategory?.(game, 'dlc'))}><PackageOpen size={14} /> Move to DLC & Add-ons</button>
+      <button onClick={() => run(() => onMoveCategory?.(game, 'utility'))}><Wrench size={14} /> Move to Utility Tools</button>
+      <div className="context-divider" />
+      <button onClick={() => run(() => onEditGame?.(game))}><SlidersHorizontal size={14} /> Edit Metadata & Artwork</button>
+      <button onClick={() => run(async () => { try { const result = await api.selectCustomArtwork(game.id); if (result) onArtworkChanged?.(result, game) } catch (error) { onArtworkError?.(error) } })}><ImagePlus size={14} /> Change cover artwork</button>
+      <button onClick={() => run(() => onHideGame?.(game))}><EyeOff size={14} /> Hide from library</button>
+    </div>
+  )
 }
 
-function GameCard({ game, onLaunch, onSelect, onHideGame, onContextMenu, compact = false, selectMode = false, selected = false, onToggleSelect, onImageError, isRestored = false }) {
+function GameCard({ game, onLaunch, onSelect, onHideGame, onContextMenu, compact = false, selectMode = false, selected = false, onToggleSelect, onImageError, isRestored = false, isGamepadFocused = false, onToggleFavorite, isScrolling = false, familyLock = null }) {
   const platforms = sourcePlatforms(game.sources)
   const storeLabels = sourceLabelsForGame(game)
   const rawStatus = String(game.status || game.backlog_status || 'unplayed').toLowerCase()
   const currentStatus = rawStatus === 'dropped' ? 'paused' : (['playing', 'paused', 'completed', 'unplayed'].includes(rawStatus) ? rawStatus : 'unplayed')
   const statusLabel = currentStatus === 'playing' ? '● Playing' : currentStatus === 'paused' ? '⏸ On Pause' : currentStatus === 'completed' ? '✓ Completed' : '○ Unplayed'
 
+  const [isHovered, setIsHovered] = useState(false)
+
   return (
     <article
       tabIndex={0}
       data-status={currentStatus}
-      className={cn('poster-card', `status-${currentStatus}`, compact && 'poster-card-compact', selectMode && 'poster-card-selectable', selected && 'poster-card-selected', isRestored && 'poster-card-restored')}
+      className={cn('poster-card', isGamepadFocused && 'gamepad-focused', `status-${currentStatus}`, compact && 'poster-card-compact', selectMode && 'poster-card-selectable', selected && 'poster-card-selected', isRestored && 'poster-card-restored', familyLock && 'poster-card-family-locked')}
       onClick={() => selectMode ? onToggleSelect?.(game) : onSelect?.(game)}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       onKeyDown={(event) => {
         if ((event.key === 'Enter' || event.key === ' ') && !selectMode && !event.target.closest('button')) {
           event.preventDefault()
@@ -1611,13 +2019,45 @@ function GameCard({ game, onLaunch, onSelect, onHideGame, onContextMenu, compact
           </button>
         ) : null}
 
-        {game.is_favorite ? (
-          <div className="poster-favorite-badge" title="Favorite title">
-            <Star size={11} fill="currentColor" />
+        {familyLock ? (
+          <div
+            className="poster-family-badge"
+            style={selectMode ? { left: '36px' } : undefined}
+            title={`In use by ${familyLock.playerName} (Steam Family: ${familyLock.familyGroup})`}
+          >
+            <Users size={11} />
+            <span>In Use ({familyLock.playerName})</span>
           </div>
         ) : null}
 
-        <PosterImage game={game} className="poster-image" onImageError={onImageError} />
+        {game.is_favorite ? (
+          <button
+            type="button"
+            className="poster-favorite-badge is-favorite"
+            title="Favorited title (click to remove from Favorites)"
+            onClick={(event) => {
+              event.stopPropagation()
+              onToggleFavorite?.(game)
+            }}
+          >
+            <Star size={11} fill="currentColor" />
+          </button>
+        ) : null}
+
+        <PosterImage
+          game={game}
+          className="poster-image"
+          onImageError={onImageError}
+        />
+        {game.hltb_main_hours ? (
+          <div
+            className="poster-hltb-badge"
+            title={`Story Campaign: ~${game.hltb_main_hours}h (HowLongToBeat)${game.hltb_completionist_hours ? ` · 100%: ${game.hltb_completionist_hours}h` : ''}${game.hltb_score ? ` · Community Rating: ${game.hltb_score}%` : ''}`}
+          >
+            <span className="hltb-story-prefix">Story</span>
+            <span className="hltb-story-hours">~{game.hltb_main_hours}h</span>
+          </div>
+        ) : null}
         <div className="poster-gradient" />
 
         {/* Machined Optical Hover Tray */}
@@ -1629,9 +2069,9 @@ function GameCard({ game, onLaunch, onSelect, onHideGame, onContextMenu, compact
               ))}
             </div>
             <div className="drawer-telemetry">
-              <span className={cn('drawer-status-pip', `pip-${currentStatus}`)} />
-              <span className="drawer-status-text">
-                {game.is_installed ? 'Installed' : 'Ready'}
+              <span className={cn('drawer-status-pip', familyLock ? 'pip-family-locked' : `pip-${currentStatus}`)} />
+              <span className={cn('drawer-status-text', familyLock && 'drawer-family-locked-text')} title={familyLock ? `Playing: ${familyLock.playerName} (${familyLock.familyGroup})` : undefined}>
+                {familyLock ? `In Use: ${familyLock.playerName}` : (game.is_installed ? 'Installed' : 'Ready')}
               </span>
               {game.play_time_seconds > 0 ? (
                 <span className="drawer-playtime">{formatPlayTime(game.play_time_seconds)}</span>
@@ -1643,16 +2083,16 @@ function GameCard({ game, onLaunch, onSelect, onHideGame, onContextMenu, compact
           <div className="drawer-actions">
             <button
               type="button"
-              className="drawer-action"
+              className={cn('drawer-action', familyLock && 'drawer-action-family-warning')}
               onClick={(event) => {
                 event.stopPropagation()
                 onLaunch(game)
               }}
-              title={game.is_installed ? `Play ${game.canonical_title}` : `Install via ${storeLabels[0] || 'store'}`}
+              title={familyLock ? `Family In Use (${familyLock.playerName}) — Click to launch options` : (game.is_installed ? `Play ${game.canonical_title}` : `Install via ${storeLabels[0] || 'store'}`)}
             >
               {game.is_installed ? (
                 <>
-                  <Play size={12} fill="currentColor" /> Play
+                  <Play size={12} fill="currentColor" /> {familyLock ? 'Play (In Use)' : 'Play'}
                 </>
               ) : (
                 <>
@@ -1751,19 +2191,61 @@ function ScanImportPanel({ open, onClose, onRefresh }) {
           <div className="import-instructions-row">
             <Info size={14} className="import-instructions-icon" />
             <p className="import-instructions-text">
-              To populate your 'Ready to install' backlog, upload an Excel/CSV file containing your uninstalled library.
+              To import games without store accounts or to populate your uninstalled backlog, upload an Excel or CSV file.
             </p>
           </div>
           <div className="import-headers-guide">
-            <span className="import-headers-label">Required headers:</span>
+            <span className="import-headers-label">Accepted column headers:</span>
             <div className="import-headers-tags">
-              <span className="import-header-tag"><code>title</code></span>
-              <span className="import-header-tag"><code>source</code></span>
-              <span className="import-header-tag"><code>is_installed</code></span>
-              <span className="import-header-tag"><code>is_utility</code></span>
-              <span className="import-header-tag"><code>is_dlc</code></span>
-              <span className="import-header-tag"><code>playtime_h</code></span>
+              <span className="import-header-tag"><code>Title</code></span>
+              <span className="import-header-tag"><code>Platform</code></span>
+              <span className="import-header-tag"><code>Status</code></span>
+              <span className="import-header-tag"><code>Genre</code></span>
+              <span className="import-header-tag"><code>Developer</code></span>
+              <span className="import-header-tag"><code>Publisher</code></span>
+              <span className="import-header-tag"><code>Playtime_Hours</code></span>
+              <span className="import-header-tag"><code>Is_Installed</code></span>
             </div>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="outline-button"
+              style={{ fontSize: '11px', padding: '5px 12px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+              onClick={async (e) => {
+                e.stopPropagation()
+                try {
+                  const res = await api.scanner.downloadTemplate('xlsx')
+                  if (res?.success) {
+                    setResult({ type: 'template', message: `Saved template: ${res.filePath}` })
+                  }
+                } catch (err) {
+                  setError(err.message || 'Failed to download Excel template.')
+                }
+              }}
+            >
+              <FileDown size={13} />
+              <span>Download Blank Excel Template (.xlsx)</span>
+            </button>
+            <button
+              type="button"
+              className="outline-button"
+              style={{ fontSize: '11px', padding: '5px 12px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+              onClick={async (e) => {
+                e.stopPropagation()
+                try {
+                  const res = await api.scanner.downloadTemplate('csv')
+                  if (res?.success) {
+                    setResult({ type: 'template', message: `Saved template: ${res.filePath}` })
+                  }
+                } catch (err) {
+                  setError(err.message || 'Failed to download CSV template.')
+                }
+              }}
+            >
+              <FileDown size={13} />
+              <span>Download CSV Template (.csv)</span>
+            </button>
           </div>
         </div>
 
@@ -2031,6 +2513,11 @@ function ConfirmActionModal({ config, onClose }) {
     }
   }
 
+  const handleCancel = () => {
+    config?.onCancel?.()
+    onClose?.()
+  }
+
   return (
     <div className="modal-backdrop confirm-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !busy && onClose?.()}>
       <div className="confirm-modal">
@@ -2046,7 +2533,7 @@ function ConfirmActionModal({ config, onClose }) {
           <p>{message}</p>
         </div>
         <div className="editor-footer">
-          <button className="outline-button" disabled={busy} onClick={onClose}>
+          <button className="outline-button" disabled={busy} onClick={handleCancel}>
             {cancelText}
           </button>
           <button
@@ -2490,8 +2977,13 @@ function ShelfCardArt({ game }) {
     setHeroFailed(false)
   }, [game?.id, game?.hero_url])
 
-  const heroUrl = !heroFailed && game?.hero_url && String(game.hero_url).trim() ? normalizeArtworkUrl(game.hero_url) : null
-  const coverUrl = game?.cover_url && String(game.cover_url).trim() ? normalizeArtworkUrl(game.cover_url) : null
+  const rawHero = game?.hero_url && String(game.hero_url).trim() ? game.hero_url : null
+  const staticHero = rawHero ? rawHero.replace(/\.(webm|mp4)(\?.*)?$/i, '.jpg$2') : null
+  const heroUrl = !heroFailed && staticHero ? normalizeArtworkUrl(staticHero) : null
+
+  const rawCover = game?.cover_url && String(game.cover_url).trim() ? game.cover_url : null
+  const staticCover = rawCover ? rawCover.replace(/\.(webm|mp4)(\?.*)?$/i, '.jpg$2') : null
+  const coverUrl = staticCover ? normalizeArtworkUrl(staticCover) : null
 
   if (heroUrl) {
     return (
@@ -2537,26 +3029,26 @@ function HomeSpotlightAndShelf({
   layoutTheme,
   isCollapsed = false,
   onToggleCollapse,
+  familyLocks = {},
+  isDrawerOpen = false,
+  preferAnimatedArtwork = false,
 }) {
+  const [shuffleSeed, setShuffleSeed] = useState(() => Math.random())
+  const handleShuffle = (e) => {
+    e?.stopPropagation?.()
+    setShuffleSeed(Math.random())
+    setActiveIndex(0)
+  }
+
   const spotlightCandidates = useMemo(() => {
     if (!games || !games.length) return []
     const valid = games.filter((g) => g.is_installed && !g.is_utility && !g.is_dlc && (g.hero_url || g.cover_url))
     if (!valid.length) return []
 
-    return [...valid].sort((a, b) => {
-      const aTime = Number(a.play_time_seconds || 0)
-      const bTime = Number(b.play_time_seconds || 0)
-      if (aTime !== bTime) return bTime - aTime
-
-      const aLast = a.last_played ? new Date(a.last_played).getTime() : 0
-      const bLast = b.last_played ? new Date(b.last_played).getTime() : 0
-      if (aLast !== bLast) return bLast - aLast
-
-      const aHero = a.hero_url ? 1 : 0
-      const bHero = b.hero_url ? 1 : 0
-      return bHero - aHero
-    }).slice(0, 5)
-  }, [games])
+    // Rotate fresh, varied titles on launch and on shuffle
+    const shuffled = [...valid].sort(() => Math.random() - 0.5)
+    return shuffled.slice(0, 5)
+  }, [games, shuffleSeed])
 
   const [activeIndex, setActiveIndex] = useState(0)
   const [isHovered, setIsHovered] = useState(false)
@@ -2573,7 +3065,9 @@ function HomeSpotlightAndShelf({
 
   const suggestedGames = useMemo(() => {
     if (!games || !games.length || !featured) return []
-    const nonFeatured = games.filter((g) => g.is_installed && !g.is_utility && !g.is_dlc && g.id !== featured.id && (g.cover_url || g.hero_url))
+    // Exclude ALL titles present in the spotlight so zero duplicates appear in the shelf below
+    const spotlightIds = new Set(spotlightCandidates.map((c) => c.id))
+    const nonFeatured = games.filter((g) => g.is_installed && !g.is_utility && !g.is_dlc && !spotlightIds.has(g.id) && (g.cover_url || g.hero_url))
     if (!nonFeatured.length) return []
 
     return [...nonFeatured].sort((a, b) => {
@@ -2589,16 +3083,23 @@ function HomeSpotlightAndShelf({
       const bTime = Number(b.play_time_seconds || 0)
       return bTime - aTime
     }).slice(0, 6)
-  }, [games, featured?.id])
+  }, [games, spotlightCandidates, featured?.id])
 
   if (!spotlightCandidates.length || !featured) return null
 
   const heroArt = featured.hero_url ? normalizeArtworkUrl(featured.hero_url) : (featured.cover_url ? normalizeArtworkUrl(featured.cover_url) : null)
+  const staticHeroArt = featured.hero_url && !featured.hero_url.includes('.webm') && !featured.hero_url.includes('.mp4')
+    ? normalizeArtworkUrl(featured.hero_url)
+    : (featured.cover_url && !featured.cover_url.includes('.webm') && !featured.cover_url.includes('.mp4')
+      ? normalizeArtworkUrl(featured.cover_url)
+      : (featured.hero_url ? normalizeArtworkUrl(featured.hero_url.replace(/\.(webm|mp4)(\?.*)?$/i, '.jpg$2')) : null))
+  const isVideoHero = Boolean(preferAnimatedArtwork && !isDrawerOpen && heroArt && (heroArt.endsWith('.webm') || heroArt.endsWith('.mp4') || heroArt.includes('.webm?') || heroArt.includes('.mp4?')))
   const genres = String(featured.genres || featured.genre || '').split(',').map((g) => g.trim()).filter(Boolean)
   const primaryGenre = genres[0] || 'Action'
   const platforms = sourcePlatforms(featured.sources)
   const mainPlatform = platforms[0] || normalizePlatform(featured.source) || 'custom'
   const platformName = platformLabel(mainPlatform)
+  const featuredFamilyLock = getFamilyLockForGame(featured, familyLocks)
 
   return (
     <div className={cn("home-hero-container", isCollapsed && "is-collapsed")}>
@@ -2608,6 +3109,11 @@ function HomeSpotlightAndShelf({
           <div className="collapsed-ribbon-left">
             <span className="pulse-dot" />
             <span className="collapsed-ribbon-tag">SPOTLIGHT</span>
+            {featuredFamilyLock && (
+              <span className="collapsed-ribbon-tag family-locked-tag" title={`In use by ${featuredFamilyLock.playerName}`}>
+                <Users size={10} style={{ marginRight: 3 }} /> IN USE ({featuredFamilyLock.playerName})
+              </span>
+            )}
             <strong className="collapsed-ribbon-title">{featured.canonical_title}</strong>
             <span className="collapsed-ribbon-platform">{platformName}</span>
           </div>
@@ -2639,11 +3145,23 @@ function HomeSpotlightAndShelf({
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
-          <div
-            className="home-spotlight-bg"
-            key={featured.id}
-            style={{ backgroundImage: heroArt ? `url("${heroArt}")` : undefined }}
-          />
+          {isVideoHero ? (
+            <video
+              key={featured.id}
+              src={heroArt}
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="home-spotlight-video"
+            />
+          ) : (
+            <div
+              className="home-spotlight-bg"
+              key={featured.id}
+              style={{ backgroundImage: staticHeroArt ? `url("${staticHeroArt}")` : undefined }}
+            />
+          )}
           <div className="home-spotlight-scrim" />
           <div className="home-spotlight-vignette" />
 
@@ -2669,6 +3187,13 @@ function HomeSpotlightAndShelf({
                   <SourceIcon source={mainPlatform} size={12} />
                   <span>{platformName}</span>
                 </span>
+
+                {featuredFamilyLock && (
+                  <span className="spotlight-chip spotlight-family-chip" title={`In use by ${featuredFamilyLock.playerName} (Steam Family: ${featuredFamilyLock.familyGroup})`}>
+                    <Users size={11} />
+                    <span>In Use: {featuredFamilyLock.playerName}</span>
+                  </span>
+                )}
 
                 {featured.is_installed ? (
                   <span className="spotlight-chip spotlight-status-chip is-installed">
@@ -2703,11 +3228,11 @@ function HomeSpotlightAndShelf({
                 {featured.is_installed ? (
                   <button
                     type="button"
-                    className="spotlight-btn-primary"
+                    className={cn("spotlight-btn-primary", featuredFamilyLock && "spotlight-btn-family-warning")}
                     onClick={() => onLaunch(featured)}
                   >
                     <Play size={14} fill="currentColor" />
-                    <span>Play Now</span>
+                    <span>{featuredFamilyLock ? 'Play (In Use)' : 'Play Now'}</span>
                   </button>
                 ) : (
                   <button
@@ -2728,6 +3253,16 @@ function HomeSpotlightAndShelf({
                   <Info size={13} />
                   <span>Game Details</span>
                 </button>
+
+                <button
+                  type="button"
+                  className="spotlight-btn-secondary spotlight-shuffle-btn"
+                  onClick={handleShuffle}
+                  title="Randomize & shuffle spotlight titles"
+                >
+                  <Shuffle size={13} />
+                  <span>Shuffle</span>
+                </button>
               </div>
             </div>
 
@@ -2736,7 +3271,9 @@ function HomeSpotlightAndShelf({
               <div className="home-spotlight-switcher" aria-label="Spotlight carousel">
                 {spotlightCandidates.map((game, idx) => {
                   const isActive = idx === (activeIndex % spotlightCandidates.length)
-                  const thumbImg = game.cover_url ? normalizeArtworkUrl(game.cover_url) : (game.hero_url ? normalizeArtworkUrl(game.hero_url) : null)
+                  const rawThumb = game.cover_url || game.hero_url || ''
+                  const cleanThumb = rawThumb.replace(/\.(webm|mp4)(\?.*)?$/i, '.jpg$2')
+                  const thumbImg = cleanThumb ? normalizeArtworkUrl(cleanThumb) : null
                   return (
                     <button
                       key={game.id}
@@ -2845,6 +3382,9 @@ function VirtualGrid({
   initialScrollTop = 0,
   restoreGameId = null,
   restoredGameId = null,
+  gamepadFocusIndex = -1,
+  onToggleFavorite,
+  familyLocks = {},
 }) {
   const gridRef = useRef(null)
   const [columns, setColumns] = useState(() => (typeof window !== 'undefined' ? (window.innerWidth >= 1180 ? 5 : window.innerWidth >= 880 ? 4 : window.innerWidth >= 600 ? 3 : 2) : 4))
@@ -2930,6 +3470,14 @@ function VirtualGrid({
     return () => cancelAnimationFrame(raf)
   }, [initialScrollTop, restoreGameId, columns, games, scrollElementRef, virtualizer])
 
+  // Auto-scroll row into view when gamepadFocusIndex changes
+  useEffect(() => {
+    if (typeof gamepadFocusIndex === 'number' && gamepadFocusIndex >= 0 && games.length > 0) {
+      const rowIndex = Math.floor(gamepadFocusIndex / columns)
+      virtualizer.scrollToIndex(rowIndex, { align: 'auto' })
+    }
+  }, [gamepadFocusIndex, columns, games.length, virtualizer])
+
   const [isScrolling, setIsScrolling] = useState(false)
   const scrollTimeoutRef = useRef(null)
 
@@ -2964,21 +3512,29 @@ function VirtualGrid({
               gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
             }}
           >
-            {rows[row.index]?.map((game) => (
-              <GameCard
-                key={game.id}
-                game={game}
-                onLaunch={onLaunch}
-                onSelect={onSelect}
-                onHideGame={onHideGame}
-                onContextMenu={onContextMenu}
-                selectMode={selectMode}
-                selected={(game.variants || [game]).every((variant) => selectedIds.includes(variant.id))}
-                onToggleSelect={onToggleSelect}
-                onImageError={onImageError}
-                isRestored={game.id === restoredGameId}
-              />
-            ))}
+            {rows[row.index]?.map((game, colIdx) => {
+              const itemGlobalIndex = row.index * columns + colIdx
+              const familyLock = getFamilyLockForGame(game, familyLocks)
+              return (
+                <GameCard
+                  key={game.id}
+                  game={game}
+                  familyLock={familyLock}
+                  onLaunch={onLaunch}
+                  onSelect={onSelect}
+                  onHideGame={onHideGame}
+                  onContextMenu={onContextMenu}
+                  selectMode={selectMode}
+                  selected={(game.variants || [game]).every((variant) => selectedIds.includes(variant.id))}
+                  onToggleSelect={onToggleSelect}
+                  onImageError={onImageError}
+                  isRestored={game.id === restoredGameId}
+                  isGamepadFocused={gamepadFocusIndex === itemGlobalIndex}
+                  onToggleFavorite={onToggleFavorite}
+                  isScrolling={isScrolling}
+                />
+              )
+            })}
           </div>
         ))}
       </div>
@@ -3477,7 +4033,11 @@ function HeroView({
   layoutTheme = 'cinematic',
   onIdleChange,
   onScrollStateChange,
+  onSnapHero,
+  onAskAi,
+  familyLocks = {},
 }) {
+  const familyLock = useMemo(() => getFamilyLockForGame(activeGame, familyLocks), [activeGame, familyLocks])
   const [activeTab, setActiveTab] = useState('overview')
   const [isScrolled, setIsScrolled] = useState(false)
   const [launchMenuOpen, setLaunchMenuOpen] = useState(false)
@@ -3486,6 +4046,35 @@ function HeroView({
   const [moreMenuPlacement, setMoreMenuPlacement] = useState('up')
   const launchMenuRef = useRef(null)
   const moreMenuRef = useRef(null)
+  const [guideReady, setGuideReady] = useState(false)
+  const [downloadingGuide, setDownloadingGuide] = useState(false)
+
+  useEffect(() => {
+    let isMounted = true
+    if (activeGame?.id && window.api?.guides?.hasGuide) {
+      window.api.guides.hasGuide(activeGame.id).then((ready) => {
+        if (isMounted) setGuideReady(Boolean(ready))
+      }).catch(() => {})
+    }
+    return () => { isMounted = false }
+  }, [activeGame?.id])
+
+  const handleDownloadSingleGuide = async (e) => {
+    e?.preventDefault?.()
+    e?.stopPropagation?.()
+    if (!activeGame || downloadingGuide) return
+    setDownloadingGuide(true)
+    try {
+      const res = await window.api?.guides?.downloadForGame?.(activeGame.id, activeGame.canonical_title)
+      if (res?.success) {
+        setGuideReady(true)
+      }
+    } catch (err) {
+      console.warn('[HeroView] Guide download error:', err)
+    } finally {
+      setDownloadingGuide(false)
+    }
+  }
 
   const updateMenuPlacements = useCallback(() => {
     if (launchMenuOpen && launchMenuRef.current) {
@@ -3928,7 +4517,25 @@ function HeroView({
                   <span className="hero-sub-chip">DIRECT EXE</span>
                 </span>
               )}
+              {familyLock && (
+                <span className="hero-sub-chip-group">
+                  <span className="hero-sub-sep">·</span>
+                  <span className="hero-sub-chip hero-sub-chip-family-locked" title={`Played by ${familyLock.playerName} (Steam Family: ${familyLock.familyGroup})`}>
+                    <Users size={12} /> IN USE BY {familyLock.playerName?.toUpperCase()} ({familyLock.familyGroup?.toUpperCase()})
+                  </span>
+                </span>
+              )}
             </div>
+
+            {familyLock && (
+              <div className="hero-family-lock-banner">
+                <AlertTriangle size={16} className="hero-family-lock-icon" />
+                <div className="hero-family-lock-copy">
+                  <strong>Currently in use by {familyLock.playerName}</strong>
+                  <span>This game is shared via Steam Family ({familyLock.familyGroup}). Launching now may interrupt their active session or fail if no other copy is available.</span>
+                </div>
+              </div>
+            )}
 
             {/* Launch Trigger */}
             <div className="hero-cta-row">
@@ -3936,67 +4543,67 @@ function HeroView({
                 <div className="hero-play-split">
                   <button
                     type="button"
-                    className="hero-play-button"
+                    className={cn("hero-play-button", familyLock && "hero-play-button-family-warning")}
                     onClick={() => onLaunch(activeGame)}
                   >
                     {layoutTheme === 'atmospheric' ? (
                       activeGame.is_installed ? (
                         <>
                           <Play size={16} fill="currentColor" />
-                          <span>Play</span>
+                          <span>{familyLock ? 'Play (In Use)' : 'Play'}</span>
                         </>
                       ) : (
                         <>
                           <Download size={16} />
-                          <span>Install</span>
+                          <span>{familyLock ? `In Use (${familyLock.playerName})` : 'Install'}</span>
                         </>
                       )
                     ) : layoutTheme === 'kinetic' ? (
                       activeGame.is_installed ? (
                         <>
                           <Play size={14} fill="currentColor" />
-                          <span>PLAY NOW</span>
+                          <span>{familyLock ? 'PLAY (IN USE)' : 'PLAY NOW'}</span>
                         </>
                       ) : (
                         <>
                           <Download size={14} />
-                          <span>INSTALL</span>
+                          <span>{familyLock ? `IN USE (${familyLock.playerName?.toUpperCase()})` : 'INSTALL'}</span>
                         </>
                       )
                     ) : layoutTheme === 'playful' ? (
                       activeGame.is_installed ? (
                         <>
                           <Play size={16} fill="currentColor" />
-                          <span>PRESS START</span>
+                          <span>{familyLock ? 'IN USE · START' : 'PRESS START'}</span>
                         </>
                       ) : (
                         <>
                           <Download size={16} />
-                          <span>INSERT GAME</span>
+                          <span>{familyLock ? `IN USE (${familyLock.playerName})` : 'INSERT GAME'}</span>
                         </>
                       )
                     ) : layoutTheme === 'competitive' ? (
                       activeGame.is_installed ? (
                         <>
                           <Play size={15} fill="currentColor" />
-                          <span>QUEUE MATCH</span>
+                          <span>{familyLock ? 'MATCH IN USE' : 'QUEUE MATCH'}</span>
                         </>
                       ) : (
                         <>
                           <Download size={15} />
-                          <span>PRE-LOAD</span>
+                          <span>{familyLock ? `IN USE (${familyLock.playerName})` : 'PRE-LOAD'}</span>
                         </>
                       )
                     ) : (
                       activeGame.is_installed ? (
                         <>
                           <Play size={16} fill="currentColor" />
-                          <span>Play Now</span>
+                          <span>{familyLock ? `Play (In Use: ${familyLock.playerName})` : 'Play Now'}</span>
                         </>
                       ) : (
                         <>
                           <Download size={16} />
-                          <span>Install via {storeLabels[0] || platformLabel(primaryPlatform)}</span>
+                          <span>{familyLock ? `In Use (${familyLock.playerName}) · Install` : `Install via ${storeLabels[0] || platformLabel(primaryPlatform)}`}</span>
                         </>
                       )
                     )}
@@ -4079,9 +4686,7 @@ function HeroView({
                             await api.database.updateGameMetadata(activeGame.id, { executablePath: exe })
                             onGameUpdated?.({ ...activeGame, executable_path: exe })
                           }
-                        } catch (err) {
-                          console.warn(err)
-                        }
+                        } catch {}
                       }}
                     >
                       <FolderOpen size={14} />
@@ -4131,6 +4736,67 @@ function HeroView({
                 <Camera size={14} />
                 <span>Captures{localCaptures.length > 0 ? ` (${localCaptures.length})` : ''}</span>
               </button>
+
+              <button
+                type="button"
+                className="hero-ghost-btn"
+                title={`Snap this ${layoutTheme.toUpperCase()} theme view (PNG)`}
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  onSnapHero?.(activeGame)
+                }}
+              >
+                <Camera size={14} />
+                <span>Snap Theme</span>
+              </button>
+
+              {onAskAi ? (
+                <button
+                  type="button"
+                  className="hero-ghost-btn"
+                  title={`Ask Gaming AI about ${activeGame.canonical_title}`}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    onAskAi(activeGame)
+                  }}
+                >
+                  <Sparkles size={14} style={{ color: 'var(--accent, #d6ff4b)' }} />
+                  <span>Ask AI</span>
+                </button>
+              ) : null}
+
+              {guideReady ? (
+                <button
+                  type="button"
+                  className="hero-ghost-btn"
+                  style={{ borderColor: 'rgba(74, 222, 128, 0.35)', color: '#4ade80' }}
+                  title="Offline walkthrough indexed in SQLite knowledge base. Click to open AI guide."
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    if (onAskAi) onAskAi(activeGame)
+                  }}
+                >
+                  <BookOpen size={14} style={{ color: '#4ade80' }} />
+                  <span>Guide Ready</span>
+                  <Check size={13} style={{ color: '#4ade80', marginLeft: '-2px' }} />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="hero-ghost-btn"
+                  title={`Download offline walkthrough guide for ${activeGame.canonical_title}`}
+                  onClick={handleDownloadSingleGuide}
+                  disabled={downloadingGuide}
+                >
+                  <BookOpen size={14} />
+                  <span>{downloadingGuide ? 'Downloading...' : 'Get Guide'}</span>
+                </button>
+              )}
+
+              <PcgwTechSyncButton game={activeGame} onGameUpdated={onGameUpdated} />
 
               {onEdit ? (
                 <button
@@ -4195,9 +4861,7 @@ function HeroView({
                         try {
                           const updated = await api.games.chooseAndSaveArtwork(activeGame.id, 'cover')
                           if (updated) onGameUpdated?.(updated)
-                        } catch (err) {
-                          console.warn(err)
-                        }
+                        } catch {}
                       }}
                     >
                       <ImagePlus size={14} />
@@ -4212,13 +4876,23 @@ function HeroView({
                         try {
                           const updated = await api.games.chooseAndSaveArtwork(activeGame.id, 'hero')
                           if (updated) onGameUpdated?.(updated)
-                        } catch (err) {
-                          console.warn(err)
-                        }
+                        } catch {}
                       }}
                     >
                       <UploadCloud size={14} />
                       <span>Upload Custom Hero Banner</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className="hero-menu-item"
+                      onClick={() => {
+                        setMoreMenuOpen(false)
+                        onSnapHero?.(activeGame)
+                      }}
+                    >
+                      <Camera size={14} />
+                      <span>Snap Theme View (PNG)</span>
                     </button>
 
                     <div className="hero-menu-divider" />
@@ -4374,6 +5048,7 @@ function HeroView({
 
         {activeTab === 'overview' && (
           <div className="cinematic-tab-pane">
+            <JumpBackInCard game={activeGame} onPlay={onLaunch} />
             <div className="cinematic-dossier-grid">
               {/* Left Column (~40%): Synopsis, Genres, Technical Specs */}
               <div className="cinematic-dossier-col cinematic-dossier-col-left">
@@ -4448,6 +5123,61 @@ function HeroView({
                     )}
                   </div>
                 </div>
+
+                {/* HowLongToBeat Card */}
+                <div className="cinematic-hltb-sheet" style={{ marginTop: '16px', padding: '16px', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                    <h4 className="cinematic-dossier-heading" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span>⏱ HowLongToBeat</span>
+                      {activeGame.hltb_score ? (
+                        <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '20px', background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', fontWeight: 600 }}>
+                          ★ {activeGame.hltb_score}% Rating
+                        </span>
+                      ) : null}
+                    </h4>
+                    <button
+                      type="button"
+                      className="hero-ghost-btn"
+                      style={{ padding: '4px 10px', fontSize: '11px', height: '26px' }}
+                      title="Fetch latest completion estimates from HowLongToBeat"
+                      onClick={async (e) => {
+                        e.stopPropagation()
+                        try {
+                          const res = await window.api?.games?.fetchHltb?.(activeGame.id, activeGame.canonical_title)
+                          if (res) onGameUpdated?.(res)
+                        } catch {}
+                      }}
+                    >
+                      <span>Sync HLTB</span>
+                    </button>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', textAlign: 'center' }}>
+                    <div style={{ padding: '10px 6px', background: 'rgba(0,0,0,0.25)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                      <div style={{ fontSize: '10px', textTransform: 'uppercase', opacity: 0.6, letterSpacing: '0.05em' }}>Main Story</div>
+                      <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--accent, #f59e0b)', marginTop: '4px' }}>
+                        {activeGame.hltb_main_hours ? `${activeGame.hltb_main_hours}h` : '—'}
+                      </div>
+                    </div>
+                    <div style={{ padding: '10px 6px', background: 'rgba(0,0,0,0.25)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                      <div style={{ fontSize: '10px', textTransform: 'uppercase', opacity: 0.6, letterSpacing: '0.05em' }}>Main + Extra</div>
+                      <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--accent, #f59e0b)', marginTop: '4px' }}>
+                        {activeGame.hltb_extra_hours ? `${activeGame.hltb_extra_hours}h` : '—'}
+                      </div>
+                    </div>
+                    <div style={{ padding: '10px 6px', background: 'rgba(0,0,0,0.25)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                      <div style={{ fontSize: '10px', textTransform: 'uppercase', opacity: 0.6, letterSpacing: '0.05em' }}>100% Complete</div>
+                      <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--accent, #f59e0b)', marginTop: '4px' }}>
+                        {activeGame.hltb_completionist_hours ? `${activeGame.hltb_completionist_hours}h` : '—'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Save Backups Panel */}
+                <SaveBackupsPanel game={activeGame} onGameUpdated={onGameUpdated} />
+
+                {/* Mod Profiles & Launch Arguments Panel */}
+                <ModProfilePanel game={activeGame} onGameUpdated={onGameUpdated} />
               </div>
 
               {/* Right Column (~60%): Media Showcase & Franchise */}
@@ -4782,7 +5512,21 @@ function HeroView({
 }
 
 
+
 function App() {
+  const isOverlayMode = typeof window !== 'undefined' && window.location.hash === '#overlay'
+  if (isOverlayMode) {
+    return (
+      <ErrorBoundary fallback={({ error, reset }) => (
+        <div style={{ padding: 24, color: '#f87171', background: '#0a0a0a', border: '1px solid #ef4444', borderRadius: 8 }}>
+          <strong>In-Game Overlay Error:</strong> {error?.message}
+          <div style={{ marginTop: 8 }}><button onClick={reset}>Retry</button></div>
+        </div>
+      )}>
+        <InGameOverlayView />
+      </ErrorBoundary>
+    )
+  }
   const greeting = greetingForHour(new Date().getHours())
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     return localStorage.getItem('logpile-sidebar-collapsed') === 'true'
@@ -4818,6 +5562,9 @@ function App() {
         e.preventDefault()
         searchInputRef.current?.focus()
         searchInputRef.current?.select()
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'j') {
+        e.preventDefault()
+        setAiDrawerOpen((prev) => !prev)
       } else if (e.key === 'F11') {
         e.preventDefault()
         if (api?.window?.toggleFullScreen) {
@@ -4834,6 +5581,167 @@ function App() {
   }, [toggleSidebar, handleToggleSpotlight])
 
   const mainScrollRef = useRef(null); const searchInputRef = useRef(null); const libraryScrollRef = useRef(0); const lastClickedGameIdRef = useRef(null); const navOriginRef = useRef({ view: 'installed', source: 'grid', scrollTop: 0 }); const hasSeededRef = useRef(false); const [restoredGameId, setRestoredGameId] = useState(null); const [games, setGames] = useState([]); const [hiddenGames, setHiddenGames] = useState([]); const [stats, setStats] = useState(() => ({ ...EMPTY_LIBRARY_STATS })); const [query, setQuery] = useState(''); const [debouncedQuery, setDebouncedQuery] = useState(''); const [view, setView] = useState('installed'); const [sourceFilters, setSourceFilters] = useState([]); const [genreFilter, setGenreFilter] = useState('all'); const [backlogFilter, setBacklogFilter] = useState('all'); const [sortKey, setSortKey] = useState('title-asc'); const [viewMode, setViewMode] = useState('grid'); const [activeGame, setActiveGame] = useState(null); const isDetailView = viewMode === 'hero' && Boolean(activeGame); const [layoutTheme, setLayoutTheme] = useState(() => localStorage.getItem('logpile-layout-theme') || 'cinematic'); const handleLayoutThemeChange = (newTheme) => { setLayoutTheme(newTheme); localStorage.setItem('logpile-layout-theme', newTheme); }; const mode = 'dark'; const [loading, setLoading] = useState(true); const [notice, setNotice] = useState(''); const [noticeTone, setNoticeTone] = useState('success'); const [scanOpen, setScanOpen] = useState(false); const [editorGame, setEditorGame] = useState(null); const [purgeOpen, setPurgeOpen] = useState(false); const [purgeBusy, setPurgeBusy] = useState(false); const [confirmModal, setConfirmModal] = useState(null); const [contextMenu, setContextMenu] = useState(null); const contextMenuRef = useRef(null); const [selectMode, setSelectMode] = useState(false); const [selectedIds, setSelectedIds] = useState([]); const [bulkEditOpen, setBulkEditOpen] = useState(false); const [bulkBusy, setBulkBusy] = useState(false); const [qualityFilters, setQualityFilters] = useState([]); const [failedImageIds, setFailedImageIds] = useState(new Set()); const [scannerStatus, setScannerStatus] = useState(null); const [isDetailHudIdle, setIsDetailHudIdle] = useState(false); const [isDetailScrolled, setIsDetailScrolled] = useState(false)
+  const [screenshotBusy, setScreenshotBusy] = useState(false)
+  const [activeCaptureAction, setActiveCaptureAction] = useState(null)
+  const [aiDrawerOpen, setAiDrawerOpen] = useState(false)
+  const [familyLocks, setFamilyLocks] = useState({})
+  const [timeFilter, setTimeFilter] = useState('all')
+  const [aiFilter, setAiFilter] = useState(null)
+  const [aiFilterQuery, setAiFilterQuery] = useState('')
+  const [aiFilterLoading, setAiFilterLoading] = useState(false)
+  const [aiFilterOpen, setAiFilterOpen] = useState(false)
+  const [isVoiceListening, setIsVoiceListening] = useState(false)
+  const [isGameRunning, setIsGameRunning] = useState(false)
+  const [checkpointPrompt, setCheckpointPrompt] = useState(null)
+  const [checkpointText, setCheckpointText] = useState('')
+  const [checkpointSaving, setCheckpointSaving] = useState(false)
+  const checkpointTimeoutRef = useRef(null)
+
+  useEffect(() => {
+    const unbindStart = window.api?.games?.onSessionStarted?.(() => setIsGameRunning(true))
+    const unbindEnd = window.api?.games?.onSessionEnded?.(() => setIsGameRunning(false))
+    const unbindPrompt = window.api?.games?.onPromptCheckpointNote?.(({ gameId, title }) => {
+      setCheckpointPrompt({ gameId, title })
+      setCheckpointText('')
+      if (checkpointTimeoutRef.current) clearTimeout(checkpointTimeoutRef.current)
+      checkpointTimeoutRef.current = setTimeout(() => {
+        setCheckpointPrompt(null)
+      }, 15000)
+    })
+    return () => {
+      unbindStart?.()
+      unbindEnd?.()
+      unbindPrompt?.()
+      if (checkpointTimeoutRef.current) clearTimeout(checkpointTimeoutRef.current)
+    }
+  }, [])
+
+  useEffect(() => {
+    const unbindVoice = window.api?.voice?.onRecognized?.((data) => {
+      if (data?.text && checkpointPrompt) {
+        setCheckpointText((prev) => (prev ? `${prev} ${data.text}` : data.text))
+        if (checkpointTimeoutRef.current) {
+          clearTimeout(checkpointTimeoutRef.current)
+          checkpointTimeoutRef.current = setTimeout(() => setCheckpointPrompt(null), 30000)
+        }
+      }
+    })
+    return () => unbindVoice?.()
+  }, [checkpointPrompt])
+
+  const handleCheckpointTextChange = (e) => {
+    setCheckpointText(e.target.value)
+    if (checkpointTimeoutRef.current) {
+      clearTimeout(checkpointTimeoutRef.current)
+      checkpointTimeoutRef.current = setTimeout(() => setCheckpointPrompt(null), 30000)
+    }
+  }
+
+  const handleSaveCheckpointNote = async () => {
+    if (!checkpointPrompt?.gameId || !checkpointText.trim()) {
+      setCheckpointPrompt(null)
+      return
+    }
+    setCheckpointSaving(true)
+    try {
+      await window.api?.games?.updateCheckpointNote?.(checkpointPrompt.gameId, checkpointText.trim())
+      setGames((prev) =>
+        prev.map((g) =>
+          g.id === checkpointPrompt.gameId
+            ? { ...g, last_checkpoint_note: checkpointText.trim(), last_checkpoint_at: new Date().toISOString() }
+            : g
+        )
+      )
+      if (activeGame?.id === checkpointPrompt.gameId) {
+        setActiveGame((prev) => ({
+          ...prev,
+          last_checkpoint_note: checkpointText.trim(),
+          last_checkpoint_at: new Date().toISOString(),
+        }))
+      }
+      setNotice('Checkpoint note saved!')
+      setNoticeTone('success')
+      setTimeout(() => setNotice(''), 3000)
+    } catch {} finally {
+      setCheckpointSaving(false)
+      setCheckpointPrompt(null)
+    }
+  }
+
+  const handleApplyAiFilter = async (queryText = aiFilterQuery) => {
+    const textToParse = (queryText || '').trim()
+    if (!textToParse) {
+      setAiFilter(null)
+      return
+    }
+    setAiFilterLoading(true)
+    try {
+      const res = await window.api?.ai?.parseFilter?.(textToParse)
+      if (res && typeof res === 'object' && Object.keys(res).length > 0) {
+        const sanitized = {}
+        if (typeof res.genre === 'string' && res.genre.trim()) sanitized.genre = res.genre.trim()
+        else if (Array.isArray(res.genre) && typeof res.genre[0] === 'string') sanitized.genre = res.genre[0].trim()
+
+        if (typeof res.max_hltb === 'number' && !isNaN(res.max_hltb) && res.max_hltb > 0) sanitized.max_hltb = Math.round(res.max_hltb)
+        if (typeof res.min_hltb === 'number' && !isNaN(res.min_hltb) && res.min_hltb > 0) sanitized.min_hltb = Math.round(res.min_hltb)
+
+        if (res.unplayed === true || res.status === 'unplayed') sanitized.unplayed = true
+        if (typeof res.status === 'string' && res.status.trim()) sanitized.status = res.status.trim()
+        if (res.installed === true) sanitized.installed = true
+        if (res.favorites === true) sanitized.favorites = true
+
+        if (typeof res.search === 'string' && res.search.trim()) sanitized.search = res.search.trim()
+        else if (Object.keys(sanitized).length === 0) sanitized.search = textToParse
+
+        setAiFilter({ ...sanitized, originalQuery: textToParse })
+      } else {
+        setAiFilter({ search: textToParse, originalQuery: textToParse })
+      }
+    } catch {
+      setAiFilter({ search: textToParse, originalQuery: textToParse })
+    } finally {
+      setAiFilterLoading(false)
+    }
+  }
+
+  const handleClearAiFilter = () => {
+    setAiFilter(null)
+    setAiFilterQuery('')
+  }
+  const [isDraggingFile, setIsDraggingFile] = useState(false)
+  const dragCounterRef = useRef(0)
+
+  useEffect(() => {
+    if (isDetailView && activeGame?.id && window.api?.overlay?.setSelectedGame) {
+      window.api.overlay.setSelectedGame({
+        id: activeGame.id,
+        title: activeGame.canonical_title,
+      }).catch(() => {})
+    } else if (!isDetailView && window.api?.overlay?.setSelectedGame) {
+      window.api.overlay.setSelectedGame(null).catch(() => {})
+    }
+  }, [isDetailView, activeGame?.id, activeGame?.canonical_title])
+
+  useEffect(() => {
+    let isMounted = true
+    api.steam?.getFamilyLocks?.().then((locks) => {
+      if (isMounted && locks) setFamilyLocks(locks)
+    }).catch(() => {})
+    const off = api.steam?.onFamilyLocksUpdated?.((locks) => {
+      if (isMounted && locks) setFamilyLocks(locks)
+    })
+    return () => {
+      isMounted = false
+      off?.()
+    }
+  }, [])
+  const [screenshotMenuOpen, setScreenshotMenuOpen] = useState(false)
+  const [bragMenuPos, setBragMenuPos] = useState({ top: 0, right: 0, openUpwards: false })
+  const bragMenuRef = useRef(null)
+  const bragDropdownRef = useRef(null)
+  const [globalSyncRunning, setGlobalSyncRunning] = useState(false)
+  const [globalSyncProgress, setGlobalSyncProgress] = useState(null)
+  const [guideSyncStatus, setGuideSyncStatus] = useState({ running: false, progress: null })
   const [libraryHealth, setLibraryHealth] = useState(null)
   const [activityLog, setActivityLog] = useState([])
   const [activityLoading, setActivityLoading] = useState(false)
@@ -4990,6 +5898,530 @@ function App() {
     setNotice(error?.message || 'Failed to update custom artwork.')
     window.setTimeout(() => setNotice(''), 3500)
   }, [])
+
+  const updateBragMenuPosition = useCallback(() => {
+    if (!bragMenuRef.current) return
+    const rect = bragMenuRef.current.getBoundingClientRect()
+    if (rect.bottom < 20 || rect.top > window.innerHeight) {
+      setScreenshotMenuOpen(false)
+      return
+    }
+    const menuEstimatedHeight = 220
+    const spaceBelow = window.innerHeight - rect.bottom
+    const spaceAbove = rect.top
+    const openUpwards = spaceBelow < menuEstimatedHeight && spaceAbove > 140
+
+    let right = window.innerWidth - rect.right
+    if (right < 16) right = 16
+
+    setBragMenuPos({
+      top: openUpwards ? rect.top - 6 : rect.bottom + 6,
+      right,
+      openUpwards,
+    })
+  }, [])
+
+  const toggleBragMenu = useCallback((e) => {
+    e?.preventDefault?.()
+    e?.stopPropagation?.()
+    if (!screenshotMenuOpen) {
+      updateBragMenuPosition()
+      setScreenshotMenuOpen(true)
+    } else {
+      setScreenshotMenuOpen(false)
+    }
+  }, [screenshotMenuOpen, updateBragMenuPosition])
+
+  const handleCaptureScreen = async () => {
+    setScreenshotMenuOpen(false)
+    setScreenshotBusy(true)
+    setActiveCaptureAction('screen')
+    setNoticeTone('info')
+    setNotice('Capturing screen...')
+    await new Promise((resolve) => setTimeout(resolve, 160))
+    try {
+      let prefix = 'Logpile-Screen-Library'
+      if (isDetailView && activeGame) {
+        const cleanTitle = (activeGame.canonical_title || 'Game').replace(/[^a-zA-Z0-9_-]/g, '_')
+        prefix = `Logpile-Screen-Dossier-${cleanTitle}-${layoutTheme}`
+      } else if (view === 'dashboard') {
+        prefix = `Logpile-Screen-Dashboard-${layoutTheme}`
+      } else if (view === 'today') {
+        prefix = `Logpile-Screen-TodaysPick-${layoutTheme}`
+      } else if (view === 'system') {
+        prefix = 'Logpile-Screen-Settings'
+      } else if (view === 'about') {
+        prefix = 'Logpile-Screen-About'
+      }
+      const res = await api.window?.captureScreen?.(prefix)
+      if (res?.success) {
+        const fileName = res.filePath ? res.filePath.split(/[/\\]/).pop() : `${prefix}.png`
+        setNoticeTone('success')
+        setNotice(`Saved to captures: ${fileName} (copied to clipboard!)`)
+      } else {
+        throw new Error(res?.error || 'Capture failed')
+      }
+    } catch (err) {
+      setNoticeTone('error')
+      setNotice(err.message || 'Failed to capture screen.')
+    } finally {
+      setScreenshotBusy(false)
+      setActiveCaptureAction(null)
+      window.setTimeout(() => setNotice(''), 4500)
+    }
+  }
+
+  const handleCaptureFullPage = async () => {
+    setScreenshotMenuOpen(false)
+    setScreenshotBusy(true)
+    setActiveCaptureAction('fullpage')
+    setNoticeTone('info')
+    setNotice('Capturing full view (whole page from top to bottom)...')
+
+    // Blur active element so cursor or input highlight does not cause redraw or scroll displacement
+    if (document.activeElement && typeof document.activeElement.blur === 'function') {
+      document.activeElement.blur()
+    }
+
+    const scrollEl = document.querySelector('.main-scroll') || document.documentElement
+    const shellEl = document.querySelector('.app-shell')
+    const originalScrollTop = scrollEl.scrollTop
+    const originalScrollBehavior = scrollEl.style.scrollBehavior
+    scrollEl.style.scrollBehavior = 'auto'
+
+    document.body.classList.add('is-fullpage-capturing')
+    if (shellEl) shellEl.classList.add('is-fullpage-capturing')
+
+    // Inject temporary override style to completely eliminate titlebar overhang, shadows, and borders
+    const overrideStyle = document.createElement('style')
+    overrideStyle.id = 'fullpage-capture-overrides'
+    overrideStyle.textContent = `
+      .titlebar {
+        overflow: hidden !important;
+      }
+      .titlebar::after,
+      .titlebar::before,
+      .app-shell .titlebar::after,
+      .app-shell:not(.is-detail-view) .titlebar::after {
+        display: none !important;
+        content: none !important;
+        height: 0px !important;
+        max-height: 0px !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+      }
+      .main-content::after {
+        display: none !important;
+        content: none !important;
+      }
+      .statusbar {
+        box-shadow: none !important;
+        border-top-color: transparent !important;
+      }
+    `
+    document.head.appendChild(overrideStyle)
+
+    const heroStage = isDetailView ? scrollEl.querySelector('.cinematic-hero-stage') : null
+    const dossierSection = isDetailView ? scrollEl.querySelector('.cinematic-dossier-section') : null
+    const backdropWrap = isDetailView ? document.querySelector('.global-detail-backdrop-wrap') : null
+    const scrollPill = isDetailView ? scrollEl.querySelector('.cinematic-scroll-pill') : null
+
+    const cleanupCaptureState = () => {
+      try {
+        overrideStyle.remove()
+      } catch {}
+      if (heroStage) heroStage.style.display = ''
+      if (backdropWrap) backdropWrap.style.display = ''
+      if (scrollPill) scrollPill.style.display = ''
+      document.body.classList.remove('is-fullpage-capturing')
+      if (shellEl) shellEl.classList.remove('is-fullpage-capturing')
+      scrollEl.scrollTop = originalScrollTop
+      scrollEl.style.scrollBehavior = originalScrollBehavior
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 80))
+
+    let prefix = 'Logpile-FullView-Library'
+    if (isDetailView && activeGame) {
+      const cleanTitle = (activeGame.canonical_title || 'Game').replace(/[^a-zA-Z0-9_-]/g, '_')
+      prefix = `Logpile-FullDossier-${cleanTitle}-${layoutTheme}`
+    } else if (view === 'dashboard') {
+      prefix = `Logpile-FullDashboard-${layoutTheme}`
+    } else if (view === 'today') {
+      prefix = `Logpile-FullTodaysPick-${layoutTheme}`
+    } else if (view === 'system') {
+      prefix = 'Logpile-FullSettings'
+    } else if (view === 'about') {
+      prefix = 'Logpile-FullAbout'
+    }
+
+    try {
+      const rect = scrollEl.getBoundingClientRect()
+      const totalHeight = scrollEl.scrollHeight
+      const viewportHeight = scrollEl.clientHeight
+      const captureWidth = Math.round(rect.width)
+      const captureHeight = viewportHeight || Math.round(rect.height)
+      const captureY = Math.round(rect.y)
+
+      const heroHeight = (heroStage && dossierSection) ? (Math.round(heroStage.getBoundingClientRect().height) || captureHeight) : 0
+      const dossierHeight = (heroStage && dossierSection) ? (Math.round(dossierSection.scrollHeight) || Math.round(dossierSection.getBoundingClientRect().height)) : 0
+      const totalHeightToCapture = (heroStage && dossierSection) ? (heroHeight + dossierHeight) : totalHeight
+
+      // If already fits within single viewport or invalid width, capture directly with full view prefix
+      if (totalHeightToCapture <= viewportHeight + 10 || captureWidth <= 10) {
+        cleanupCaptureState()
+        const directRes = await api.window?.captureScreen?.(prefix)
+        if (directRes?.success) {
+          const fileName = directRes.filePath ? directRes.filePath.split(/[/\\]/).pop() : `${prefix}.png`
+          setNoticeTone('success')
+          setNotice(`Saved whole view capture: ${fileName} (copied to clipboard!)`)
+          return
+        }
+        throw new Error(directRes?.error || 'Failed capturing view')
+      }
+
+      // Capture top slice at scrollTop = 0
+      scrollEl.scrollTop = 0
+      await new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 150)))
+      })
+
+      const firstRes = await api.window?.captureRect?.({
+        x: Math.round(rect.x),
+        y: captureY,
+        width: captureWidth,
+        height: captureHeight,
+      })
+
+      if (!firstRes?.success || !firstRes?.dataUrl) {
+        throw new Error(firstRes?.error || 'Failed capturing view segment')
+      }
+
+      const firstImg = new Image()
+      firstImg.src = firstRes.dataUrl
+      await new Promise((resolve, reject) => {
+        firstImg.onload = resolve
+        firstImg.onerror = reject
+      })
+
+      let scale = firstImg.naturalWidth / captureWidth
+      const rawCanvasHeight = Math.round(totalHeightToCapture * scale)
+      const maxDim = 16384
+      if (rawCanvasHeight > maxDim) {
+        scale = maxDim / totalHeightToCapture
+      }
+
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.round(captureWidth * scale)
+      canvas.height = Math.round(totalHeightToCapture * scale)
+      const ctx = canvas.getContext('2d')
+      ctx.imageSmoothingEnabled = true
+      ctx.imageSmoothingQuality = 'high'
+
+      // Exact DIP height actually captured by the window
+      const stepDips = firstRes.capturedHeight || captureHeight
+      const stepCanvasHeight = Math.round(stepDips * scale)
+
+      // Draw top slice (from 0 to stepDips)
+      ctx.drawImage(
+        firstImg,
+        0, 0, firstImg.naturalWidth, firstImg.naturalHeight,
+        0, 0, canvas.width, stepCanvasHeight
+      )
+
+      if (heroStage && dossierSection) {
+        // Hide fixed hero stage and backdrop so subsequent slices only scroll and capture dossier content
+        heroStage.style.display = 'none'
+        if (backdropWrap) backdropWrap.style.display = 'none'
+        if (scrollPill) scrollPill.style.display = 'none'
+
+        scrollEl.scrollTop = 0
+        await new Promise((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 150)))
+        })
+
+        let currentDossierY = 0
+        let currentCanvasY = stepCanvasHeight
+
+        while (currentDossierY < dossierHeight) {
+          const remainingDips = dossierHeight - currentDossierY
+          if (remainingDips <= 0) break
+
+          if (remainingDips >= stepDips) {
+            scrollEl.scrollTop = currentDossierY
+            await new Promise((resolve) => {
+              requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 150)))
+            })
+
+            const sliceRes = await api.window?.captureRect?.({
+              x: Math.round(rect.x),
+              y: captureY,
+              width: captureWidth,
+              height: stepDips,
+            })
+
+            if (!sliceRes?.success || !sliceRes?.dataUrl) {
+              throw new Error(sliceRes?.error || 'Failed capturing view segment')
+            }
+
+            const sliceImg = new Image()
+            sliceImg.src = sliceRes.dataUrl
+            await new Promise((resolve, reject) => {
+              sliceImg.onload = resolve
+              sliceImg.onerror = reject
+            })
+
+            ctx.drawImage(
+              sliceImg,
+              0, 0, sliceImg.naturalWidth, sliceImg.naturalHeight,
+              0, currentCanvasY, canvas.width, stepCanvasHeight
+            )
+
+            currentDossierY += stepDips
+            currentCanvasY += stepCanvasHeight
+          } else {
+            // Final slice of dossier
+            const bottomScrollTop = Math.max(0, dossierHeight - stepDips)
+            scrollEl.scrollTop = bottomScrollTop
+            await new Promise((resolve) => {
+              requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 150)))
+            })
+
+            const lastRes = await api.window?.captureRect?.({
+              x: Math.round(rect.x),
+              y: captureY,
+              width: captureWidth,
+              height: stepDips,
+            })
+
+            if (!lastRes?.success || !lastRes?.dataUrl) {
+              throw new Error(lastRes?.error || 'Failed capturing view segment')
+            }
+
+            const lastImg = new Image()
+            lastImg.src = lastRes.dataUrl
+            await new Promise((resolve, reject) => {
+              lastImg.onload = resolve
+              lastImg.onerror = reject
+            })
+
+            const sourceCropY = dossierHeight >= stepDips
+              ? Math.round((stepDips - remainingDips) * (lastImg.naturalHeight / stepDips))
+              : 0
+            const sourceCropH = Math.min(
+              lastImg.naturalHeight - sourceCropY,
+              Math.round(remainingDips * (lastImg.naturalHeight / stepDips))
+            )
+            const destCropH = canvas.height - currentCanvasY
+
+            ctx.drawImage(
+              lastImg,
+              0, sourceCropY, lastImg.naturalWidth, sourceCropH,
+              0, currentCanvasY, canvas.width, destCropH
+            )
+
+            currentDossierY = dossierHeight
+            currentCanvasY = canvas.height
+            break
+          }
+        }
+      } else {
+        // Standard view scrolling capture (Dashboard, Settings, Library Grid)
+        let currentScrolledDips = stepDips
+        let currentCanvasY = stepCanvasHeight
+
+        while (currentScrolledDips < totalHeight) {
+          const remainingDips = totalHeight - currentScrolledDips
+          if (remainingDips <= 0) break
+
+          if (remainingDips >= stepDips) {
+            // Advance by exact captured height (zero overlap, zero skipped pixels)
+            scrollEl.scrollTop = currentScrolledDips
+            await new Promise((resolve) => {
+              requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 150)))
+            })
+
+            const sliceRes = await api.window?.captureRect?.({
+              x: Math.round(rect.x),
+              y: captureY,
+              width: captureWidth,
+              height: stepDips,
+            })
+
+            if (!sliceRes?.success || !sliceRes?.dataUrl) {
+              throw new Error(sliceRes?.error || 'Failed capturing view segment')
+            }
+
+            const sliceImg = new Image()
+            sliceImg.src = sliceRes.dataUrl
+            await new Promise((resolve, reject) => {
+              sliceImg.onload = resolve
+              sliceImg.onerror = reject
+            })
+
+            ctx.drawImage(
+              sliceImg,
+              0, 0, sliceImg.naturalWidth, sliceImg.naturalHeight,
+              0, currentCanvasY, canvas.width, stepCanvasHeight
+            )
+
+            currentScrolledDips += stepDips
+            currentCanvasY += stepCanvasHeight
+          } else {
+            // Final slice: scroll to very bottom and crop only the exact remaining tail
+            const bottomScrollTop = Math.max(0, totalHeight - stepDips)
+            scrollEl.scrollTop = bottomScrollTop
+            await new Promise((resolve) => {
+              requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 150)))
+            })
+
+            const lastRes = await api.window?.captureRect?.({
+              x: Math.round(rect.x),
+              y: captureY,
+              width: captureWidth,
+              height: stepDips,
+            })
+
+            if (!lastRes?.success || !lastRes?.dataUrl) {
+              throw new Error(lastRes?.error || 'Failed capturing view segment')
+            }
+
+            const lastImg = new Image()
+            lastImg.src = lastRes.dataUrl
+            await new Promise((resolve, reject) => {
+              lastImg.onload = resolve
+              lastImg.onerror = reject
+            })
+
+            // In this bottom-anchored capture, only the bottom `remainingDips` is needed
+            const sourceCropY = totalHeight >= stepDips
+              ? Math.round((stepDips - remainingDips) * (lastImg.naturalHeight / stepDips))
+              : 0
+            const sourceCropH = Math.min(
+              lastImg.naturalHeight - sourceCropY,
+              Math.round(remainingDips * (lastImg.naturalHeight / stepDips))
+            )
+            const destCropH = canvas.height - currentCanvasY
+
+            ctx.drawImage(
+              lastImg,
+              0, sourceCropY, lastImg.naturalWidth, sourceCropH,
+              0, currentCanvasY, canvas.width, destCropH
+            )
+
+            currentScrolledDips = totalHeight
+            currentCanvasY = canvas.height
+            break
+          }
+        }
+      }
+
+      // Restore scrolling state
+      cleanupCaptureState()
+
+      const finalDataUrl = canvas.toDataURL('image/png')
+      const saveRes = await api.window?.saveBragCollage?.(finalDataUrl, prefix)
+      if (saveRes?.success) {
+        const fileName = saveRes.filePath ? saveRes.filePath.split(/[/\\]/).pop() : `${prefix}.png`
+        setNoticeTone('success')
+        setNotice(`Saved whole view capture: ${fileName} (copied to clipboard!)`)
+      } else {
+        throw new Error(saveRes?.error || 'Failed to save whole view')
+      }
+    } catch (err) {
+      console.error('[FullPageCapture] Error:', err)
+      setNoticeTone('error')
+      setNotice(err.message || 'Failed to capture full view.')
+    } finally {
+      cleanupCaptureState()
+      setScreenshotBusy(false)
+      setActiveCaptureAction(null)
+      window.setTimeout(() => setNotice(''), 4500)
+    }
+  }
+
+  const handleSnapHero = useCallback(async (gameToSnap = activeGame) => {
+    if (!gameToSnap) return
+    setScreenshotBusy(true)
+    setActiveCaptureAction('hero')
+    setNoticeTone('info')
+    setNotice(`Snapping ${layoutTheme} hero view for "${gameToSnap.canonical_title}"...`)
+    await new Promise((resolve) => setTimeout(resolve, 160))
+    try {
+      const cleanTitle = (gameToSnap.canonical_title || 'Game').replace(/[^a-zA-Z0-9_-]/g, '_')
+      const prefix = `Logpile-Hero-${cleanTitle}-${layoutTheme}`
+      const res = await api.window?.captureScreen?.(prefix)
+      if (res?.success) {
+        const fileName = res.filePath ? res.filePath.split(/[/\\]/).pop() : `${prefix}.png`
+        setNoticeTone('success')
+        setNotice(`Saved to captures: ${fileName} (copied to clipboard!)`)
+      } else {
+        throw new Error(res?.error || 'Capture failed')
+      }
+    } catch (err) {
+      console.error('Failed to snap hero view:', err)
+      setNoticeTone('error')
+      setNotice(err.message || 'Failed to capture hero view.')
+    } finally {
+      setScreenshotBusy(false)
+      setActiveCaptureAction(null)
+      window.setTimeout(() => setNotice(''), 4500)
+    }
+  }, [activeGame, layoutTheme])
+
+  const handleCaptureFilteredShowcase = async (aspectRatio = 'auto') => {
+    setScreenshotMenuOpen(false)
+    setScreenshotBusy(true)
+    setActiveCaptureAction('showcase')
+    const count = filteredGames.length
+    if (count === 0) {
+      setNoticeTone('warning')
+      setNotice('No titles match your current filters to showcase.')
+      setScreenshotBusy(false)
+      return
+    }
+    const themeName = LAYOUT_THEMES.find((t) => t.value === layoutTheme)?.label || layoutTheme
+    const title = collectionHeading || 'Game Sanctuary'
+    const ratioLabel = aspectRatio === 'auto' ? 'Full Grid' : aspectRatio
+    setNoticeTone('info')
+    setNotice(`Rendering ${title} showcase (${count} titles in ${themeName} theme, ${ratioLabel})...`)
+    await new Promise((resolve) => setTimeout(resolve, 160))
+    try {
+      const collageDataUrl = await generateBragCollage(filteredGames, stats, {
+        layoutTheme,
+        viewTitle: title,
+        aspectRatio,
+      })
+      const cleanHeading = title.replace(/[^a-zA-Z0-9_-]/g, '_')
+      const ratioSuffix = aspectRatio === 'auto' ? 'full' : aspectRatio.replace(':', 'x')
+      const prefix = `Logpile-Showcase-${cleanHeading}-${layoutTheme}-${ratioSuffix}`
+      const res = await api.window?.saveBragCollage?.(collageDataUrl, prefix)
+      if (res?.success) {
+        const fileName = res.filePath ? res.filePath.split(/[/\\]/).pop() : `${prefix}.png`
+        setNoticeTone('success')
+        setNotice(`Saved 4K showcase (${ratioLabel}) to captures: ${fileName} (copied to clipboard!)`)
+      } else {
+        throw new Error(res?.error || 'Save failed')
+      }
+    } catch (err) {
+      console.error('Failed to generate showcase collage:', err)
+      setNoticeTone('error')
+      setNotice(err.message || 'Failed to generate showcase collage.')
+    } finally {
+      setScreenshotBusy(false)
+      setActiveCaptureAction(null)
+      window.setTimeout(() => setNotice(''), 6000)
+    }
+  }
+
+  const handleOpenCapturesFolder = async () => {
+    setScreenshotMenuOpen(false)
+    try {
+      await (api.window?.openCapturesFolder || api.window?.openPicturesFolder)?.()
+    } catch (err) {
+      console.warn('Failed to open captures folder:', err)
+    }
+  }
   const handleCardContextMenu = (event, game) => { event.preventDefault(); event.stopPropagation(); const left = event.clientX + MENU_WIDTH > window.innerWidth ? Math.max(MENU_PADDING, window.innerWidth - MENU_WIDTH - MENU_PADDING) : event.clientX; const top = event.clientY + MENU_HEIGHT > window.innerHeight ? Math.max(MENU_PADDING, event.clientY - MENU_HEIGHT) : event.clientY; setContextMenu({ game, anchorX: event.clientX, anchorY: event.clientY, x: left, y: top }) }
   const handleSelectGame = useCallback((game, originSource = 'grid') => {
     const currentScroll = mainScrollRef.current?.scrollTop || 0
@@ -5035,11 +6467,23 @@ function App() {
   const handleExportSelected = async () => { if (!selectedIds.length) return; setBulkBusy(true); try { const result = await api.database.exportSelectedCsv(selectedIds); if (result) { setNoticeTone('success'); setNotice(`Exported ${result.rows} selected record${result.rows === 1 ? '' : 's'} to CSV.`); window.setTimeout(() => setNotice(''), 4000) } } catch (error) { setNoticeTone('error'); setNotice(error.message || 'Selected records could not be exported.') } finally { setBulkBusy(false) } }
   const handleBackupCache = async () => { const result = await api.scraper.backupCache(); if (result) { setNoticeTone('success'); setNotice(`Artwork backup saved with ${result.files} file${result.files === 1 ? '' : 's'}.`); window.setTimeout(() => setNotice(''), 4000) } }
   const handleRestoreCache = async () => { const result = await api.scraper.restoreCache(); if (result) { await loadData(); setNoticeTone('success'); setNotice(`Artwork cache restored: ${result.files} file${result.files === 1 ? '' : 's'} extracted.`); window.setTimeout(() => setNotice(''), 4000) } }
-  const handleCancelSync = async () => { const result = await api.scraper.cancelSync(); if (result?.cancelled) { setNoticeTone('warning'); setNotice('Sync cancellation requested.'); window.setTimeout(() => setNotice(''), 3000) } }
+  const handleCancelGlobalSync = async () => {
+    try {
+      const result = await api.scraper?.cancelSync?.()
+      if (result?.cancelled) {
+        setNoticeTone('warning')
+        setNotice('Sync cancellation requested.')
+        window.setTimeout(() => setNotice(''), 3000)
+      }
+    } catch (err) {
+      console.warn('Failed to cancel sync:', err)
+    }
+  }
+  const handleCancelSync = handleCancelGlobalSync
   const handlePurge = async () => { setPurgeBusy(true); try { const result = await api.database.purgeLibrary(); setPurgeOpen(false); setGames([]); setHiddenGames([]); setActiveGame(null); setSourceFilters([]); setStats({ ...EMPTY_LIBRARY_STATS }); setNoticeTone('success'); setNotice(`Library purged: ${result.deletedGames} records removed. Artwork cache preserved.`); await loadData(); window.setTimeout(() => setNotice(''), 5000) } catch (error) { setNoticeTone('error'); setNotice(error.message || 'Library purge failed.') } finally { setPurgeBusy(false) } }
   const loadData = async ({ preserveScroll = false } = {}) => {
     const scrollTop = preserveScroll ? mainScrollRef.current?.scrollTop || 0 : null
-    if (!preserveScroll) setLoading(true)
+    if (!preserveScroll && !games.length) setLoading(true)
     try {
       if (!hasSeededRef.current) {
         hasSeededRef.current = true
@@ -5055,7 +6499,11 @@ function App() {
       const nextGames = await nextGamesPromise
       const consolidated = consolidateGames(Array.isArray(nextGames) ? nextGames : [])
       setGames(consolidated)
-      if (!preserveScroll) setLoading(false)
+      setActiveGame((current) => {
+        if (!current) return current;
+        const updated = consolidated.find((g) => g.id === current.id);
+        return updated ? { ...current, ...updated } : current;
+      });
 
       statsPromise.then((nextStats) => {
         if (nextStats) setStats(normalizeLibraryStats(nextStats))
@@ -5074,8 +6522,10 @@ function App() {
         }
         return next
       })
-    } catch (error) { setNotice(error.message || 'Unable to read the local library database.'); if (!preserveScroll) setLoading(false) }
-    finally {
+    } catch (error) {
+      setNotice(error.message || 'Unable to read the local library database.')
+    } finally {
+      setLoading(false)
       if (preserveScroll && scrollTop !== null) {
         window.requestAnimationFrame(() => {
           if (mainScrollRef.current) mainScrollRef.current.scrollTop = scrollTop
@@ -5086,7 +6536,36 @@ function App() {
       }
     }
   }
-  useEffect(() => { loadData() }, [view, sortKey, qualityFilters]); useEffect(() => { const close = () => setContextMenu(null); window.addEventListener('pointerdown', close); window.addEventListener('click', close); window.addEventListener('contextmenu', close); window.addEventListener('scroll', close, true); return () => { window.removeEventListener('pointerdown', close); window.removeEventListener('click', close); window.removeEventListener('contextmenu', close); window.removeEventListener('scroll', close, true) } }, []); useLayoutEffect(() => { if (!contextMenu || !contextMenuRef.current) return; const bounds = contextMenuRef.current.getBoundingClientRect(); const menuWidth = bounds.width || MENU_WIDTH; const menuHeight = bounds.height || MENU_HEIGHT; const anchorX = contextMenu.anchorX; const anchorY = contextMenu.anchorY; const left = anchorX + menuWidth > window.innerWidth ? Math.max(MENU_PADDING, window.innerWidth - menuWidth - MENU_PADDING) : anchorX; const top = anchorY + menuHeight > window.innerHeight ? Math.max(MENU_PADDING, anchorY - menuHeight) : anchorY; const clampedLeft = Math.max(MENU_PADDING, Math.min(left, Math.max(MENU_PADDING, window.innerWidth - menuWidth - MENU_PADDING))); const clampedTop = Math.max(MENU_PADDING, Math.min(top, Math.max(MENU_PADDING, window.innerHeight - menuHeight - MENU_PADDING))); if (clampedLeft !== contextMenu.x || clampedTop !== contextMenu.y) setContextMenu((current) => current ? { ...current, x: clampedLeft, y: clampedTop } : current) }, [contextMenu]); useEffect(() => { const offArtwork = api.scraper.onUpdated?.(() => loadData({ preserveScroll: true })); const offLibrary = api.database.onUpdated?.(() => loadData({ preserveScroll: true })); return () => { offArtwork?.(); offLibrary?.() } }, [view, sortKey, qualityFilters]); useEffect(() => { const timer = setTimeout(() => setDebouncedQuery(query), 150); return () => clearTimeout(timer) }, [query]); useEffect(() => { localStorage.setItem('logpile-layout-theme', layoutTheme) }, [layoutTheme]);
+
+  const handleToggleFavorite = useCallback(async (game) => {
+    if (!game) return
+    const nextFav = !game.is_favorite
+    const updatedGame = { ...game, is_favorite: nextFav }
+    setActiveGame((prev) => (prev?.id === game.id ? { ...prev, ...updatedGame } : prev))
+    setGames((prev) => prev.map((g) => (g.id === game.id ? { ...g, ...updatedGame } : g)))
+    setNoticeTone('success')
+    setNotice(nextFav ? `Added "${game.canonical_title}" to favorites.` : `Removed "${game.canonical_title}" from favorites.`)
+    window.setTimeout(() => setNotice(''), 3000)
+    try {
+      await api.database.updateGameMetadata(game.id, { is_favorite: nextFav ? 1 : 0 })
+      await loadData({ preserveScroll: true })
+    } catch (err) {
+      console.error('Failed to update favorite status:', err)
+      setNoticeTone('error')
+      setNotice(err.message || 'Failed to update favorite.')
+    }
+  }, [loadData])
+  useEffect(() => { loadData() }, [view, sortKey, qualityFilters]); useEffect(() => { const close = (e) => { setContextMenu(null); if (bragMenuRef.current && bragMenuRef.current.contains(e.target)) return; if (bragDropdownRef.current && bragDropdownRef.current.contains(e.target)) return; setScreenshotMenuOpen(false); }; window.addEventListener('pointerdown', close); window.addEventListener('click', close); window.addEventListener('contextmenu', close); window.addEventListener('scroll', close, true); return () => { window.removeEventListener('pointerdown', close); window.removeEventListener('click', close); window.removeEventListener('contextmenu', close); window.removeEventListener('scroll', close, true) } }, []);
+  useEffect(() => {
+    if (!screenshotMenuOpen) return
+    const handleReposition = () => updateBragMenuPosition()
+    window.addEventListener('resize', handleReposition)
+    window.addEventListener('scroll', handleReposition, true)
+    return () => {
+      window.removeEventListener('resize', handleReposition)
+      window.removeEventListener('scroll', handleReposition, true)
+    }
+  }, [screenshotMenuOpen, updateBragMenuPosition]); useLayoutEffect(() => { if (!contextMenu || !contextMenuRef.current) return; const bounds = contextMenuRef.current.getBoundingClientRect(); const menuWidth = bounds.width || MENU_WIDTH; const menuHeight = bounds.height || MENU_HEIGHT; const anchorX = contextMenu.anchorX; const anchorY = contextMenu.anchorY; const left = anchorX + menuWidth > window.innerWidth ? Math.max(MENU_PADDING, window.innerWidth - menuWidth - MENU_PADDING) : anchorX; const top = anchorY + menuHeight > window.innerHeight ? Math.max(MENU_PADDING, anchorY - menuHeight) : anchorY; const clampedLeft = Math.max(MENU_PADDING, Math.min(left, Math.max(MENU_PADDING, window.innerWidth - menuWidth - MENU_PADDING))); const clampedTop = Math.max(MENU_PADDING, Math.min(top, Math.max(MENU_PADDING, window.innerHeight - menuHeight - MENU_PADDING))); if (clampedLeft !== contextMenu.x || clampedTop !== contextMenu.y) setContextMenu((current) => current ? { ...current, x: clampedLeft, y: clampedTop } : current) }, [contextMenu]); useEffect(() => { const offArtwork = api.scraper.onUpdated?.(() => loadData({ preserveScroll: true })); const offLibrary = api.database.onUpdated?.(() => loadData({ preserveScroll: true })); return () => { offArtwork?.(); offLibrary?.() } }, [view, sortKey, qualityFilters]); useEffect(() => { const timer = setTimeout(() => setDebouncedQuery(query), 150); return () => clearTimeout(timer) }, [query]); useEffect(() => { localStorage.setItem('logpile-layout-theme', layoutTheme) }, [layoutTheme]);
   useEffect(() => {
     let isMounted = true
     const offProgress = api.scanner.onProgress?.((payload) => {
@@ -5100,6 +6579,60 @@ function App() {
     return () => {
       isMounted = false
       offProgress?.()
+    }
+  }, [])
+
+  useEffect(() => {
+    let isMounted = true
+    api.scraper?.isSyncing?.().then((res) => {
+      if (isMounted && res?.syncing) {
+        setGlobalSyncRunning(true)
+      }
+    }).catch(() => {})
+
+    const offProgress = api.scraper?.onProgress?.((p) => {
+      if (!isMounted) return
+      const norm = normalizeSyncProgress(p)
+      if (norm?.phase === 'complete') {
+        setGlobalSyncRunning(false)
+        setGlobalSyncProgress(null)
+        if (norm.message) {
+          setNoticeTone('success')
+          setNotice(norm.message)
+        }
+      } else {
+        setGlobalSyncRunning(true)
+        setGlobalSyncProgress(norm)
+      }
+    })
+    return () => {
+      isMounted = false
+      offProgress?.()
+    }
+  }, [])
+
+  useEffect(() => {
+    let isMounted = true
+    if (window.api?.guides?.getStatus) {
+      window.api.guides.getStatus().then((st) => {
+        if (isMounted && st?.running) {
+          setGuideSyncStatus(st)
+        }
+      }).catch(() => {})
+    }
+    const unsub = window.api?.guides?.onBatchProgress?.((data) => {
+      if (!isMounted) return
+      if (data && typeof data.running === 'boolean') {
+        setGuideSyncStatus(data)
+      } else if (data) {
+        setGuideSyncStatus({ running: true, progress: data })
+      } else {
+        setGuideSyncStatus({ running: false, progress: null })
+      }
+    })
+    return () => {
+      isMounted = false
+      if (typeof unsub === 'function') unsub()
     }
   }, [])
   const handleBackToLibrary = useCallback(() => {
@@ -5205,10 +6738,113 @@ function App() {
     { value: 'completed', label: 'Completed' },
     { value: 'dropped', label: 'Dropped' },
   ], [])
-  const filteredGames = useMemo(() => { let result = strictTitleSearch(games, debouncedQuery); if (view === 'installed') result = result.filter((game) => game.is_installed && !game.is_utility && !game.is_dlc); if (view === 'ready') result = result.filter((game) => !game.is_installed && !game.is_utility && !game.is_dlc); if (view === 'utilities') result = result.filter((game) => game.is_utility); if (view === 'dlc') result = result.filter((game) => game.is_dlc && !game.is_utility); if (view !== 'utilities' && view !== 'dlc' && view !== 'system') result = result.filter((game) => !game.is_utility && !game.is_dlc); if (qualityFilters.includes('missingArtwork')) { result = result.filter((game) => { const artwork = String(game.cover_url ?? '').trim().toLowerCase(); const hasNoArt = !artwork || artwork === 'null' || artwork === 'undefined'; return hasNoArt || failedImageIds.has(game.id) }) } if (qualityFilters.includes('missingIds')) result = result.filter((game) => { const id = String(game.steamgriddb_id ?? '').trim().toLowerCase(); return !id || id === 'null' || id === 'undefined' }); if (sourceFilters.length) result = result.filter((game) => sourceFilters.some((source) => sourceLabelsForGame(game).some((label) => sourceKey(label) === source))); if (genreFilter !== 'all') result = result.filter((game) => String(game.genres || game.genre || '').split(',').map((genre) => genre.trim()).includes(genreFilter)); if (backlogFilter !== 'all') result = result.filter((game) => game.backlog_status === backlogFilter); return result.sort((a, b) => { if (debouncedQuery.trim()) { const rank = titleSearchRank(a.canonical_title, debouncedQuery) - titleSearchRank(b.canonical_title, debouncedQuery); if (rank) return rank } if (sortKey === 'title-desc') return b.canonical_title.localeCompare(a.canonical_title); if (sortKey === 'size-desc') return (b.install_size_bytes || 0) - (a.install_size_bytes || 0); if (sortKey === 'drive-asc') return String(a.drive_letter || 'Z:').localeCompare(String(b.drive_letter || 'Z:')); if (sortKey === 'last-played') return String(b.last_played || '').localeCompare(String(a.last_played || '')); if (sortKey === 'platform') return platformLabel(sourcePlatforms(a.sources)[0] || '').localeCompare(platformLabel(sourcePlatforms(b.sources)[0] || '')); return a.canonical_title.localeCompare(b.canonical_title) }) }, [games, debouncedQuery, view, sourceFilters, genreFilter, backlogFilter, sortKey, qualityFilters, failedImageIds])
-  const filteredRecordIds = useMemo(() => [...new Set(filteredGames.flatMap((game) => (game.variants || [game]).map((variant) => variant.id).filter(Boolean)))], [filteredGames])
-  const isHomeView = !query && !debouncedQuery && !selectMode && genreFilter === 'all' && backlogFilter === 'all' && qualityFilters.length === 0 && sourceFilters.length === 0 && (view === 'all' || view === 'installed')
+  const timeOptions = useMemo(() => [
+    { value: 'all', label: 'All playtimes' },
+    { value: 'under5', label: '< 5 Hours (Bite-sized)' },
+    { value: '5to20', label: '5 – 20 Hours (Standard)' },
+    { value: '20to50', label: '20 – 50 Hours (Long)' },
+    { value: '50plus', label: '50+ Hours (Epic)' },
+  ], [])
+  const filteredGames = useMemo(() => {
+    let result = strictTitleSearch(games, debouncedQuery)
+    if (view === 'installed') result = result.filter((game) => game.is_installed && !game.is_utility && !game.is_dlc)
+    if (view === 'favorites') result = result.filter((game) => Boolean(game.is_favorite) && !game.is_utility && !game.is_dlc)
+    if (view === 'ready') result = result.filter((game) => !game.is_installed && !game.is_utility && !game.is_dlc)
+    if (view === 'utilities') result = result.filter((game) => game.is_utility)
+    if (view === 'dlc') result = result.filter((game) => game.is_dlc && !game.is_utility)
+    if (view !== 'utilities' && view !== 'dlc' && view !== 'system') result = result.filter((game) => !game.is_utility && !game.is_dlc)
+    if (qualityFilters.includes('missingArtwork')) {
+      result = result.filter((game) => {
+        const artwork = String(game.cover_url ?? '').trim().toLowerCase()
+        const hasNoArt = !artwork || artwork === 'null' || artwork === 'undefined'
+        return hasNoArt || failedImageIds.has(game.id)
+      })
+    }
+    if (qualityFilters.includes('missingIds')) result = result.filter((game) => {
+      const id = String(game.steamgriddb_id ?? '').trim().toLowerCase()
+      return !id || id === 'null' || id === 'undefined'
+    })
+    if (qualityFilters.includes('missingGuide')) {
+      result = result.filter((game) => !game.has_guide)
+    }
+    if (sourceFilters.length) result = result.filter((game) => sourceFilters.some((source) => sourceLabelsForGame(game).some((label) => sourceKey(label) === source)))
+    if (genreFilter !== 'all') result = result.filter((game) => String(game.genres || game.genre || '').split(',').map((genre) => genre.trim()).includes(genreFilter))
+    if (backlogFilter !== 'all') result = result.filter((game) => game.backlog_status === backlogFilter)
+    if (timeFilter === 'under5') result = result.filter((game) => game.hltb_main_hours && game.hltb_main_hours < 5)
+    if (timeFilter === '5to20') result = result.filter((game) => game.hltb_main_hours && game.hltb_main_hours >= 5 && game.hltb_main_hours <= 20)
+    if (timeFilter === '20to50') result = result.filter((game) => game.hltb_main_hours && game.hltb_main_hours > 20 && game.hltb_main_hours <= 50)
+    if (timeFilter === '50plus') result = result.filter((game) => game.hltb_main_hours && game.hltb_main_hours > 50)
+
+    if (aiFilter) {
+      try {
+        if (aiFilter.genre) {
+          const targetGenre = String(aiFilter.genre).toLowerCase()
+          result = result.filter((game) => {
+            const gStr = String(game?.genres || game?.genre || '').toLowerCase()
+            if (targetGenre === 'rpg' || targetGenre.includes('rpg')) {
+              return gStr.includes('rpg') || gStr.includes('role-playing')
+            }
+            return gStr.includes(targetGenre)
+          })
+        }
+        if (typeof aiFilter.max_hltb === 'number' && aiFilter.max_hltb > 0) {
+          result = result.filter((game) => {
+            return game?.hltb_main_hours && game.hltb_main_hours <= aiFilter.max_hltb
+          })
+        }
+        if (typeof aiFilter.min_hltb === 'number' && aiFilter.min_hltb > 0) {
+          result = result.filter((game) => {
+            return game?.hltb_main_hours && game.hltb_main_hours >= aiFilter.min_hltb
+          })
+        }
+        if (aiFilter.unplayed === true || aiFilter.status === 'unplayed') {
+          result = result.filter((game) => {
+            return game?.backlog_status === 'unplayed' || !game?.playtime_seconds || game.playtime_seconds === 0
+          })
+        } else if (aiFilter.status && aiFilter.status !== 'all') {
+          result = result.filter((game) => game?.backlog_status === String(aiFilter.status))
+        }
+        if (aiFilter.installed === true) {
+          result = result.filter((game) => Boolean(game?.is_installed))
+        }
+        if (aiFilter.favorites === true) {
+          result = result.filter((game) => Boolean(game?.is_favorite))
+        }
+        if (aiFilter.search) {
+          const s = String(aiFilter.search).toLowerCase()
+          result = result.filter((game) => String(game?.canonical_title || '').toLowerCase().includes(s))
+        }
+      } catch {}
+    }
+
+    return result.sort((a, b) => {
+      const titleA = String(a?.canonical_title || '')
+      const titleB = String(b?.canonical_title || '')
+      if (debouncedQuery.trim()) {
+        const rank = titleSearchRank(titleA, debouncedQuery) - titleSearchRank(titleB, debouncedQuery)
+        if (rank) return rank
+      }
+      if (sortKey === 'title-desc') return titleB.localeCompare(titleA)
+      if (sortKey === 'size-desc') return (b?.install_size_bytes || 0) - (a?.install_size_bytes || 0)
+      if (sortKey === 'drive-asc') return String(a?.drive_letter || 'Z:').localeCompare(String(b?.drive_letter || 'Z:'))
+      if (sortKey === 'last-played') return String(b?.last_played || '').localeCompare(String(a?.last_played || ''))
+      if (sortKey === 'platform') return platformLabel(sourcePlatforms(a?.sources)[0] || '').localeCompare(platformLabel(sourcePlatforms(b?.sources)[0] || ''))
+      return titleA.localeCompare(titleB)
+    })
+  }, [games, debouncedQuery, view, sourceFilters, genreFilter, backlogFilter, timeFilter, sortKey, qualityFilters, failedImageIds, aiFilter])
+  const filteredRecordIds = useMemo(() => [...new Set(filteredGames.flatMap((game) => (game?.variants || [game]).map((variant) => variant?.id).filter(Boolean)))], [filteredGames])
+  const isHomeView = !query && !debouncedQuery && !selectMode && !aiFilter && genreFilter === 'all' && backlogFilter === 'all' && timeFilter === 'all' && qualityFilters.length === 0 && sourceFilters.length === 0 && (view === 'all' || view === 'installed')
   const collectionHeading = useMemo(() => {
+    if (aiFilter) {
+      const parts = []
+      if (aiFilter.genre) parts.push(String(aiFilter.genre))
+      if (aiFilter.max_hltb) parts.push(`≤ ${aiFilter.max_hltb}h`)
+      if (aiFilter.min_hltb) parts.push(`≥ ${aiFilter.min_hltb}h`)
+      if (aiFilter.unplayed) parts.push('Unplayed')
+      else if (aiFilter.status) parts.push(String(aiFilter.status))
+      if (aiFilter.search) parts.push(`"${String(aiFilter.search)}"`)
+      return `Smart Filter: ${parts.join(' · ') || 'Active'}`
+    }
     if (sourceFilters.length === 1) {
       const found = sourceOptions.find((s) => s.key === sourceFilters[0])
       return found ? found.label : 'Filtered Collection'
@@ -5216,12 +6852,14 @@ function App() {
     if (sourceFilters.length > 1) {
       return 'Filtered Collection'
     }
+    if (view === 'favorites') return 'Favorite Games'
     if (view === 'installed') return 'Installed Games'
+    if (view === 'dashboard') return 'Sanctuary Analytics'
     if (view === 'ready') return 'Ready to Install'
     if (view === 'utilities') return 'Utility Tools'
     if (view === 'dlc') return 'DLC & Add-ons'
     return 'Full Collection'
-  }, [sourceFilters, sourceOptions, view])
+  }, [sourceFilters, sourceOptions, view, aiFilter])
   const setSidebarView = (nextView) => {
     if (nextView !== view) {
       libraryScrollRef.current = 0
@@ -5409,6 +7047,7 @@ function App() {
       }
     })
   }
+  const displayFavoriteGames = useMemo(() => games.filter((g) => g.is_favorite && !g.is_utility && !g.is_dlc).length, [games]);
   const displayTotalGames = Math.max(0, stats.visibleGames ?? (stats.totalGames - stats.utilityTools - (stats.dlcGames || 0) - (stats.hiddenGames || 0) - (stats.hiddenDlc || 0))); const displayInstalledGames = Math.max(0, stats.visibleInstalledGames ?? (stats.installedGames - (stats.installedUtilities || 0) - (stats.installedDlc || 0) - (stats.hiddenInstalledGames || 0) - (stats.hiddenInstalledDlc || 0))); const displayDlcGames = Math.max(0, stats.dlcGames || 0); const readyToInstallCount = Math.max(0, Number(stats.readyToInstallCount || 0)); const installedPercent = displayTotalGames ? Math.round((displayInstalledGames / displayTotalGames) * 100) : 0; const vars = themeVars(layoutTheme);
 
   const workspaceItems = useMemo(() => {
@@ -5435,7 +7074,64 @@ function App() {
     const selected = Number.parseInt(window.prompt(`This title is installed from multiple stores. Choose a launcher:\n${choices}`, '1') || '1', 10)
     return installed[selected >= 1 && selected <= installed.length ? selected - 1 : 0]
   }
-  const handleLaunch = async (game) => {
+  const handleLaunch = async (game, forceBypassLock = false, bypassRamGuard = false) => {
+    if (!bypassRamGuard && window.api?.system?.checkPreLaunch) {
+      try {
+        const preCheck = await window.api.system.checkPreLaunch()
+        if (preCheck?.shouldWarn) {
+          const hasHeavy = Array.isArray(preCheck.heavyProcesses) && preCheck.heavyProcesses.length > 0
+          const heavyNames = hasHeavy ? preCheck.heavyProcesses.map((p) => p.label).join(', ') : ''
+          const msg = [
+            preCheck.isLowMemory ? `Available system memory is low (${preCheck.freeMemGb} GB free).` : '',
+            hasHeavy ? `Heavy background apps detected: ${heavyNames}.` : '',
+            hasHeavy
+              ? 'Closing background apps will free up system RAM and prevent in-game stuttering.'
+              : 'Launching games with low memory may cause stuttering or frame drops.'
+          ].filter(Boolean).join('\n\n')
+
+          setConfirmModal({
+            title: 'System Memory & Process Alert',
+            eyebrow: 'PRE-LAUNCH HARDWARE GUARD',
+            message: msg,
+            confirmText: hasHeavy ? 'Close Apps & Launch' : 'Launch Anyway',
+            cancelText: hasHeavy ? 'Launch Anyway' : 'Cancel',
+            isDanger: false,
+            icon: Cpu,
+            onConfirm: async () => {
+              setConfirmModal(null)
+              if (hasHeavy && window.api?.system?.closeHeavyProcesses) {
+                await window.api.system.closeHeavyProcesses(preCheck.heavyProcesses.map((p) => p.name))
+              }
+              handleLaunch(game, forceBypassLock, true)
+            },
+            onCancel: () => {
+              setConfirmModal(null)
+              if (hasHeavy) {
+                handleLaunch(game, forceBypassLock, true)
+              }
+            }
+          })
+          return
+        }
+      } catch {}
+    }
+    const lock = getFamilyLockForGame(game, familyLocks)
+    if (lock && !forceBypassLock) {
+      setConfirmModal({
+        title: `${game.canonical_title} is being played`,
+        eyebrow: 'STEAM FAMILY IN USE',
+        message: `${lock.playerName} is currently playing this shared Steam copy (Steam Family: ${lock.familyGroup}). Launching now may interrupt their active game session or fail if no other copy is available.\n\nDo you want to launch anyway?`,
+        confirmText: 'Launch Anyway',
+        cancelText: 'Wait & Cancel',
+        isDanger: false,
+        icon: Users,
+        onConfirm: () => {
+          setConfirmModal(null)
+          handleLaunch(game, true, bypassRamGuard)
+        }
+      })
+      return
+    }
     const variant = game.is_installed ? chooseLaunchVariant(game) : game
     const sources = variant.sources || []
     const source = sources.find((candidate) => sourceLauncherFamily({ ...candidate, sourceName: candidate.sourceName || candidate.source_name || variant.store_name || variant.storeName })) || sources[0]
@@ -5454,6 +7150,24 @@ function App() {
       id: launchSource?.platformGameId,
       idSource: launchSource?.idSource,
     }
+    if (variant.id && window.api?.saves?.checkConflict) {
+      try {
+        const conflict = await window.api.saves.checkConflict(variant.id)
+        if (conflict?.hasConflict) {
+          const msg = conflict.reason === 'missing_local'
+            ? `Newer portable save detected for "${game.canonical_title}", but no local save folder exists on this PC yet.\n\nRestore portable save before launching?`
+            : `Newer portable save detected for "${game.canonical_title}" (modified more recently than this PC's local files).\n\nRestore portable save to this PC before launching?`
+          if (window.confirm(msg)) {
+            const rest = await window.api.saves.restore(variant.id, conflict.backupId)
+            if (rest?.success) {
+              notify(`Portable save restored for ${game.canonical_title}!`)
+            } else {
+              notify(rest?.error || 'Could not restore save backup.', 'warning')
+            }
+          }
+        }
+      } catch {}
+    }
     try {
       if (variant.is_installed && variant.executable_path) {
         try { await api.games.launchExecutable(variant.executable_path, variant.launch_arguments || game.launch_arguments || '', launchMeta); notify(`Launching ${game.canonical_title}...`); return } catch (executableError) { if (!uri) throw executableError }
@@ -5469,18 +7183,546 @@ function App() {
       else if (error?.message === 'No executable or launcher URI is mapped for this title.') notify(`No supported launcher is mapped for ${storefront}.`, 'error')
     }
   }
+
+  const handleAiAction = useCallback(async (actionObj) => {
+    if (!actionObj || !actionObj.action) return
+    const { action, payload = {} } = actionObj
+    const alertUser = (msg, tone = 'success') => {
+      setNoticeTone(tone)
+      setNotice(msg)
+      window.setTimeout(() => setNotice(''), 3500)
+    }
+
+    const findGame = (titleQuery) => {
+      if (!titleQuery || !games || games.length === 0) return null
+      let q = String(titleQuery).trim().toLowerCase()
+      // Strip conversational prefixes
+      q = q
+        .replace(/^(?:i\s+(?:wanna|want\s+to|would\s+like\s+to)|can\s+you|could\s+you|please|pls|let'?s|just|khelna\s+hai)\s+/gi, '')
+        .replace(/^(?:check(?:\s+out)?|look\s+at|show(?:\s+me)?|open|view|tell\s+me\s+about|details\s+(?:for|on)?|info\s+(?:on|about)?|dossier\s+(?:for|on)?)\s+/gi, '')
+        .replace(/^(?:launch|play|start|run|boot)\s+/gi, '')
+        .trim()
+
+      // 1. Exact match
+      let match = games.find((g) => (g.canonical_title || '').toLowerCase() === q)
+      if (match) return match
+
+      // 2. Cleaned query (remove noise words 'game', 'the', 'edition', 'details', 'dossier', 'launch', etc.)
+      const noise = /\b(?:the|a|an|game|games|video game|khel|khelo|play|launch|open|view|show|check|details|dossier|page|edition|goty|remastered|deluxe|please|pls|info)\b/gi
+      const cleanQ = q.replace(noise, ' ').replace(/[:–—\-_"']/g, ' ').replace(/\s+/g, ' ').trim()
+      if (cleanQ && cleanQ !== q) {
+        match = games.find((g) => (g.canonical_title || '').toLowerCase() === cleanQ)
+        if (match) return match
+      }
+
+      // 3. Normalized title match
+      const normQ = (cleanQ || q).replace(/[^a-z0-9]/g, '')
+      if (normQ) {
+        match = games.find((g) => (g.canonical_title || '').toLowerCase().replace(/[^a-z0-9]/g, '') === normQ)
+        if (match) return match
+      }
+
+      // 4. Substring inclusion
+      const searchTarget = cleanQ && cleanQ.length >= 3 ? cleanQ : q
+      match = games.find((g) => (g.canonical_title || '').toLowerCase().includes(searchTarget))
+      if (match) return match
+      match = games.find((g) => searchTarget.includes((g.canonical_title || '').toLowerCase()))
+      if (match) return match
+
+      // 5. Token overlap
+      const tokens = (cleanQ || q).split(/\s+/).filter((t) => t.length > 2)
+      if (tokens.length > 0) {
+        match = games.find((g) => {
+          const t = (g.canonical_title || '').toLowerCase()
+          return tokens.every((tok) => t.includes(tok))
+        })
+      }
+      return match || null
+    }
+
+    switch (action) {
+      case 'LAUNCH_GAME': {
+        const gameTargetId = payload.id || payload.gameId
+        let target = (gameTargetId ? games.find((g) => g.id === gameTargetId) : null) || findGame(payload.title)
+        if (!target && payload.title && window.api?.database?.resolveGameByQuery) {
+          try {
+            const resolved = await window.api.database.resolveGameByQuery(payload.title)
+            if (resolved?.id) {
+              target = games.find((g) => g.id === resolved.id) || resolved
+            }
+          } catch {}
+        }
+        if (!target) target = activeGame
+        if (target) {
+          alertUser(`AI Companion: Launching ${target.canonical_title}...`)
+          handleLaunch(target)
+        } else {
+          alertUser(`Could not find "${payload.title || 'game'}" in your library.`, 'warning')
+        }
+        break
+      }
+      case 'VIEW_DOSSIER':
+      case 'VIEW_DETAILS': {
+        const gameTargetId = payload.id || payload.gameId
+        let target = (gameTargetId ? games.find((g) => g.id === gameTargetId) : null) || findGame(payload.title)
+        if (!target && payload.title && window.api?.database?.resolveGameByQuery) {
+          try {
+            const resolved = await window.api.database.resolveGameByQuery(payload.title)
+            if (resolved?.id) {
+              target = games.find((g) => g.id === resolved.id) || resolved
+            }
+          } catch {}
+        }
+        if (!target) target = activeGame
+        if (target) {
+          alertUser(`AI Companion: Opening ${target.canonical_title}`)
+          handleSelectGame(target, 'ai')
+        } else {
+          alertUser(`Could not find "${payload.title || 'game'}" in your library.`, 'warning')
+        }
+        break
+      }
+      case 'FILTER_SEARCH': {
+        const q = payload.query || ''
+        setQuery(q)
+        if (isDetailView) {
+          handleBackToLibrary()
+        }
+        alertUser(`AI Companion: Searching for "${q}"`)
+        break
+      }
+      case 'FILTER_GENRE': {
+        const g = payload.genre || 'all'
+        setGenreFilter(g)
+        if (isDetailView) {
+          handleBackToLibrary()
+        }
+        alertUser(`AI Companion: Filtered genre to ${g}`)
+        break
+      }
+      case 'FILTER_STATUS': {
+        const s = payload.status || 'all'
+        setBacklogFilter(s)
+        if (isDetailView) {
+          handleBackToLibrary()
+        }
+        alertUser(`AI Companion: Filtered backlog to ${s}`)
+        break
+      }
+      case 'SWITCH_VIEW': {
+        let v = String(payload.view || 'all').toLowerCase().trim()
+        if (v === 'settings' || v === 'settigns' || v === 'config' || v === 'prefs' || v === 'preferences' || v === 'options') v = 'system'
+        if (v === 'library') v = 'all'
+        setSidebarView(v)
+        alertUser(`AI Companion: Switched view to ${v}`)
+        break
+      }
+      case 'SCAN_LIBRARY': {
+        alertUser('AI Companion: Triggering library scan...')
+        if (window.api?.scanner?.scanAll) {
+          window.api.scanner.scanAll().catch((err) => {
+            console.warn('Scan error:', err)
+          })
+        }
+        break
+      }
+      case 'SYNC_HLTB': {
+        const forceAll = Boolean(payload.forceAll)
+        alertUser(forceAll ? 'AI Companion: Updating story hours for all games...' : 'AI Companion: Fetching missing story hours...')
+        if (window.api?.games?.syncHltb) {
+          window.api.games.syncHltb({ forceAll }).then((res) => {
+            if (res?.synced > 0) {
+              alertUser(`Synced story hours for ${res.synced} games!`)
+              loadData({ preserveScroll: true })
+            }
+          }).catch((err) => {
+            console.warn('HLTB sync error:', err)
+          })
+        }
+        break
+      }
+      default:
+        console.warn('Unknown AI action:', action)
+    }
+  }, [games, activeGame, isDetailView, handleLaunch, handleSelectGame, handleBackToLibrary, setQuery, setGenreFilter, setBacklogFilter, setSidebarView])
+
+  // Voice Command & Hands-Free Audio listener
+  useEffect(() => {
+    if (!window.api?.voice?.onRecognized) return
+    const unbindRecognized = window.api.voice.onRecognized(async (data) => {
+      if (!data?.text) return
+      if (data.isWakeWord) {
+        setNoticeTone('info')
+        setNotice('🎙️ "Hey Logpile" detected — listening...')
+        speakConfirmation('Yes?')
+        return
+      }
+
+      setNoticeTone('info')
+      setNotice(`🎙️ "${data.text}"`)
+
+      try {
+        const aiStatus = await window.api?.ai?.getStatus?.()
+        if (aiStatus && !aiStatus.installed && !aiStatus.ready) {
+          setNoticeTone('warning')
+          setNotice('AI model not installed. Open AI Companion to download.')
+          speakConfirmation('AI model is not installed.')
+          return
+        }
+
+        const answer = await window.api?.ai?.askQuestion?.(data.text, activeGame?.canonical_title || '', {
+          theme: layoutTheme,
+        })
+        const isUserQuestion = /\?/.test(data.text) || /\b(?:how|where|what|why|who|when|which|whose|stuck|guide|help|walkthrough|solve|beat|defeat|kill|find|locate|get out|pass|progress|puzzle|boss|mission|quest|tip|tips|advice)\b/i.test(data.text)
+        const { action, text: cleanText } = parseAiResponse(answer, isUserQuestion)
+        if (action) {
+          handleAiAction(action)
+          if (action.action === 'LAUNCH_GAME' && (action.payload?.title || activeGame?.canonical_title)) {
+            speakConfirmation(`Launching ${action.payload?.title || activeGame?.canonical_title}`)
+          } else if (action.action === 'SWITCH_VIEW') {
+            speakConfirmation(`Opening ${action.payload?.view}`)
+          } else if (action.action === 'FILTER_GENRE' || action.action === 'FILTER_STATUS') {
+            speakConfirmation(`Filtering ${action.payload?.genre || action.payload?.status} titles`)
+          } else if (action.action === 'SCAN_LIBRARY') {
+            speakConfirmation('Scanning library')
+          }
+        } else {
+          setAiDrawerOpen(true)
+          if (cleanText) speakConfirmation(cleanText)
+        }
+      } catch {}
+    })
+
+    const unbindState = window.api?.voice?.onStateChange?.((state) => {
+      if (state && typeof state.isListening === 'boolean') {
+        setIsVoiceListening(state.isListening)
+      }
+    })
+
+    return () => {
+      unbindRecognized?.()
+      unbindState?.()
+    }
+  }, [activeGame, handleAiAction, layoutTheme])
+
+  const toggleVoiceListening = useCallback(async () => {
+    if (isVoiceListening) {
+      await window.api?.voice?.stop?.()
+      setIsVoiceListening(false)
+      setNoticeTone('info')
+      setNotice('🎙️ Voice listening stopped.')
+      setTimeout(() => setNotice(''), 2000)
+    } else {
+      const res = await window.api?.voice?.start?.()
+      if (res?.success) {
+        setIsVoiceListening(true)
+        setNoticeTone('info')
+        setNotice('🎙️ Listening... (say "Launch [game]" or "Open settings")')
+      } else {
+        setNoticeTone('warning')
+        setNotice('Microphone not available.')
+        setTimeout(() => setNotice(''), 3000)
+      }
+    }
+  }, [isVoiceListening])
+
+  const [gamepadIndex, setGamepadIndex] = useState(0)
+
+  useEffect(() => {
+    if (gamepadIndex >= filteredGames.length && filteredGames.length > 0) {
+      setGamepadIndex(filteredGames.length - 1)
+    }
+  }, [filteredGames.length, gamepadIndex])
+
+  const cycleGameStatus = useCallback(async (targetGame) => {
+    if (!targetGame) return
+    const cur = String(targetGame.status || targetGame.backlog_status || 'unplayed').toLowerCase()
+    const STATUS_ORDER = ['unplayed', 'playing', 'paused', 'completed']
+    const currentStatus = cur === 'dropped' ? 'paused' : (STATUS_ORDER.includes(cur) ? cur : 'unplayed')
+    const nextStatus = STATUS_ORDER[(STATUS_ORDER.indexOf(currentStatus) + 1) % STATUS_ORDER.length]
+    const labelMap = { unplayed: 'Unplayed', playing: 'Playing', paused: 'On Pause', completed: 'Completed' }
+    const completedAt = nextStatus === 'completed' ? new Date().toISOString() : null
+    const backlogVal = nextStatus === 'paused' ? 'playing' : nextStatus
+
+    setNoticeTone('success')
+    setNotice(`Marked "${targetGame.canonical_title}" as ${labelMap[nextStatus]}.`)
+    window.setTimeout(() => setNotice(''), 3000)
+
+    try {
+      const updateFn = api.database?.updateGameStatus || api.updateGameStatus
+      let updated = null
+      if (updateFn) {
+        updated = await updateFn(targetGame.id, nextStatus)
+      } else {
+        updated = await api.database.updateGameMetadata(targetGame.id, {
+          status: nextStatus,
+          backlog_status: backlogVal,
+          completed_at: completedAt,
+        })
+      }
+      if (updated && typeof updated === 'object') {
+        setActiveGame((prev) => (prev?.id === targetGame.id ? { ...prev, ...updated } : prev))
+        setGames((prev) => prev.map((g) => (g.id === targetGame.id ? { ...g, ...updated } : g)))
+      }
+      await loadData({ preserveScroll: true })
+    } catch (err) {
+      console.error('Failed to cycle status:', err)
+    }
+  }, [loadData])
+
+  const getGridColumns = useCallback(() => {
+    if (typeof window === 'undefined') return 4
+    const w = window.innerWidth
+    return w >= 1180 ? 5 : w >= 880 ? 4 : w >= 600 ? 3 : 2
+  }, [])
+
+  const handleGamepadNavigate = useCallback((direction) => {
+    if (isDetailView) return
+    const cols = getGridColumns()
+    const total = filteredGames.length
+    if (total === 0) return
+
+    setGamepadIndex((prev) => {
+      let next = prev
+      if (direction === 'left') next = Math.max(0, prev - 1)
+      else if (direction === 'right') next = Math.min(total - 1, prev + 1)
+      else if (direction === 'up') next = Math.max(0, prev - cols)
+      else if (direction === 'down') next = Math.min(total - 1, prev + cols)
+      return next
+    })
+  }, [isDetailView, getGridColumns, filteredGames.length])
+
+  const handleGamepadAction = useCallback((code) => {
+    const MAIN_VIEWS = ['installed', 'favorites', 'ready', 'all', 'today', 'system']
+    const currentGame = filteredGames[gamepadIndex] || activeGame
+
+    if (code === 'START' || code === 'GUIDE') {
+      if (api?.window?.toggleFullScreen) {
+        api.window.toggleFullScreen()
+      } else if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {})
+      } else {
+        document.documentElement.requestFullscreen().catch(() => {})
+      }
+      return
+    }
+
+    if (isDetailView) {
+      if (code === 'B') {
+        handleBackToLibrary()
+        return
+      }
+      if (code === 'A' && activeGame) {
+        if (activeGame.is_installed) {
+          handleLaunch(activeGame)
+        }
+        return
+      }
+      if (code === 'X' && activeGame) {
+        cycleGameStatus(activeGame)
+        return
+      }
+      if (code === 'Y' && activeGame) {
+        handleToggleFavorite(activeGame)
+        return
+      }
+      if (code === 'LB' || code === 'RB') {
+        const curIdx = filteredGames.findIndex((g) => g.id === activeGame.id)
+        if (curIdx >= 0 && filteredGames.length > 1) {
+          const nextIdx = code === 'RB'
+            ? (curIdx + 1) % filteredGames.length
+            : (curIdx - 1 + filteredGames.length) % filteredGames.length
+          setActiveGame(filteredGames[nextIdx])
+          setGamepadIndex(nextIdx)
+        }
+        return
+      }
+    } else {
+      if (code === 'A') {
+        if (currentGame) {
+          handleSelectGame(currentGame)
+        }
+        return
+      }
+      if (code === 'B') {
+        if (selectMode) {
+          setSelectMode(false)
+          setSelectedIds([])
+        } else if (query) {
+          setQuery('')
+          setDebouncedQuery('')
+        } else if (view !== 'installed') {
+          setView('installed')
+        }
+        return
+      }
+      if (code === 'X') {
+        if (currentGame) {
+          cycleGameStatus(currentGame)
+        }
+        return
+      }
+      if (code === 'Y') {
+        if (currentGame) {
+          handleToggleFavorite(currentGame)
+        }
+        return
+      }
+      if (code === 'LB') {
+        setView((prev) => {
+          const idx = MAIN_VIEWS.indexOf(prev)
+          const nextIdx = idx >= 0 ? (idx - 1 + MAIN_VIEWS.length) % MAIN_VIEWS.length : 0
+          return MAIN_VIEWS[nextIdx]
+        })
+        setGamepadIndex(0)
+        return
+      }
+      if (code === 'RB') {
+        setView((prev) => {
+          const idx = MAIN_VIEWS.indexOf(prev)
+          const nextIdx = idx >= 0 ? (idx + 1) % MAIN_VIEWS.length : 1
+          return MAIN_VIEWS[nextIdx]
+        })
+        setGamepadIndex(0)
+        return
+      }
+      if (code === 'R3') {
+        toggleVoiceListening()
+        return
+      }
+    }
+  }, [isDetailView, activeGame, filteredGames, gamepadIndex, handleBackToLibrary, handleLaunch, handleSelectGame, cycleGameStatus, handleToggleFavorite, selectMode, query, view, toggleVoiceListening])
+
+  const { connectedGamepad, isGamepadMode } = useGamepad({
+    enabled: !isGameRunning,
+    onNavigate: handleGamepadNavigate,
+    onAction: handleGamepadAction,
+    onStatusChange: (statusMsg) => {
+      setNoticeTone('info')
+      setNotice(statusMsg)
+      setTimeout(() => setNotice(''), 3000)
+    },
+  })
   const detailHero = activeGame?.hero_url ? normalizeArtworkUrl(activeGame.hero_url) : null
   const detailCover = activeGame?.cover_url ? normalizeArtworkUrl(activeGame.cover_url) : null
   const isAmbientCoverFallback = !detailHero && Boolean(detailCover)
   const detailBackdropUrl = detailHero || detailCover
+  const isDetailVideoBackdrop = false
+  const staticDetailBackdrop = useMemo(() => {
+    let art = detailBackdropUrl || ''
+    if (art.includes('.webm') || art.includes('.mp4')) {
+      if (detailCover && !detailCover.includes('.webm') && !detailCover.includes('.mp4')) {
+        art = detailCover
+      } else {
+        art = art.replace(/\.(webm|mp4)(\?.*)?$/i, '.jpg$2')
+      }
+    }
+    return art
+  }, [detailBackdropUrl, detailCover])
 
-  return <div className={cn("app-shell", isDetailView && "is-detail-view", isDetailView && isDetailHudIdle && "detail-hud-idle", isDetailView && isDetailScrolled && "detail-is-scrolled", sidebarCollapsed && "sidebar-is-collapsed", `layout-${layoutTheme}`)} data-layout-theme={layoutTheme} data-layout={layoutTheme} data-mode="dark" style={vars}>
+  const handleDragEnter = useCallback((e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    dragCounterRef.current += 1
+    if (e.dataTransfer?.types?.includes('Files')) {
+      setIsDraggingFile(true)
+    }
+  }, [])
+
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault()
+    e.stopPropagation()
+  }, [])
+
+  const handleDragLeave = useCallback((e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    dragCounterRef.current -= 1
+    if (dragCounterRef.current <= 0) {
+      dragCounterRef.current = 0
+      setIsDraggingFile(false)
+    }
+  }, [])
+
+  const handleFileDrop = useCallback(async (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    dragCounterRef.current = 0
+    setIsDraggingFile(false)
+    const files = e.dataTransfer?.files
+    if (!files || !files.length) return
+    const file = files[0]
+    let filePath = ''
+    try {
+      if (api?.getPathForFile && typeof api.getPathForFile === 'function') {
+        filePath = api.getPathForFile(file)
+      }
+    } catch {}
+    if (!filePath) filePath = file.path || ''
+    if (!filePath) {
+      setNoticeTone('error')
+      setNotice('Could not resolve file path from drop event.')
+      window.setTimeout(() => setNotice(''), 4000)
+      return
+    }
+
+    try {
+      setNoticeTone('success')
+      setNotice(`Adding ${file.name || 'game'} to Logpile...`)
+      const result = await api?.games?.addCustomGame?.(filePath)
+      if (result) {
+        setNoticeTone('success')
+        setNotice(`Added "${result.canonical_title}" to library!`)
+        await loadData()
+      }
+    } catch (err) {
+      setNoticeTone('error')
+      setNotice(err.message || 'Failed to add custom game.')
+    } finally {
+      window.setTimeout(() => setNotice(''), 4000)
+    }
+  }, [loadData])
+
+  return <div
+    className={cn("app-shell", isDetailView && "is-detail-view", isDetailView && isDetailHudIdle && "detail-hud-idle", isDetailView && isDetailScrolled && "detail-is-scrolled", sidebarCollapsed && "sidebar-is-collapsed", `layout-${layoutTheme}`)}
+    data-layout-theme={layoutTheme}
+    data-layout={layoutTheme}
+    data-mode="dark"
+    style={vars}
+    onDragEnter={handleDragEnter}
+    onDragOver={handleDragOver}
+    onDragLeave={handleDragLeave}
+    onDrop={handleFileDrop}
+  >
+    {isDraggingFile && (
+      <div className="global-dropzone-overlay">
+        <div className="global-dropzone-box">
+          <div className="global-dropzone-icon-wrap">
+            <Download size={32} />
+          </div>
+          <h3 className="global-dropzone-title">Drop Executable or Game Folder</h3>
+          <p className="global-dropzone-desc">Drop an .exe, shortcut (.lnk), or game folder to instantly add to Logpile.</p>
+        </div>
+      </div>
+    )}
     {isDetailView && detailBackdropUrl && (
       <div className={cn("global-detail-backdrop-wrap", isAmbientCoverFallback && "is-ambient-cover-wrap")}>
-        <div
-          className={cn("global-detail-backdrop-img", isAmbientCoverFallback && "is-ambient-cover-blur")}
-          style={{ backgroundImage: `url("${detailBackdropUrl}")` }}
-        />
+        {isDetailVideoBackdrop ? (
+          <video
+            key={detailBackdropUrl}
+            src={detailBackdropUrl}
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="global-detail-backdrop-video"
+          />
+        ) : (
+          <div
+            className={cn("global-detail-backdrop-img", isAmbientCoverFallback && "is-ambient-cover-blur")}
+            style={{ backgroundImage: staticDetailBackdrop ? `url("${staticDetailBackdrop}")` : undefined }}
+          />
+        )}
         <div className="global-detail-backdrop-gradient" />
       </div>
     )}
@@ -5539,6 +7781,30 @@ function App() {
               autoComplete="off"
               spellCheck="false"
             />
+            <button
+              type="button"
+              className="titlebar-ai-spark-btn"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setAiDrawerOpen((prev) => !prev)
+              }}
+              title="Gaming AI Companion (Ctrl+J)"
+            >
+              <Sparkles size={13} />
+            </button>
+            <button
+              type="button"
+              className={cn('titlebar-voice-btn', isVoiceListening && 'active-listening')}
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                toggleVoiceListening()
+              }}
+              title={isVoiceListening ? 'Listening for voice command... (Click to stop)' : 'Push to talk (Voice Command / Gamepad R3)'}
+            >
+              {isVoiceListening ? <Mic size={13} /> : <MicOff size={13} />}
+            </button>
             {query ? (
               <button
                 type="button"
@@ -5560,6 +7826,144 @@ function App() {
         )}
       </div>
       <div className="titlebar-tools">
+        {isDetailView && (
+          <button
+            type="button"
+            className="outline-button brag-screenshot-btn titlebar-snap-btn"
+            onClick={() => handleSnapHero(activeGame)}
+            disabled={screenshotBusy}
+            title="Snap this theme-based view to captures & clipboard"
+            style={{ marginRight: '6px', height: '26px', fontSize: '11px', padding: '0 8px' }}
+          >
+            <Camera size={12} />
+            <span>{activeCaptureAction === 'hero' ? 'Snapping…' : 'Snap Hero'}</span>
+          </button>
+        )}
+        <div
+          ref={bragMenuRef}
+          className="relative inline-block"
+          style={{ WebkitAppRegion: 'no-drag' }}
+        >
+          <button
+            type="button"
+            className="outline-button brag-screenshot-btn titlebar-brag-btn"
+            onClick={toggleBragMenu}
+            disabled={screenshotBusy}
+            title="Capture current view screenshot or 4K Brag Showcase"
+            style={{ height: '28px', fontSize: '11px', padding: '0 9px' }}
+          >
+            <Camera size={13} />
+            <span>{['screen', 'fullpage', 'showcase'].includes(activeCaptureAction) ? 'Capturing…' : 'Brag'}</span>
+            <ChevronDown size={11} className={cn(screenshotMenuOpen && 'rotate-180')} />
+          </button>
+          {screenshotMenuOpen && typeof document !== 'undefined' && createPortal(
+            <div
+              ref={bragDropdownRef}
+              className={cn('brag-dropdown-menu', bragMenuPos.openUpwards ? 'open-upwards' : 'open-downwards')}
+              style={{
+                position: 'fixed',
+                top: `${bragMenuPos.top}px`,
+                right: `${bragMenuPos.right}px`,
+                zIndex: 999999,
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                className="brag-dropdown-item"
+                onClick={handleCaptureFullPage}
+                title="Capture entire scrollable page from top to bottom"
+              >
+                <Layers size={13} style={{ color: 'var(--accent, #f59e0b)' }} />
+                <div>
+                  <span className="brag-dropdown-title">Full View (Whole Page PNG)</span>
+                  <span className="brag-dropdown-sub">Complete scrollable page (Dashboard, Game Dossier, Settings)</span>
+                </div>
+              </button>
+              <button
+                type="button"
+                className="brag-dropdown-item"
+                onClick={handleCaptureScreen}
+                title="Capture current visible window snapshot"
+              >
+                <Camera size={13} />
+                <div>
+                  <span className="brag-dropdown-title">Visible Window (PNG)</span>
+                  <span className="brag-dropdown-sub">Window snapshot as currently seen on screen</span>
+                </div>
+              </button>
+              <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.08)', margin: '4px 2px' }} />
+              <div className="brag-menu-section-header">
+                <Sparkles size={11} style={{ color: '#818cf8' }} />
+                <span>Showcase Collages (4K)</span>
+              </div>
+              <div className="brag-ratio-grid">
+                <button
+                  type="button"
+                  className="brag-ratio-btn"
+                  onClick={() => handleCaptureFilteredShowcase('auto')}
+                  title="Continuous full tapestry showing every game without cutoff"
+                >
+                  <div className="brag-ratio-btn-header">
+                    <Maximize2 size={12} style={{ color: '#818cf8' }} />
+                    <span>Full Grid</span>
+                  </div>
+                  <span className="brag-ratio-tag">All {filteredGames.length} titles</span>
+                </button>
+                <button
+                  type="button"
+                  className="brag-ratio-btn"
+                  onClick={() => handleCaptureFilteredShowcase('16:9')}
+                  title="16:9 landscape 4K UHD - ideal for PC monitors, Reddit, and X"
+                >
+                  <div className="brag-ratio-btn-header">
+                    <Monitor size={12} style={{ color: '#38bdf8' }} />
+                    <span>16:9</span>
+                  </div>
+                  <span className="brag-ratio-tag">Landscape</span>
+                </button>
+                <button
+                  type="button"
+                  className="brag-ratio-btn"
+                  onClick={() => handleCaptureFilteredShowcase('9:16')}
+                  title="9:16 vertical 4K - ideal for Instagram Stories, Reels, and Mobile"
+                >
+                  <div className="brag-ratio-btn-header">
+                    <Smartphone size={12} style={{ color: '#a855f7' }} />
+                    <span>9:16</span>
+                  </div>
+                  <span className="brag-ratio-tag">Story / Reel</span>
+                </button>
+                <button
+                  type="button"
+                  className="brag-ratio-btn"
+                  onClick={() => handleCaptureFilteredShowcase('1:1')}
+                  title="1:1 square 4K - ideal for Instagram feed posts and Discord"
+                >
+                  <div className="brag-ratio-btn-header">
+                    <Square size={12} style={{ color: '#22c55e' }} />
+                    <span>1:1</span>
+                  </div>
+                  <span className="brag-ratio-tag">Square Post</span>
+                </button>
+              </div>
+              <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.08)', margin: '4px 2px' }} />
+              <button
+                type="button"
+                className="brag-dropdown-item"
+                onClick={handleOpenCapturesFolder}
+              >
+                <FolderOpen size={13} style={{ color: '#94a3b8' }} />
+                <div>
+                  <span className="brag-dropdown-title">Open Captures Folder</span>
+                  <span className="brag-dropdown-sub">Open local captures folder in Explorer</span>
+                </div>
+              </button>
+            </div>,
+            document.body
+          )}
+        </div>
         <SanctuaryControls layoutTheme={layoutTheme} setLayoutTheme={handleLayoutThemeChange} />
         <WindowControls />
       </div>
@@ -5580,10 +7984,10 @@ function App() {
           </button>
         </div>
         <nav className="nav-stack">
-          {(query || sourceFilters.length || genreFilter !== 'all' || backlogFilter !== 'all' || qualityFilters.length) ? (
+          {(query || sourceFilters.length || genreFilter !== 'all' || backlogFilter !== 'all' || timeFilter !== 'all' || qualityFilters.length || aiFilter) ? (
             <div className="sidebar-filter-summary">
               <span>{filteredGames.length} of {games.length} titles</span>
-              <button type="button" className="sidebar-reset-btn" onClick={() => { setQuery(''); setSourceFilters([]); setGenreFilter('all'); setBacklogFilter('all'); setQualityFilters([]) }}>Reset all</button>
+              <button type="button" className="sidebar-reset-btn" onClick={() => { setQuery(''); setSourceFilters([]); setGenreFilter('all'); setBacklogFilter('all'); setTimeFilter('all'); setQualityFilters([]); handleClearAiFilter(); }}>Reset all</button>
             </div>
           ) : null}
 
@@ -5597,6 +8001,15 @@ function App() {
               <PackageCheck size={15} />
               <span>Installed</span>
               <em>{displayInstalledGames}</em>
+            </button>
+            <button
+              className={cn('nav-item', view === 'favorites' && 'active')}
+              onClick={() => setSidebarView('favorites')}
+              title="Favorites"
+            >
+              <Star size={15} className={view === 'favorites' ? 'text-amber-400 fill-amber-400' : 'text-amber-400'} />
+              <span>Favorites</span>
+              <em>{displayFavoriteGames}</em>
             </button>
             <button
               className={cn('nav-item', view === 'all' && 'active')}
@@ -5629,6 +8042,22 @@ function App() {
             >
               <Dices size={15} />
               <span>Today’s Pick</span>
+            </button>
+            <button
+              className={cn('nav-item', view === 'dashboard' && 'active')}
+              onClick={() => setSidebarView('dashboard')}
+              title="Library Intelligence & Backlog Dashboard"
+            >
+              <LayoutDashboard size={15} />
+              <span>Dashboard</span>
+            </button>
+            <button
+              className={cn('nav-item nav-item-ai', aiDrawerOpen && 'active')}
+              onClick={() => setAiDrawerOpen((prev) => !prev)}
+              title="Gaming AI Companion (Ctrl+J)"
+            >
+              <Sparkles size={15} style={{ color: 'var(--accent, #d6ff4b)' }} />
+              <span>AI Companion</span>
             </button>
           </div>
 
@@ -5682,7 +8111,7 @@ function App() {
         </div>
       </aside>
       )}
-      <main className="main-content"><div ref={mainScrollRef} className={cn('main-scroll', isDetailView && 'main-scroll-fullbleed')}><ErrorBoundary key={`${view}-${viewMode}-${activeGame?.id || 'none'}`} fallback={({ error, reset }) => <TabErrorFallback error={error} reset={reset} onBack={handleBackToLibrary} />}>{isDetailView ? <HeroView games={filteredGames} activeGame={activeGame || filteredGames[0]} onSelect={setActiveGame} onLaunch={handleLaunch} onBack={handleBackToLibrary} onEdit={setEditorGame} onHideGame={(game) => updateHiddenState(game, true)} onMoveCategory={moveCategory} onContextMenu={handleCardContextMenu} isCinematicTheme={layoutTheme === 'cinematic'} layoutTheme={layoutTheme} scrollContainerRef={mainScrollRef} onIdleChange={setIsDetailHudIdle} onScrollStateChange={setIsDetailScrolled} onToggleFavorite={async (game) => {
+      <main className="main-content"><div ref={mainScrollRef} className={cn('main-scroll', isDetailView && 'main-scroll-fullbleed')}><ErrorBoundary key={`${view}-${viewMode}-${activeGame?.id || 'none'}`} fallback={({ error, reset }) => <TabErrorFallback error={error} reset={reset} onBack={handleBackToLibrary} />}>{isDetailView ? <HeroView games={filteredGames} activeGame={activeGame || filteredGames[0]} familyLocks={familyLocks} onSelect={setActiveGame} onLaunch={handleLaunch} onBack={handleBackToLibrary} onEdit={setEditorGame} onHideGame={(game) => updateHiddenState(game, true)} onMoveCategory={moveCategory} onContextMenu={handleCardContextMenu} isCinematicTheme={layoutTheme === 'cinematic'} layoutTheme={layoutTheme} scrollContainerRef={mainScrollRef} onIdleChange={setIsDetailHudIdle} onScrollStateChange={setIsDetailScrolled} onSnapHero={handleSnapHero} onAskAi={(g) => { if (g) setActiveGame(g); setAiDrawerOpen(true); }} onToggleFavorite={async (game) => {
   const nextFav = !game.is_favorite
   try {
     await api.database.updateGameMetadata(game.id, { is_favorite: nextFav })
@@ -5773,19 +8202,102 @@ function App() {
 }} onGameUpdated={(updated) => {
   setActiveGame(updated)
   loadData({ preserveScroll: true })
-}} /> : view === 'about' ? <AboutView /> : view === 'system' ? <>
-      <LibraryHealthSection health={libraryHealth} stats={stats} backupsList={backupsList} backupBusy={backupBusy} restoreBusy={restoreBusy} onBackupNow={handleBackupNow} onOpenBackupsFolder={handleOpenBackupsFolder} onOpenBackupsManager={handleOpenBackupsManager} />
-      <RecentActivitySection activityLog={activityLog} loading={activityLoading} onRefresh={fetchSystemHealthAndActivity} />
-      <section className="stats-section"><div className="section-header compact"><div><h2>Library overview</h2><p>At-a-glance footprint across all connected sources.</p></div><span className="sync-label"><span className="pulse-dot" /> Synced locally</span></div><div className="stats-grid"><StatCard icon={Gamepad2} label="Visible games" value={displayTotalGames} meta={`${stats.hiddenGames || 0} hidden support/add-on entries`} /><StatCard icon={PackageOpen} label="DLC & add-ons" value={displayDlcGames} meta={`${stats.installedDlc || 0} installed add-ons`} accent="amber" /><StatCard icon={PackageCheck} label="Installed" value={displayInstalledGames} meta={`${installedPercent}% of visible library`} accent="violet" /><StatCard icon={Wrench} label="Utility tools" value={stats.utilityTools} meta="Performance & creator tools" accent="amber" /><StatCard icon={HardDrive} label="Disk footprint" value={formatGb(stats.totalStorageGb)} meta="Used by game library" accent="neutral" /><StatCard icon={Database} label="Available storage" value={stats.systemSpecs?.freeStorageGb ? `${stats.systemSpecs.freeStorageGb} GB` : '—'} meta={stats.systemSpecs?.driveCount ? `Free on ${stats.systemSpecs.driveCount} drives (${stats.systemSpecs.driveLetters || '—'})` : '—'} accent="green" /><StatCard icon={HardDrive} label="Total capacity" value={stats.systemSpecs?.totalStorageGb ? `${stats.systemSpecs.totalStorageGb} GB` : '—'} meta="Across all connected drives" accent="violet" /><StatCard icon={Cpu} label="System specs" value={stats.systemSpecs?.gpu ? stats.systemSpecs.gpu.replace(/NVIDIA\s+|GeForce\s+/gi, '') : 'Unknown GPU'} meta={`${stats.systemSpecs?.cpu ? stats.systemSpecs.cpu.replace(/Intel\s+|Core\s+/gi, '') : 'Unknown CPU'} · ${stats.systemSpecs?.ram || '—'}`} accent="neutral" /></div></section><HiddenItemsPanel games={hiddenGames} onRestore={(game) => updateHiddenState(game, false)} /><ArtworkManager onRefresh={loadData} onCancel={handleCancelSync} /><MetadataProvidersSection onRefresh={loadData} /><AdvancedDiagnosticsSection themeName={LAYOUT_THEMES.find((t) => t.value === layoutTheme)?.label || layoutTheme} health={libraryHealth} /><DatabaseManagement onExport={handleExport} onBackup={handleBackupCache} onRestore={handleRestoreCache} onOpenBackups={handleOpenBackupsManager} onPurge={() => setPurgeOpen(true)} />
-      </> : view === 'today' ? <section className="library-section today-section"><div className="section-header compact"><div><div className="eyebrow"><span>DAILY ROTATION</span><span className="eyebrow-line" /></div><h2>Today’s Pick</h2><p>One installed, non-utility title selected from your local library.</p></div></div><RoulettePanel onWinner={handlePickWinner} /></section> : <section className="library-section library-pure-games">{isHomeView && (
+}} /> : view === 'dashboard' ? (
+  <DashboardView
+    games={games}
+    stats={stats}
+    onSelectGame={handleSelectGame}
+    onLaunchGame={handleLaunch}
+    onNavigateView={setSidebarView}
+    onRefreshLibrary={() => loadData({ preserveScroll: true })}
+    layoutTheme={layoutTheme}
+    guideSyncStatus={guideSyncStatus}
+    onCancelGuideSync={() => window.api?.guides?.cancelBatch?.()}
+    onFilterMissingGuides={(installedOnly = false) => {
+      setQualityFilters(['missingGuide'])
+      setSidebarView(installedOnly ? 'installed' : 'library')
+    }}
+  />
+) : view === 'about' ? <AboutView /> : view === 'system' ? (
+        <>
+          {/* 1. Library Overview (Stats & Hardware Specs) */}
+          <section className="stats-section">
+            <div className="section-header compact">
+              <div>
+                <h2>Library overview</h2>
+                <p>At-a-glance footprint across all connected sources.</p>
+              </div>
+              <span className="sync-label"><span className="pulse-dot" /> Synced locally</span>
+            </div>
+            <div className="stats-grid">
+              <StatCard icon={Gamepad2} label="Visible games" value={displayTotalGames} meta={`${stats.hiddenGames || 0} hidden support/add-on entries`} />
+              <StatCard icon={PackageOpen} label="DLC & add-ons" value={displayDlcGames} meta={`${stats.installedDlc || 0} installed add-ons`} accent="amber" />
+              <StatCard icon={PackageCheck} label="Installed" value={displayInstalledGames} meta={`${installedPercent}% of visible library`} accent="violet" />
+              <StatCard icon={Wrench} label="Utility tools" value={stats.utilityTools} meta="Performance & creator tools" accent="amber" />
+              <StatCard icon={HardDrive} label="Disk footprint" value={formatGb(stats.totalStorageGb)} meta="Used by game library" accent="neutral" />
+              <StatCard icon={Database} label="Available storage" value={stats.systemSpecs?.freeStorageGb ? `${stats.systemSpecs.freeStorageGb} GB` : '—'} meta={stats.systemSpecs?.driveCount ? `Free on ${stats.systemSpecs.driveCount} drives (${stats.systemSpecs.driveLetters || '—'})` : '—'} accent="green" />
+              <StatCard icon={HardDrive} label="Total capacity" value={stats.systemSpecs?.totalStorageGb ? `${stats.systemSpecs.totalStorageGb} GB` : '—'} meta="Across all connected drives" accent="violet" />
+              <StatCard icon={Cpu} label="System specs" value={stats.systemSpecs?.gpu ? stats.systemSpecs.gpu.replace(/NVIDIA\s+|GeForce\s+/gi, '') : 'Unknown GPU'} meta={`${stats.systemSpecs?.cpu ? stats.systemSpecs.cpu.replace(/Intel\s+|Core\s+/gi, '') : 'Unknown CPU'} · ${stats.systemSpecs?.ram || '—'}`} accent="neutral" />
+            </div>
+          </section>
+
+          {/* 2. Library Health & Backups */}
+          <LibraryHealthSection
+            health={libraryHealth}
+            stats={stats}
+            backupsList={backupsList}
+            backupBusy={backupBusy}
+            restoreBusy={restoreBusy}
+            onBackupNow={handleBackupNow}
+            onOpenBackupsFolder={handleOpenBackupsFolder}
+            onOpenBackupsManager={handleOpenBackupsManager}
+          />
+
+          {/* 3. Settings & Library Enrichment */}
+          <MetadataProvidersSection
+            onRefresh={loadData}
+            globalSyncRunning={globalSyncRunning}
+            globalSyncProgress={globalSyncProgress}
+            onCancelSync={handleCancelGlobalSync}
+          />
+
+          {/* 4. Hidden Library Entries */}
+          <HiddenItemsPanel games={hiddenGames} onRestore={(game) => updateHiddenState(game, false)} />
+
+          {/* 5. Developer & Engine Diagnostics */}
+          <AdvancedDiagnosticsSection
+            themeName={LAYOUT_THEMES.find((t) => t.value === layoutTheme)?.label || layoutTheme}
+            health={libraryHealth}
+          />
+
+          {/* 6. Database Management */}
+          <DatabaseManagement
+            onExport={handleExport}
+            onBackup={handleBackupCache}
+            onRestore={handleRestoreCache}
+            onOpenBackups={handleOpenBackupsManager}
+            onPurge={() => setPurgeOpen(true)}
+          />
+
+          {/* 7. Recent Activity Feed (Audit Trail) */}
+          <RecentActivitySection
+            activityLog={activityLog}
+            loading={activityLoading}
+            onRefresh={fetchSystemHealthAndActivity}
+          />
+        </>
+      ) : view === 'today' ? <section className="library-section today-section"><div className="section-header compact"><div><div className="eyebrow"><span>DAILY ROTATION</span><span className="eyebrow-line" /></div><h2>Today’s Pick</h2><p>One installed, non-utility title selected from your local library.</p></div></div><RoulettePanel onWinner={handlePickWinner} /></section> : <section className="library-section library-pure-games">{isHomeView && (
   <ErrorBoundary fallback={null}>
     <HomeSpotlightAndShelf
       games={games}
+      familyLocks={familyLocks}
       onLaunch={handleLaunch}
       onSelect={handleSelectGame}
       layoutTheme={layoutTheme}
       isCollapsed={isSpotlightCollapsed}
       onToggleCollapse={handleToggleSpotlight}
+      isDrawerOpen={aiDrawerOpen}
+      preferAnimatedArtwork={true}
     />
   </ErrorBoundary>
 )}<div className="library-top-bar">
@@ -5798,9 +8310,48 @@ function App() {
     <CustomDropdown value={sortKey} onChange={setSortKey} options={sortOptions} icon={ArrowDownAZ} className="top-bar-dropdown" title="Sort games" />
     <CustomDropdown value={genreFilter} onChange={setGenreFilter} options={genreOptions} icon={Filter} className="top-bar-dropdown" title="Filter by genre" />
     <CustomDropdown value={backlogFilter} onChange={setBacklogFilter} options={backlogOptions} icon={SlidersHorizontal} className="top-bar-dropdown" title="Filter by backlog status" />
+    <CustomDropdown value={timeFilter} onChange={setTimeFilter} options={timeOptions} icon={Clock} className="top-bar-dropdown" title="Filter by playtime (HowLongToBeat)" />
+    <button
+      type="button"
+      className={cn('outline-button smart-ai-filter-trigger', (aiFilter || aiFilterOpen) && 'active')}
+      onClick={() => setAiFilterOpen((prev) => !prev)}
+      title="Smart AI Filter: Enter natural language criteria (e.g. 'Find me a short RPG I haven't played')"
+    >
+      <Sparkles size={12} style={{ color: 'var(--accent, #d6ff4b)', flexShrink: 0 }} />
+      <span className="smart-ai-full">Smart AI Filter</span>
+      <span className="smart-ai-compact">AI Filter</span>
+      {aiFilter && (
+        <span
+          className="smart-ai-badge"
+          style={{
+            fontSize: '9.5px',
+            background: 'var(--accent, #d6ff4b)',
+            color: '#000',
+            borderRadius: '4px',
+            padding: '1px 5px',
+            fontWeight: 700,
+            marginLeft: '2px',
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
+          }}
+        >
+          Active
+        </span>
+      )}
+    </button>
     <div className="top-bar-chip-group">
-      <button type="button" className={cn('top-bar-chip', qualityFilters.includes('missingArtwork') && 'active')} onClick={() => setQualityFilters((current) => current.includes('missingArtwork') ? current.filter((item) => item !== 'missingArtwork') : [...current, 'missingArtwork'])}>Missing Artwork</button>
-      <button type="button" className={cn('top-bar-chip', qualityFilters.includes('missingIds') && 'active')} onClick={() => setQualityFilters((current) => current.includes('missingIds') ? current.filter((item) => item !== 'missingIds') : [...current, 'missingIds'])}>Missing IDs</button>
+      <button type="button" className={cn('top-bar-chip top-bar-chip-artwork', qualityFilters.includes('missingArtwork') && 'active')} onClick={() => setQualityFilters((current) => current.includes('missingArtwork') ? current.filter((item) => item !== 'missingArtwork') : [...current, 'missingArtwork'])} title="Filter games missing custom covers or artwork">
+        <span className="chip-full">Missing Artwork</span>
+        <span className="chip-compact">No Art</span>
+      </button>
+      <button type="button" className={cn('top-bar-chip top-bar-chip-ids', qualityFilters.includes('missingIds') && 'active')} onClick={() => setQualityFilters((current) => current.includes('missingIds') ? current.filter((item) => item !== 'missingIds') : [...current, 'missingIds'])} title="Filter games missing database IDs">
+        <span className="chip-full">Missing IDs</span>
+        <span className="chip-compact">No IDs</span>
+      </button>
+      <button type="button" className={cn('top-bar-chip top-bar-chip-guide', qualityFilters.includes('missingGuide') && 'active')} onClick={() => setQualityFilters((current) => current.includes('missingGuide') ? current.filter((item) => item !== 'missingGuide') : [...current, 'missingGuide'])} title="Filter games missing strategy guides">
+        <span className="chip-full">Missing Guide</span>
+        <span className="chip-compact">No Guide</span>
+      </button>
     </div>
   </div>
   <div className="library-top-bar-right">
@@ -5812,7 +8363,7 @@ function App() {
         title="Compact hero spotlight (Ctrl+H)"
       >
         <Minimize2 size={13} />
-        <span>Compact Hero</span>
+        <span>Compact</span>
       </button>
     )}
     <button
@@ -5822,20 +8373,302 @@ function App() {
         setSelectMode((current) => !current)
         if (selectMode) setSelectedIds([])
       }}
+      title="Toggle batch selection mode"
     >
       <Check size={14} />
-      <span>{selectMode ? 'Exit select' : 'Select mode'}</span>
+      <span>{selectMode ? 'Exit' : 'Select'}</span>
     </button>
     <button
       type="button"
       className="outline-button scan-import-btn"
       onClick={() => setScanOpen(true)}
+      title="Scan local directories or import game files"
     >
       <ScanLine size={13} />
-      <span>Scan & import</span>
+      <span>Scan</span>
     </button>
   </div>
-</div>{selectMode ? <div className="bulk-action-bar"><span><Check size={14} /> {selectedIds.length} selected · {filteredRecordIds.length} filtered</span><div className="bulk-action-group"><button className="outline-button" disabled={bulkBusy || !filteredRecordIds.length} onClick={selectAllFiltered}><Check size={14} /> Select All Filtered</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={deselectAll}><X size={14} /> Deselect All</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={() => handleBulkMove('dlc')}><PackageOpen size={14} /> Move to DLC</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleBulkHide}><EyeOff size={14} /> Hide from Library</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleRefetchSelected}><RefreshCw size={14} /> Re-fetch Artwork</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleExportSelected}><FileDown size={14} /> Export Selected to CSV</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={() => setBulkEditOpen(true)}><SlidersHorizontal size={14} /> Edit Selected</button><button className="danger-button" disabled={bulkBusy || !selectedIds.length} onClick={handleDeleteSelected}><Trash2 size={14} /> Delete Selected</button></div></div> : null}{notice ? <div className={cn('notice', noticeTone === 'error' && 'notice-error', noticeTone === 'warning' && 'notice-warning')}>{noticeTone === 'error' ? <X size={14} /> : noticeTone === 'warning' ? <AlertTriangle size={14} /> : <Check size={14} />} {notice}</div> : null}{loading ? <div className="empty-state"><div className="loader" /> Loading and indexing your library…</div> : filteredGames.length ? <ErrorBoundary><VirtualGrid games={filteredGames} onLaunch={handleLaunch} onSelect={handleSelectGame} onHideGame={(game) => updateHiddenState(game, true)} onMoveCategory={moveCategory} onEditGame={setEditorGame} onContextMenu={handleCardContextMenu} onArtworkChanged={handleArtworkChanged} onArtworkError={handleArtworkError} selectMode={selectMode} selectedIds={selectedIds} onToggleSelect={toggleGameSelection} scrollElementRef={mainScrollRef} onImageError={handleImageError} initialScrollTop={activeGame?.id === lastClickedGameIdRef.current ? libraryScrollRef.current : 0} restoreGameId={activeGame?.id || lastClickedGameIdRef.current} restoredGameId={restoredGameId} /></ErrorBoundary> : (!games.length && !query && !sourceFilters.length && genreFilter === 'all' && backlogFilter === 'all' && !qualityFilters.length) ? <div className="empty-state"><strong>Your library is empty.</strong><span>Click Scan & import (top right) to add your games.</span></div> : <div className="empty-state"><Search size={21} /><span>No titles match these filters.</span></div>}</section>}</ErrorBoundary></div><footer className="statusbar"><span className="statusbar-item statusbar-terminal"><TerminalSquare size={13} /> {scannerStatus ? <span className="inline-flex items-center gap-1.5"><span className="pulse-dot" /> {scannerStatus}</span> : 'Ready'}</span><span className="statusbar-item statusbar-storage"><span className="pulse-dot" /> Offline · Local storage</span><span className="statusbar-item statusbar-version">Version 1.2.0</span></footer></main>
-    </div><ScanImportPanel open={scanOpen} onClose={() => setScanOpen(false)} onRefresh={loadData} /><GameEditorModal game={editorGame} onClose={() => setEditorGame(null)} onSaved={handleEditorSaved} /><PurgeConfirmModal open={purgeOpen} busy={purgeBusy} onClose={() => setPurgeOpen(false)} onConfirm={handlePurge} /><BulkEditModal open={bulkEditOpen} count={selectedIds.length} busy={bulkBusy} onClose={() => setBulkEditOpen(false)} onApply={handleBulkApply} /><ContextMenu menu={contextMenu} menuRef={contextMenuRef} onClose={() => setContextMenu(null)} onMoveCategory={moveCategory} onEditGame={setEditorGame} onHideGame={(game) => updateHiddenState(game, true)} onArtworkChanged={handleArtworkChanged} onArtworkError={handleArtworkError} /><ConfirmActionModal config={confirmModal} onClose={() => setConfirmModal(null)} /><BackupsManagerModal open={backupsModalOpen} busy={backupBusy || restoreBusy} backups={backupsList} loading={backupsLoading} backupsDirectory={backupsDirectory || libraryHealth?.backupsDirectory} onClose={() => setBackupsModalOpen(false)} onBackupNow={handleBackupNow} onOpenFolder={handleOpenBackupsFolder} onRestoreBackup={handleRestoreBackup} onChooseAndRestoreFile={handleChooseAndRestoreFile} /></div>
+</div>
+{(aiFilterOpen || aiFilter) && (
+  <div
+    className="smart-ai-filter-bar"
+    style={{
+      padding: '10px 14px',
+      background: 'rgba(0, 0, 0, 0.45)',
+      borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '8px',
+      backdropFilter: 'blur(10px)',
+    }}
+  >
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+      <div style={{ position: 'relative', flex: 1, minWidth: '260px' }}>
+        <Sparkles
+          size={13}
+          style={{
+            position: 'absolute',
+            left: '10px',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            color: 'var(--accent, #d6ff4b)',
+            pointerEvents: 'none',
+          }}
+        />
+        <input
+          type="text"
+          value={aiFilterQuery}
+          onChange={(e) => setAiFilterQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              handleApplyAiFilter(aiFilterQuery)
+            }
+          }}
+          placeholder="Ask AI to filter: 'Find me a short RPG I haven't played', 'cozy games under 10 hours'..."
+          style={{
+            width: '100%',
+            padding: '6px 10px 6px 30px',
+            fontSize: '12px',
+            borderRadius: '6px',
+            border: '1px solid rgba(255, 255, 255, 0.15)',
+            background: 'rgba(255, 255, 255, 0.05)',
+            color: 'var(--text-primary, #ffffff)',
+            outline: 'none',
+            boxSizing: 'border-box',
+          }}
+        />
+      </div>
+
+      <button
+        type="button"
+        className="primary-button"
+        disabled={aiFilterLoading || !aiFilterQuery.trim()}
+        onClick={() => handleApplyAiFilter(aiFilterQuery)}
+        style={{
+          height: '30px',
+          padding: '0 12px',
+          fontSize: '11px',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
+        }}
+      >
+        {aiFilterLoading ? (
+          <>
+            <RotateCw size={11} className="spin-icon" />
+            <span>Filtering...</span>
+          </>
+        ) : (
+          <>
+            <Sparkles size={11} />
+            <span>Apply AI Filter</span>
+          </>
+        )}
+      </button>
+
+      {aiFilter && (
+        <button
+          type="button"
+          className="outline-button"
+          onClick={handleClearAiFilter}
+          style={{
+            height: '30px',
+            padding: '0 10px',
+            fontSize: '11px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+            borderColor: 'rgba(239, 68, 68, 0.4)',
+            color: '#f87171',
+          }}
+        >
+          <X size={12} />
+          <span>Clear Filter</span>
+        </button>
+      )}
+
+      <button
+        type="button"
+        onClick={() => setAiFilterOpen(false)}
+        style={{
+          background: 'transparent',
+          border: 'none',
+          color: 'var(--text-muted, #71717a)',
+          cursor: 'pointer',
+          padding: '4px',
+          display: 'flex',
+          alignItems: 'center',
+        }}
+        title="Close AI Filter bar"
+      >
+        <X size={14} />
+      </button>
+    </div>
+
+    {/* Active Filter Badges or Presets */}
+    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', fontSize: '11px' }}>
+      {aiFilter ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+          <span style={{ color: 'var(--accent, #d6ff4b)', fontWeight: 600 }}>Active Criteria:</span>
+          {aiFilter.genre && (
+            <span style={{ background: 'rgba(255, 255, 255, 0.08)', padding: '2px 8px', borderRadius: '4px', color: '#fff' }}>
+              Genre: {String(aiFilter.genre)}
+            </span>
+          )}
+          {aiFilter.max_hltb && (
+            <span style={{ background: 'rgba(255, 255, 255, 0.08)', padding: '2px 8px', borderRadius: '4px', color: '#fff' }}>
+              Playtime: ≤ {aiFilter.max_hltb}h
+            </span>
+          )}
+          {aiFilter.min_hltb && (
+            <span style={{ background: 'rgba(255, 255, 255, 0.08)', padding: '2px 8px', borderRadius: '4px', color: '#fff' }}>
+              Playtime: ≥ {aiFilter.min_hltb}h
+            </span>
+          )}
+          {(aiFilter.unplayed || aiFilter.status === 'unplayed') && (
+            <span style={{ background: 'rgba(255, 255, 255, 0.08)', padding: '2px 8px', borderRadius: '4px', color: '#fff' }}>
+              Status: Unplayed
+            </span>
+          )}
+          {aiFilter.installed && (
+            <span style={{ background: 'rgba(255, 255, 255, 0.08)', padding: '2px 8px', borderRadius: '4px', color: '#fff' }}>
+              Installed Only
+            </span>
+          )}
+          {aiFilter.search && (
+            <span style={{ background: 'rgba(255, 255, 255, 0.08)', padding: '2px 8px', borderRadius: '4px', color: '#fff' }}>
+              Search: "{String(aiFilter.search)}"
+            </span>
+          )}
+        </div>
+      ) : (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+          <span style={{ color: 'var(--text-muted, #71717a)' }}>Try asking:</span>
+          {[
+            "Short RPG I haven't played",
+            "Action games under 10 hours",
+            "Unplayed favorites",
+            "Epic long games",
+          ].map((preset) => (
+            <button
+              key={preset}
+              type="button"
+              onClick={() => {
+                setAiFilterQuery(preset)
+                handleApplyAiFilter(preset)
+              }}
+              style={{
+                background: 'rgba(255, 255, 255, 0.06)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '12px',
+                padding: '2px 8px',
+                fontSize: '10.5px',
+                color: 'var(--text-muted, #a1a1aa)',
+                cursor: 'pointer',
+              }}
+            >
+              {preset}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  </div>
+)}
+{selectMode ? <div className="bulk-action-bar"><span><Check size={14} /> {selectedIds.length} selected · {filteredRecordIds.length} filtered</span><div className="bulk-action-group"><button className="outline-button" disabled={bulkBusy || !filteredRecordIds.length} onClick={selectAllFiltered}><Check size={14} /> Select All Filtered</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={deselectAll}><X size={14} /> Deselect All</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={() => handleBulkMove('dlc')}><PackageOpen size={14} /> Move to DLC</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleBulkHide}><EyeOff size={14} /> Hide from Library</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleRefetchSelected}><RefreshCw size={14} /> Re-fetch Artwork</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleExportSelected}><FileDown size={14} /> Export Selected to CSV</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={() => setBulkEditOpen(true)}><SlidersHorizontal size={14} /> Edit Selected</button><button className="danger-button" disabled={bulkBusy || !selectedIds.length} onClick={handleDeleteSelected}><Trash2 size={14} /> Delete Selected</button></div></div> : null}{notice ? <div className={cn('notice', noticeTone === 'error' && 'notice-error', noticeTone === 'warning' && 'notice-warning')}>{noticeTone === 'error' ? <X size={14} /> : noticeTone === 'warning' ? <AlertTriangle size={14} /> : <Check size={14} />} {notice}</div> : null}{loading && !filteredGames.length ? <div className="empty-state"><div className="loader" /> Loading and indexing your library…</div> : filteredGames.length ? <ErrorBoundary><VirtualGrid games={filteredGames} familyLocks={familyLocks} onLaunch={handleLaunch} onSelect={handleSelectGame} onHideGame={(game) => updateHiddenState(game, true)} onMoveCategory={moveCategory} onEditGame={setEditorGame} onContextMenu={handleCardContextMenu} onArtworkChanged={handleArtworkChanged} onArtworkError={handleArtworkError} selectMode={selectMode} selectedIds={selectedIds} onToggleSelect={toggleGameSelection} scrollElementRef={mainScrollRef} onImageError={handleImageError} initialScrollTop={activeGame?.id === lastClickedGameIdRef.current ? libraryScrollRef.current : 0} restoreGameId={activeGame?.id || lastClickedGameIdRef.current} restoredGameId={restoredGameId} gamepadFocusIndex={isGamepadMode ? gamepadIndex : -1} onToggleFavorite={handleToggleFavorite} /></ErrorBoundary> : (!games.length && !query && !sourceFilters.length && genreFilter === 'all' && backlogFilter === 'all' && !qualityFilters.length) ? <div className="empty-state"><strong>Your library is empty.</strong><span>Click Scan & import (top right) to add your games.</span></div> : <div className="empty-state"><Search size={21} /><span>No titles match {query ? `"${query}"` : aiFilter ? `AI filter "${aiFilter.originalQuery || 'custom'}"` : 'these filters'}.</span>{aiFilter ? (<button type="button" className="outline-button" style={{ marginTop: '10px', borderColor: 'rgba(239, 68, 68, 0.4)', color: '#f87171', display: 'inline-flex', alignItems: 'center', gap: '6px' }} onClick={handleClearAiFilter}><X size={14} /><span>Clear Smart AI Filter</span></button>) : null}{query ? (<button type="button" className="outline-button" style={{ marginTop: '10px', borderColor: 'var(--accent, #d6ff4b)', color: 'var(--accent, #d6ff4b)', display: 'inline-flex', alignItems: 'center', gap: '6px' }} onClick={() => setAiDrawerOpen(true)}><Sparkles size={14} /><span>Ask AI Companion about "{query}"</span></button>) : null}</div>}</section>}</ErrorBoundary></div><footer className="statusbar"><span className="statusbar-item statusbar-terminal"><TerminalSquare size={13} /> {scannerStatus ? <span className="inline-flex items-center gap-1.5"><span className="pulse-dot" /> {scannerStatus}</span> : 'Ready'}</span>{globalSyncRunning && (<span className="statusbar-item statusbar-sync-active" title="Artwork & metadata sync in progress"><span className="pulse-dot" /><span>{globalSyncProgress?.gameTitle ? `Syncing: ${globalSyncProgress.gameTitle} (${globalSyncProgress.current}/${globalSyncProgress.total})${globalSyncProgress.formattedTransfer ? ` • ${globalSyncProgress.formattedTransfer}` : ''}` : (globalSyncProgress?.message || `Syncing artwork (${globalSyncProgress?.current || 0}/${globalSyncProgress?.total || 0})...`)}</span><button type="button" onClick={handleCancelGlobalSync} className="statusbar-cancel-btn" title="Cancel sync immediately"><X size={11} /> Cancel</button></span>)}{guideSyncStatus?.running && (<span className="statusbar-item statusbar-sync-active" title="Strategy guides downloading from StrategyWiki in progress"><span className="pulse-dot" /><span>{guideSyncStatus.progress?.title ? `Downloading Guides: ${guideSyncStatus.progress.title} (${guideSyncStatus.progress.current}/${guideSyncStatus.progress.total})` : 'Downloading Guides from StrategyWiki...'}</span><button type="button" onClick={() => window.api?.guides?.cancelBatch?.()} className="statusbar-cancel-btn" title="Cancel guide download"><X size={11} /> Cancel</button></span>)}<span className="statusbar-item statusbar-storage"><span className="pulse-dot" /> Offline · Local storage</span>{isVoiceListening && (<span className="statusbar-item statusbar-voice-listening" style={{ color: '#22c55e' }}><span className="pulse-dot" style={{ background: '#22c55e', boxShadow: '0 0 8px rgba(34, 197, 94, 0.6)' }} /> Listening (PTT)...</span>)}{connectedGamepad && (<span className="statusbar-item statusbar-gamepad" title={`Connected Controller: ${connectedGamepad}`}><Gamepad2 size={13} style={{ color: '#22c55e' }} /><span>{connectedGamepad}</span><span className="gamepad-hud-bar" style={{ marginLeft: '6px' }}><span className="gamepad-key-badge badge-a">A</span> Select<span className="gamepad-key-badge badge-b">B</span> Back<span className="gamepad-key-badge badge-x">X</span> Status<span className="gamepad-key-badge badge-y">Y</span> Fav<span className="gamepad-key-badge">LB/RB</span> Views</span></span>)}<span className="statusbar-item statusbar-version">Version 1.3.0</span></footer></main>
+    </div><AiAssistantDrawer open={aiDrawerOpen} onClose={() => setAiDrawerOpen(false)} activeGame={activeGame} layoutTheme={layoutTheme} games={games} onAction={handleAiAction} isVoiceListening={isVoiceListening} onToggleVoice={toggleVoiceListening} /><ScanImportPanel open={scanOpen} onClose={() => setScanOpen(false)} onRefresh={loadData} /><GameEditorModal game={editorGame} onClose={() => setEditorGame(null)} onSaved={handleEditorSaved} /><PurgeConfirmModal open={purgeOpen} busy={purgeBusy} onClose={() => setPurgeOpen(false)} onConfirm={handlePurge} /><BulkEditModal open={bulkEditOpen} count={selectedIds.length} busy={bulkBusy} onClose={() => setBulkEditOpen(false)} onApply={handleBulkApply} /><ContextMenu menu={contextMenu} menuRef={contextMenuRef} onClose={() => setContextMenu(null)} onMoveCategory={moveCategory} onEditGame={setEditorGame} onHideGame={(game) => updateHiddenState(game, true)} onArtworkChanged={handleArtworkChanged} onArtworkError={handleArtworkError} onToggleFavorite={handleToggleFavorite} /><ConfirmActionModal config={confirmModal} onClose={() => setConfirmModal(null)} />{checkpointPrompt && (
+  <div
+    className="checkpoint-note-toast"
+    style={{
+      position: 'fixed',
+      bottom: '48px',
+      right: '24px',
+      zIndex: 9999,
+      width: '380px',
+      padding: '16px',
+      background: 'rgba(18, 18, 22, 0.95)',
+      backdropFilter: 'blur(16px)',
+      border: '1px solid rgba(214, 255, 75, 0.3)',
+      borderRadius: '12px',
+      boxShadow: '0 12px 40px rgba(0, 0, 0, 0.6)',
+    }}
+  >
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <Bookmark size={13} style={{ color: 'var(--accent, #d6ff4b)' }} />
+        <span style={{ fontSize: '11px', fontWeight: 700, color: '#ffffff' }}>
+          Leave a quick note for next time?
+        </span>
+      </div>
+      <button
+        type="button"
+        onClick={() => setCheckpointPrompt(null)}
+        style={{ background: 'transparent', border: 'none', color: '#71717a', cursor: 'pointer', padding: '2px' }}
+      >
+        <X size={13} />
+      </button>
+    </div>
+    <div style={{ fontSize: '11px', color: '#a1a1aa', marginBottom: '10px' }}>
+      {checkpointPrompt.title} session ended. What were you working on?
+    </div>
+    <form
+      onSubmit={(e) => {
+        e.preventDefault()
+        handleSaveCheckpointNote()
+      }}
+      style={{ display: 'flex', gap: '8px', alignItems: 'center' }}
+    >
+      <input
+        type="text"
+        autoFocus
+        value={checkpointText}
+        onChange={handleCheckpointTextChange}
+        placeholder="e.g. Cleared sewer boss, go north..."
+        style={{
+          flex: 1,
+          padding: '7px 10px',
+          background: 'rgba(0, 0, 0, 0.4)',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          borderRadius: '6px',
+          color: '#ffffff',
+          fontSize: '11px',
+          outline: 'none',
+        }}
+      />
+      <button
+        type="button"
+        onClick={toggleVoiceListening}
+        title={isVoiceListening ? 'Recording note... click to stop' : 'Speak note (offline STT)'}
+        style={{
+          padding: '7px',
+          background: isVoiceListening ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+          border: isVoiceListening ? '1px solid #22c55e' : '1px solid rgba(255, 255, 255, 0.1)',
+          borderRadius: '6px',
+          color: isVoiceListening ? '#22c55e' : 'var(--text-secondary, #94a3b8)',
+          cursor: 'pointer',
+        }}
+      >
+        {isVoiceListening ? <Mic size={13} /> : <MicOff size={13} />}
+      </button>
+      <button
+        type="submit"
+        disabled={checkpointSaving || !checkpointText.trim()}
+        className="primary-button"
+        style={{
+          padding: '6px 12px',
+          fontSize: '11px',
+          height: '29px',
+          background: 'var(--accent, #d6ff4b)',
+          color: '#000000',
+          fontWeight: 600,
+          borderRadius: '6px',
+        }}
+      >
+        {checkpointSaving ? 'Saving...' : 'Save'}
+      </button>
+    </form>
+  </div>
+)}<BackupsManagerModal open={backupsModalOpen} busy={backupBusy || restoreBusy} backups={backupsList} loading={backupsLoading} backupsDirectory={backupsDirectory || libraryHealth?.backupsDirectory} onClose={() => setBackupsModalOpen(false)} onBackupNow={handleBackupNow} onOpenFolder={handleOpenBackupsFolder} onRestoreBackup={handleRestoreBackup} onChooseAndRestoreFile={handleChooseAndRestoreFile} /></div>
 }
 export default App

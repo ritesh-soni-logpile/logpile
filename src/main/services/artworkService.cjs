@@ -3,11 +3,25 @@ const fsSync = require('node:fs')
 const path = require('node:path')
 const { pathToFileURL, fileURLToPath } = require('node:url')
 const { execFileSync } = require('node:child_process')
-const { fetchIgdbMetadata, stripTitleNoise } = require('./igdbService.cjs')
+const { fetchIgdbMetadata, stripTitleNoise, normalizeTitle, splitCamelCase } = require('./igdbService.cjs')
 const { isDlcTitle, isDlcException } = require('./utilityRules.cjs')
 const { normalizeCanonicalTitle } = require('./deduplicationService.cjs')
 
+let logNetworkActivity = null
+try {
+  const dbModule = require('../../../electron/db.cjs')
+  logNetworkActivity = dbModule.logNetworkActivity
+} catch {}
+
 const API_BASE = 'https://www.steamgriddb.com/api/v2'
+
+function formatTransferBytes(bytes) {
+  if (!bytes || bytes <= 0) return '0 B'
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
+}
 
 function safeKey(value) { return String(value || '').trim() }
 
@@ -27,30 +41,31 @@ function cleanArtworkTitle(title) {
     .replace(/[?!*~]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
-  return cleaned || String(title || '').trim()
+  const camel = splitCamelCase(cleaned)
+  return camel || cleaned || String(title || '').trim()
 }
 
 function findBestAutocompleteMatch(candidates = [], targetTitle) {
   if (!candidates || !candidates.length || !targetTitle) return null
-  const cleanTarget = cleanArtworkTitle(targetTitle).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
-  if (!cleanTarget) return candidates[0] || null
+  const normTarget = normalizeTitle(targetTitle)
+  if (!normTarget) return null
 
-  const targetNumbers = cleanTarget.match(/\b\d+\b/g) || []
+  const targetNumbers = normTarget.match(/\b\d+\b/g) || []
 
-  // 1. Exact match on normalized title
+  // 1. Exact match on normalized title (handling roman numerals, colons, subtitles)
   for (const item of candidates) {
     if (!item?.name) continue
-    const cleanItem = cleanArtworkTitle(item.name).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
-    if (cleanItem === cleanTarget) return item
+    const normItem = normalizeTitle(item.name)
+    if (normItem === normTarget) return item
   }
 
   // 2. Candidates whose prefix before ':' or ' - ' exactly matches the target
-  const prefixMatches = candidates.filter(item => {
+  const prefixMatches = candidates.filter((item) => {
     if (!item?.name) return false
     const itemPrefix = item.name.split(/[:–—]| - /)[0]
-    const cleanPrefix = cleanArtworkTitle(itemPrefix).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
-    if (cleanPrefix !== cleanTarget) return false
-    const prefixNumbers = cleanPrefix.match(/\b\d+\b/g) || []
+    const normPrefix = normalizeTitle(itemPrefix)
+    if (normPrefix !== normTarget) return false
+    const prefixNumbers = normPrefix.match(/\b\d+\b/g) || []
     return prefixNumbers.length === targetNumbers.length
   })
 
@@ -60,17 +75,37 @@ function findBestAutocompleteMatch(candidates = [], targetTitle) {
     return prefixMatches[0]
   }
 
-  // 3. Candidates starting with cleanTarget that don't introduce sequel numbers
-  const prefixStartsWith = candidates.filter(item => {
+  // 3. Candidates starting with normTarget that don't introduce sequel numbers
+  const prefixStartsWith = candidates.filter((item) => {
     if (!item?.name) return false
-    const cleanItem = cleanArtworkTitle(item.name).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
-    const itemNumbers = cleanItem.match(/\b\d+\b/g) || []
+    const normItem = normalizeTitle(item.name)
+    const itemNumbers = normItem.match(/\b\d+\b/g) || []
     if (targetNumbers.length === 0 && itemNumbers.length > 0) return false
-    return cleanItem.startsWith(cleanTarget)
+    if (targetNumbers.length > 0 && !targetNumbers.every((n) => itemNumbers.includes(n))) return false
+    return normItem.startsWith(normTarget)
   })
   if (prefixStartsWith.length > 0) return prefixStartsWith[0]
 
-  return candidates[0] || null
+  // 4. Word overlap scoring for fuzzy matches
+  const targetWords = normTarget.split(' ').filter(Boolean)
+  let bestScore = 0
+  let bestItem = null
+  for (const item of candidates) {
+    if (!item?.name) continue
+    const normItem = normalizeTitle(item.name)
+    const itemWords = normItem.split(' ').filter(Boolean)
+    let matched = 0
+    for (const w of targetWords) {
+      if (itemWords.includes(w)) matched++
+    }
+    const ratio = matched / Math.max(targetWords.length, itemWords.length)
+    if (ratio > bestScore && ratio >= 0.5) {
+      bestScore = ratio
+      bestItem = item
+    }
+  }
+
+  return bestItem
 }
 
 function getArtworkDirectory(userDataPath) {
@@ -140,46 +175,53 @@ function extractExeIcon(exePath, destPngPath) {
   } catch { return false }
 }
 
-async function fetchGridsForId(id, apiKey, signal) {
+async function fetchGridsForId(id, apiKey, signal, preferAnimated = false) {
   if (!id || !apiKey) return []
   const cleanId = String(id).trim()
+  const typesParam = preferAnimated ? '&types=static,animated' : ''
+  const typesQuery = preferAnimated ? '?types=static,animated' : ''
   try {
-    const grids = await apiGet(`/grids/game/${cleanId}?dimensions=600x900`, apiKey, signal)
+    const grids = await apiGet(`/grids/game/${cleanId}?dimensions=600x900${typesParam}`, apiKey, signal)
     if (grids?.length > 0) return grids
   } catch {}
   try {
-    const grids = await apiGet(`/grids/game/${cleanId}`, apiKey, signal)
+    const grids = await apiGet(`/grids/game/${cleanId}${typesQuery}`, apiKey, signal)
     if (grids?.length > 0) return grids
   } catch {}
   if (/^\d+$/.test(cleanId)) {
     try {
-      const grids = await apiGet(`/grids/steam/${cleanId}?dimensions=600x900`, apiKey, signal)
+      const grids = await apiGet(`/grids/steam/${cleanId}?dimensions=600x900${typesParam}`, apiKey, signal)
       if (grids?.length > 0) return grids
     } catch {}
     try {
-      const grids = await apiGet(`/grids/steam/${cleanId}`, apiKey, signal)
+      const grids = await apiGet(`/grids/steam/${cleanId}${typesQuery}`, apiKey, signal)
       if (grids?.length > 0) return grids
     } catch {}
   }
   return []
 }
 
-async function fetchHeroesForId(id, apiKey, signal, heroResolution = '2.5k') {
+async function fetchHeroesForId(id, apiKey, signal, heroResolution = '2.5k', preferAnimated = false) {
   if (!id || !apiKey) return []
   const cleanId = String(id).trim()
+  const isAnimatedHero = preferAnimated || heroResolution === 'animated'
+  const typesParam = isAnimatedHero ? '&types=animated,static' : ''
+  const typesQuery = isAnimatedHero ? '?types=animated,static' : ''
   const dimQuery = heroResolution === '4k'
-    ? '?dimensions=3840x2160,3840x1240'
+    ? `?dimensions=3840x2160,3840x1240${typesParam}`
     : (heroResolution === '720p'
-      ? '?dimensions=1920x620,1920x1080'
+      ? `?dimensions=1920x620,1920x1080${typesParam}`
       : (heroResolution === '1080p'
-        ? '?dimensions=1920x1080,1920x620'
-        : '?dimensions=2560x1440,1920x1080,1920x620'))
+        ? `?dimensions=1920x1080,1920x620${typesParam}`
+        : (heroResolution === 'animated'
+          ? `?types=animated,static`
+          : `?dimensions=2560x1440,1920x1080,1920x620${typesParam}`)))
   try {
     const heroes = await apiGet(`/heroes/game/${cleanId}${dimQuery}`, apiKey, signal)
     if (heroes?.length > 0) return heroes
   } catch {}
   try {
-    const heroes = await apiGet(`/heroes/game/${cleanId}`, apiKey, signal)
+    const heroes = await apiGet(`/heroes/game/${cleanId}${typesQuery}`, apiKey, signal)
     if (heroes?.length > 0) return heroes
   } catch {}
   if (/^\d+$/.test(cleanId)) {
@@ -188,15 +230,30 @@ async function fetchHeroesForId(id, apiKey, signal, heroResolution = '2.5k') {
       if (heroes?.length > 0) return heroes
     } catch {}
     try {
-      const heroes = await apiGet(`/heroes/steam/${cleanId}`, apiKey, signal)
+      const heroes = await apiGet(`/heroes/steam/${cleanId}${typesQuery}`, apiKey, signal)
       if (heroes?.length > 0) return heroes
     } catch {}
   }
   return []
 }
 
-function pickBestGrid(grids = []) {
+function pickBestGrid(grids = [], preferAnimated = false) {
   if (!Array.isArray(grids) || !grids.length) return null
+
+  // If user enabled animated covers, prioritize animated 600x900 webp/gif/apng
+  if (preferAnimated) {
+    const animatedGrid = grids.find(g => {
+      const url = String(g.url || '').toLowerCase()
+      const mime = String(g.mime || '').toLowerCase()
+      const isAnim = mime.includes('webp') || mime.includes('gif') || url.includes('.webp') || url.includes('.gif') || Boolean(g.animated)
+      return isAnim && Number(g.width) === 600 && Number(g.height) === 900
+    }) || grids.find(g => {
+      const url = String(g.url || '').toLowerCase()
+      const mime = String(g.mime || '').toLowerCase()
+      return mime.includes('webp') || mime.includes('gif') || url.includes('.webp') || url.includes('.gif') || Boolean(g.animated)
+    })
+    if (animatedGrid) return animatedGrid
+  }
 
   // Filter out grids with DVD cases, plastic case mockups, or ugly borders when clean covers exist
   const isMockupOrDvd = (g) => {
@@ -208,27 +265,35 @@ function pickBestGrid(grids = []) {
   const cleanGrids = grids.filter(g => !isMockupOrDvd(g))
   const pool = cleanGrids.length > 0 ? cleanGrids : grids
 
+  // When preferAnimated is false, strictly filter out animated grids (webp/gif/apng) to preserve 120+ FPS
+  const staticPool = preferAnimated ? pool : pool.filter(g => {
+    const url = String(g.url || '').toLowerCase()
+    const mime = String(g.mime || '').toLowerCase()
+    return !g.animated && !mime.includes('gif') && !url.includes('.gif')
+  })
+  const effectivePool = staticPool.length > 0 ? staticPool : pool
+
   // 1. Prefer crisp static 600x900 WebP (lightweight & high fidelity)
-  const webp600 = pool.find(g => String(g.url || '').toLowerCase().includes('.webp') && Number(g.width) === 600 && Number(g.height) === 900)
+  const webp600 = effectivePool.find(g => String(g.url || '').toLowerCase().includes('.webp') && Number(g.width) === 600 && Number(g.height) === 900)
   if (webp600) return webp600
   // 2. Any 600x900 grid
-  const standard600 = pool.find(g => Number(g.width) === 600 && Number(g.height) === 900)
+  const standard600 = effectivePool.find(g => Number(g.width) === 600 && Number(g.height) === 900)
   if (standard600) return standard600
   // 3. Any webp grid
-  const anyWebp = pool.find(g => String(g.url || '').toLowerCase().includes('.webp'))
+  const anyWebp = effectivePool.find(g => String(g.url || '').toLowerCase().includes('.webp'))
   if (anyWebp) return anyWebp
-  return pool[0]
+  return effectivePool[0]
 }
 
 function pickBestHero(heroes, heroResolution = '2.5k', preferAnimated = false) {
   if (!Array.isArray(heroes) || !heroes.length) return null
 
-  // If user enabled animated artwork, prioritize animated webp/gif for the hero showcase
-  if (preferAnimated) {
+  // If user enabled animated artwork or selected animated resolution, prioritize animated webm/mp4/webp/gif
+  if (preferAnimated || heroResolution === 'animated') {
     const animatedHero = heroes.find(h => {
       const url = String(h.url || '').toLowerCase()
       const mime = String(h.mime || '').toLowerCase()
-      return mime.includes('webp') || mime.includes('gif') || url.includes('.webp') || url.includes('.gif') || Boolean(h.animated)
+      return mime.includes('webm') || mime.includes('mp4') || mime.includes('webp') || mime.includes('gif') || url.includes('.webm') || url.includes('.mp4') || url.includes('.webp') || url.includes('.gif') || Boolean(h.animated)
     })
     if (animatedHero) return animatedHero
   }
@@ -409,6 +474,40 @@ async function autoResolveMissingArtwork(db, userDataPath, onProgress) {
     } catch {}
 
     if (!resolvedUrl) {
+      const sgdbKey = getAppSettingValue(db, 'steamgriddb_api_key')
+      if (sgdbKey) {
+        try {
+          const searchRes = await apiGet(`/search/autocomplete/${encodeURIComponent(cleanArtworkTitle(game.canonical_title))}`, sgdbKey).catch(() => [])
+          const best = findBestAutocompleteMatch(searchRes, game.canonical_title)
+          if (best?.id) {
+            const grids = await fetchGridsForId(best.id, sgdbKey)
+            const heroes = await fetchHeroesForId(best.id, sgdbKey)
+            const bestGrid = pickBestGrid(grids)
+            const bestHero = pickBestHero(heroes)
+            let newCover = null
+            let newHero = null
+            if (bestGrid?.url) {
+              const ext = getArtworkExtension(bestGrid.url, 'jpg')
+              const dest = path.join(cacheDir, `${artworkSlug(game)}-cover.${ext}`)
+              newCover = await downloadImage(bestGrid.url, dest).catch(() => null)
+            }
+            if (bestHero?.url) {
+              const hExt = getArtworkExtension(bestHero.url, 'jpg')
+              const hDest = path.join(cacheDir, `${artworkSlug(game)}-hero.${hExt}`)
+              newHero = await downloadImage(bestHero.url, hDest).catch(() => null)
+            }
+            if (newCover || newHero) {
+              db.prepare('UPDATE games SET cover_url = COALESCE(?, cover_url), hero_url = COALESCE(?, hero_url), steamgriddb_id = COALESCE(steamgriddb_id, ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(newCover, newHero, String(best.id), game.id)
+              resolvedUrl = newCover
+              updatedCount++
+              if (onProgress) onProgress({ source: 'artwork-resolver', phase: 'fetching', current: i + 1, total: candidates.length, title: game.canonical_title, message: `Success: Found SteamGridDB poster for ${game.canonical_title}` })
+            }
+          }
+        } catch {}
+      }
+    }
+
+    if (!resolvedUrl) {
       const exe = resolveGameExecutable(game)
       if (exe) {
         try {
@@ -438,7 +537,9 @@ function relinkLocalArtwork(db, userDataPath, game) {
     if (isLocalArtwork(game[column])) {
       try {
         const localPath = String(game[column]).startsWith('file:') ? fileURLToPath(game[column]) : String(game[column])
-        currentValid = fsSync.existsSync(localPath)
+        const rel = path.relative(userDataPath, localPath)
+        const isInsideUserData = !rel.startsWith('..') && !path.isAbsolute(rel)
+        currentValid = isInsideUserData && fsSync.existsSync(localPath)
       } catch {
         currentValid = false
       }
@@ -478,15 +579,43 @@ function relinkAllLocalArtwork(db, userDataPath) {
   return relinked
 }
 
-async function apiGet(endpoint, apiKey, signal) {
-  const res = await fetch(`${API_BASE}${endpoint}`, { headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' }, signal })
+async function apiGet(endpoint, apiKey, signal, options = {}) {
+  const startTime = Date.now()
+  const url = `${API_BASE}${endpoint}`
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' }, signal })
   if (!res.ok) throw new Error(`SteamGridDB error: ${res.status}`)
-  return (await res.json()).data || []
+  const text = await res.text()
+  const bytes = Buffer.byteLength(text, 'utf8')
+  const durationMs = Date.now() - startTime
+
+  if (options && typeof options.onBytes === 'function') {
+    options.onBytes(bytes, 'SteamGridDB API')
+  }
+  if (options?.db && logNetworkActivity) {
+    try {
+      logNetworkActivity(options.db, {
+        service: 'SteamGridDB',
+        endpoint: url,
+        method: 'GET',
+        statusCode: res.status,
+        bytesTransferred: bytes,
+        durationMs,
+        gameId: options.gameId || null,
+        gameTitle: options.gameTitle || null,
+        assetType: options.assetType || 'SteamGridDB Query',
+        status: 'success',
+      })
+    } catch {}
+  }
+  const json = JSON.parse(text)
+  return json.data || []
 }
 
 function getArtworkExtension(url, fallback = 'jpg') {
   if (!url) return fallback
   const clean = String(url).split('?')[0].toLowerCase()
+  if (clean.endsWith('.webm')) return 'webm'
+  if (clean.endsWith('.mp4')) return 'mp4'
   if (clean.endsWith('.webp')) return 'webp'
   if (clean.endsWith('.png')) return 'png'
   if (clean.endsWith('.gif')) return 'gif'
@@ -494,18 +623,73 @@ function getArtworkExtension(url, fallback = 'jpg') {
   return fallback
 }
 
-async function downloadImage(url, destination) {
-  const res = await fetch(url)
+function abortableSleep(ms, signal) {
+  if (signal?.aborted) return Promise.resolve()
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms)
+    signal?.addEventListener('abort', () => {
+      clearTimeout(timer)
+      resolve()
+    }, { once: true })
+  })
+}
+
+async function downloadImage(url, destination, signal = null, options = {}) {
+  if (signal?.aborted) throw new Error('Download aborted')
+  const startTime = Date.now()
+  const res = await fetch(url, { signal: signal || undefined })
   if (!res.ok) throw new Error(`Download failed: ${res.status}`)
+  if (signal?.aborted) throw new Error('Download aborted')
   const contentType = (res.headers.get('content-type') || '').toLowerCase()
   let finalDest = destination
-  // If destination has a generic ext but actual content is webp or png, adjust extension
-  if (contentType.includes('webp') && !finalDest.endsWith('.webp')) {
+  // If destination has a generic ext but actual content is webm, mp4, webp, png, or gif, adjust extension
+  if (contentType.includes('webm') && !finalDest.endsWith('.webm')) {
+    finalDest = finalDest.replace(/\.[a-zA-Z0-9]+$/, '.webm')
+  } else if (contentType.includes('mp4') && !finalDest.endsWith('.mp4')) {
+    finalDest = finalDest.replace(/\.[a-zA-Z0-9]+$/, '.mp4')
+  } else if (contentType.includes('webp') && !finalDest.endsWith('.webp')) {
     finalDest = finalDest.replace(/\.[a-zA-Z0-9]+$/, '.webp')
   } else if (contentType.includes('png') && !finalDest.endsWith('.png')) {
     finalDest = finalDest.replace(/\.[a-zA-Z0-9]+$/, '.png')
+  } else if (contentType.includes('gif') && !finalDest.endsWith('.gif')) {
+    finalDest = finalDest.replace(/\.[a-zA-Z0-9]+$/, '.gif')
   }
-  await fs.writeFile(finalDest, Buffer.from(await res.arrayBuffer()))
+  const buffer = Buffer.from(await res.arrayBuffer())
+  if (signal?.aborted) throw new Error('Download aborted')
+  await fs.writeFile(finalDest, buffer)
+
+  const byteSize = buffer.length
+  const durationMs = Date.now() - startTime
+
+  if (typeof options === 'function') {
+    options({ url, finalDest, bytes: byteSize, durationMs, statusCode: res.status })
+  } else if (options && typeof options.onComplete === 'function') {
+    options.onComplete({ url, finalDest, bytes: byteSize, durationMs, statusCode: res.status })
+  }
+
+  if (options?.db && logNetworkActivity) {
+    try {
+      const serviceName = url.includes('steamgriddb')
+        ? 'SteamGridDB'
+        : (url.includes('steamstatic') || url.includes('steampowered'))
+          ? 'Steam CDN'
+          : 'Artwork Provider'
+      logNetworkActivity(options.db, {
+        service: serviceName,
+        endpoint: url,
+        method: 'GET',
+        statusCode: res.status,
+        bytesTransferred: byteSize,
+        durationMs,
+        gameId: options.gameId || null,
+        gameTitle: options.gameTitle || null,
+        assetType: options.assetType || 'Artwork Asset',
+        status: 'success',
+        details: JSON.stringify({ destination: path.basename(finalDest), contentType }),
+      })
+    } catch {}
+  }
+
   return pathToFileURL(finalDest).href
 }
 
@@ -513,8 +697,10 @@ async function runBulkArtworkSync(db, userDataPath, apiKey, onProgress, signal, 
   const key = safeKey(apiKey)
   if (!key) throw new Error('SteamGridDB API key is required.')
   const cacheDir = getArtworkDirectory(userDataPath)
-  const heroResolution = getAppSettingValue(db, 'hero_resolution', '2.5k')
-  const preferAnimated = Boolean(options?.preferAnimated ?? (getAppSettingValue(db, 'prefer_animated_artwork', 'false') === 'true'))
+  const heroResolution = options?.heroResolution || getAppSettingValue(db, 'hero_resolution', '2.5k')
+  const settingAnimated = getAppSettingValue(db, 'prefer_animated_artwork', 'false') === 'true'
+  const preferAnimated = Boolean(options?.preferAnimated ?? (settingAnimated || heroResolution === 'animated'))
+  const preferAnimatedCovers = Boolean(options?.preferAnimatedCovers ?? (getAppSettingValue(db, 'prefer_animated_covers', 'false') === 'true'))
 
   const forceAll = Boolean(options?.forceAll || options?.forceHeroes)
 
@@ -522,7 +708,7 @@ async function runBulkArtworkSync(db, userDataPath, apiKey, onProgress, signal, 
     ? db.prepare('SELECT * FROM games ORDER BY canonical_title COLLATE NOCASE').all()
     : db.prepare(`
         SELECT * FROM games 
-        WHERE cover_url IS NULL OR TRIM(cover_url) = '' OR cover_url LIKE '%.svg%' OR cover_url LIKE '%fallback%'
+        WHERE cover_url IS NULL OR TRIM(cover_url) = '' OR cover_url LIKE '%.svg%' OR cover_url LIKE '%fallback%' OR cover_url LIKE '%-icon.png%'
            OR hero_url IS NULL OR TRIM(hero_url) = ''
            OR logo_url IS NULL OR TRIM(logo_url) = ''
            OR steamgriddb_id IS NULL OR TRIM(steamgriddb_id) = ''
@@ -530,28 +716,64 @@ async function runBulkArtworkSync(db, userDataPath, apiKey, onProgress, signal, 
       `).all()
 
   let updated = 0
-  for (let i = 0; i < candidates.length; i++) {
-    if (signal?.aborted) break
-    const game = candidates[i]
-    const needsCover = forceAll || !game.cover_url || game.cover_url.includes('.svg') || game.cover_url.includes('fallback')
+  let completed = 0
+  let totalBytesThisSync = 0
+  let totalAssetsUpdatedThisSync = 0
+  const CONCURRENCY = 3
+
+  async function processArtworkCandidate(game) {
+    if (signal?.aborted) return
+    const needsCover = forceAll || !game.cover_url || game.cover_url.includes('.svg') || game.cover_url.includes('fallback') || game.cover_url.includes('-icon.png')
     const needsHero = forceAll || !game.hero_url || !String(game.hero_url).trim()
     const needsLogo = forceAll || !game.logo_url || !String(game.logo_url).trim()
-
-    if (onProgress) onProgress({ source: 'steamgriddb', phase: 'fetching', current: i + 1, total: candidates.length, title: game.canonical_title, message: `Syncing: ${i + 1} / ${candidates.length} — ${game.canonical_title}` })
 
     let newCoverUrl = null
     let newHeroUrl = null
     let newLogoUrl = null
     let resolvedId = game.steamgriddb_id ? String(game.steamgriddb_id).trim() : null
 
+    let currentFileBytes = 0
+    let lastAssetLabel = ''
+
+    const onAssetDownloaded = (assetLabel, byteSize) => {
+      currentFileBytes = byteSize
+      lastAssetLabel = assetLabel
+      totalBytesThisSync += byteSize
+      totalAssetsUpdatedThisSync++
+
+      if (onProgress) {
+        onProgress({
+          source: 'steamgriddb',
+          phase: 'fetching',
+          current: Math.min(candidates.length, completed + 1),
+          total: candidates.length,
+          title: game.canonical_title,
+          gameTitle: game.canonical_title,
+          currentAsset: assetLabel,
+          fileSizeBytes: byteSize,
+          formattedCurrentFile: formatTransferBytes(byteSize),
+          totalBytes: totalBytesThisSync,
+          formattedTransfer: formatTransferBytes(totalBytesThisSync),
+          assetsUpdated: totalAssetsUpdatedThisSync,
+          message: `Syncing Artwork: ${game.canonical_title} (${Math.min(candidates.length, completed + 1)} / ${candidates.length})`,
+          subMessage: `Current: ${formatTransferBytes(byteSize)} (${assetLabel}) • Total Transferred: ${formatTransferBytes(totalBytesThisSync)}`,
+        })
+      }
+    }
+
     try {
       let grids = []
       let heroes = []
       let logos = []
       if (resolvedId) {
-        if (needsCover) grids = await fetchGridsForId(resolvedId, key, signal)
-        if (needsHero) heroes = await fetchHeroesForId(resolvedId, key, signal, heroResolution)
-        if (needsLogo) logos = await fetchLogosForId(resolvedId, key, signal)
+        const [gridsRes, heroesRes, logosRes] = await Promise.all([
+          needsCover ? fetchGridsForId(resolvedId, key, signal, preferAnimatedCovers).catch(() => []) : [],
+          needsHero ? fetchHeroesForId(resolvedId, key, signal, heroResolution, preferAnimated).catch(() => []) : [],
+          needsLogo ? fetchLogosForId(resolvedId, key, signal).catch(() => []) : [],
+        ])
+        grids = gridsRes || []
+        heroes = heroesRes || []
+        logos = logosRes || []
       }
 
       // Check storefront IDs directly (Steam App ID or GOG ID) for instant, exact lookup
@@ -560,22 +782,33 @@ async function runBulkArtworkSync(db, userDataPath, apiKey, onProgress, signal, 
           const sources = db.prepare("SELECT platform, platform_game_id FROM game_sources WHERE game_id = ?").all(game.id)
           for (const s of sources) {
             if (s.platform === 'steam' && /^\d+$/.test(s.platform_game_id)) {
-              if (needsCover && !grids.length) grids = await apiGet(`/grids/steam/${s.platform_game_id}?dimensions=600x900`, key, signal).catch(() => [])
-              if (needsCover && !grids.length) grids = await apiGet(`/grids/steam/${s.platform_game_id}`, key, signal).catch(() => [])
-              if (needsHero && !heroes.length) heroes = await fetchHeroesForId(s.platform_game_id, key, signal, heroResolution)
-              if (needsLogo && !logos.length) logos = await apiGet(`/logos/steam/${s.platform_game_id}`, key, signal).catch(() => [])
+              const typesParam = preferAnimatedCovers ? '&types=static,animated' : ''
+              const typesQuery = preferAnimatedCovers ? '?types=static,animated' : ''
+              const [steamGrids, steamHeroes, steamLogos] = await Promise.all([
+                needsCover ? apiGet(`/grids/steam/${s.platform_game_id}?dimensions=600x900${typesParam}`, key, signal, { db, gameId: game.id, gameTitle: game.canonical_title, assetType: 'SteamGridDB Grid Query' }).catch(() => apiGet(`/grids/steam/${s.platform_game_id}${typesQuery}`, key, signal, { db, gameId: game.id, gameTitle: game.canonical_title, assetType: 'SteamGridDB Grid Query' }).catch(() => [])) : [],
+                needsHero ? fetchHeroesForId(s.platform_game_id, key, signal, heroResolution, preferAnimated) : [],
+                needsLogo ? apiGet(`/logos/steam/${s.platform_game_id}`, key, signal, { db, gameId: game.id, gameTitle: game.canonical_title, assetType: 'SteamGridDB Logo Query' }).catch(() => []) : [],
+              ])
+              if (needsCover && steamGrids?.length) grids = steamGrids
+              if (needsHero && steamHeroes?.length) heroes = steamHeroes
+              if (needsLogo && steamLogos?.length) logos = steamLogos
               if (!resolvedId) {
-                const gameInfo = await apiGet(`/games/steam/${s.platform_game_id}`, key, signal).catch(() => null)
+                const gameInfo = await apiGet(`/games/steam/${s.platform_game_id}`, key, signal, { db, gameId: game.id, gameTitle: game.canonical_title, assetType: 'SteamGridDB Game Query' }).catch(() => null)
                 if (gameInfo?.id) resolvedId = String(gameInfo.id)
               }
               break
             } else if (s.platform === 'gog' && /^\d+$/.test(s.platform_game_id)) {
-              const gameInfo = await apiGet(`/games/gog/${s.platform_game_id}`, key, signal).catch(() => null)
+              const gameInfo = await apiGet(`/games/gog/${s.platform_game_id}`, key, signal, { db, gameId: game.id, gameTitle: game.canonical_title, assetType: 'SteamGridDB GOG Query' }).catch(() => null)
               if (gameInfo?.id) {
                 resolvedId = String(gameInfo.id)
-                if (needsCover && !grids.length) grids = await fetchGridsForId(resolvedId, key, signal)
-                if (needsHero && !heroes.length) heroes = await fetchHeroesForId(resolvedId, key, signal, heroResolution)
-                if (needsLogo && !logos.length) logos = await fetchLogosForId(resolvedId, key, signal)
+                const [gogGrids, gogHeroes, gogLogos] = await Promise.all([
+                  needsCover ? fetchGridsForId(resolvedId, key, signal, preferAnimatedCovers) : [],
+                  needsHero ? fetchHeroesForId(resolvedId, key, signal, heroResolution, preferAnimated) : [],
+                  needsLogo ? fetchLogosForId(resolvedId, key, signal) : [],
+                ])
+                if (needsCover && gogGrids?.length) grids = gogGrids
+                if (needsHero && gogHeroes?.length) heroes = gogHeroes
+                if (needsLogo && gogLogos?.length) logos = gogLogos
               }
               break
             }
@@ -585,55 +818,132 @@ async function runBulkArtworkSync(db, userDataPath, apiKey, onProgress, signal, 
 
       // Fall back to title search autocomplete
       if ((!grids.length && needsCover) || (!heroes.length && needsHero && !resolvedId) || (!logos.length && needsLogo && !resolvedId)) {
-        let searchRes = await apiGet(`/search/autocomplete/${encodeURIComponent(cleanArtworkTitle(game.canonical_title))}`, key, signal).catch(() => [])
+        let searchRes = await apiGet(`/search/autocomplete/${encodeURIComponent(cleanArtworkTitle(game.canonical_title))}`, key, signal, { db, gameId: game.id, gameTitle: game.canonical_title, assetType: 'SteamGridDB Autocomplete' }).catch(() => [])
         if (!searchRes?.length && (game.canonical_title.includes(':') || game.canonical_title.includes(' - '))) {
           const prefix = game.canonical_title.split(/[:–—]| - /)[0].trim()
           if (prefix && prefix !== game.canonical_title) {
-            searchRes = await apiGet(`/search/autocomplete/${encodeURIComponent(cleanArtworkTitle(prefix))}`, key, signal).catch(() => [])
+            searchRes = await apiGet(`/search/autocomplete/${encodeURIComponent(cleanArtworkTitle(prefix))}`, key, signal, { db, gameId: game.id, gameTitle: game.canonical_title, assetType: 'SteamGridDB Autocomplete' }).catch(() => [])
           }
         }
         const bestMatch = findBestAutocompleteMatch(searchRes, game.canonical_title)
         if (bestMatch?.id) {
           resolvedId = String(bestMatch.id)
-          if (needsCover && !grids.length) grids = await fetchGridsForId(resolvedId, key, signal)
-          if (needsHero && !heroes.length) heroes = await fetchHeroesForId(resolvedId, key, signal, heroResolution)
-          if (needsLogo && !logos.length) logos = await fetchLogosForId(resolvedId, key, signal)
+          const [matchGrids, matchHeroes, matchLogos] = await Promise.all([
+            needsCover ? fetchGridsForId(resolvedId, key, signal, preferAnimatedCovers) : [],
+            needsHero ? fetchHeroesForId(resolvedId, key, signal, heroResolution, preferAnimated) : [],
+            needsLogo ? fetchLogosForId(resolvedId, key, signal) : [],
+          ])
+          if (needsCover && matchGrids?.length) grids = matchGrids
+          if (needsHero && matchHeroes?.length) heroes = matchHeroes
+          if (needsLogo && matchLogos?.length) logos = matchLogos
         }
       }
-      const bestGrid = pickBestGrid(grids)
+
+      const bestGrid = pickBestGrid(grids, preferAnimatedCovers)
+      const bestHero = pickBestHero(heroes, heroResolution, preferAnimated)
+      const bestLogo = logos?.[0]
+
+      const downloadTasks = []
       if (bestGrid?.url && needsCover) {
         const ext = getArtworkExtension(bestGrid.url, 'jpg')
         const dest = path.join(cacheDir, `${artworkSlug(game)}-cover.${ext}`)
-        newCoverUrl = await downloadImage(bestGrid.url, dest)
+        const label = preferAnimatedCovers && (ext === 'webm' || ext === 'mp4') ? 'Motion Poster' : 'Poster'
+        downloadTasks.push(
+          downloadImage(bestGrid.url, dest, signal, {
+            db,
+            gameId: game.id,
+            gameTitle: game.canonical_title,
+            assetType: label,
+            onComplete: (info) => {
+              newCoverUrl = pathToFileURL(info.finalDest || dest).href
+              onAssetDownloaded(label, info.bytes || 0)
+            }
+          }).catch(() => {})
+        )
       }
-      const bestHero = pickBestHero(heroes, heroResolution, preferAnimated)
       if (bestHero?.url && needsHero) {
         const ext = getArtworkExtension(bestHero.url, 'jpg')
         const destHero = path.join(cacheDir, `${artworkSlug(game)}-hero.${ext}`)
-        newHeroUrl = await downloadImage(bestHero.url, destHero)
+        const isVideo = ext === 'webm' || ext === 'mp4'
+        const label = isVideo ? 'Motion Hero' : 'Hero Backdrop'
+        downloadTasks.push(
+          downloadImage(bestHero.url, destHero, signal, {
+            db,
+            gameId: game.id,
+            gameTitle: game.canonical_title,
+            assetType: label,
+            onComplete: (info) => {
+              newHeroUrl = pathToFileURL(info.finalDest || destHero).href
+              onAssetDownloaded(label, info.bytes || 0)
+            }
+          }).catch(() => {})
+        )
       }
-      if (logos?.[0]?.url && needsLogo) {
+      if (bestLogo?.url && needsLogo) {
         const destLogo = path.join(cacheDir, `${artworkSlug(game)}-logo.png`)
-        try {
-          newLogoUrl = await downloadImage(logos[0].url, destLogo)
-        } catch {}
+        const label = 'Transparent Logo'
+        downloadTasks.push(
+          downloadImage(bestLogo.url, destLogo, signal, {
+            db,
+            gameId: game.id,
+            gameTitle: game.canonical_title,
+            assetType: label,
+            onComplete: (info) => {
+              newLogoUrl = pathToFileURL(info.finalDest || destLogo).href
+              onAssetDownloaded(label, info.bytes || 0)
+            }
+          }).catch(() => {})
+        )
+      }
+      if (downloadTasks.length > 0) {
+        await Promise.all(downloadTasks)
       }
     } catch {}
+
+    if (signal?.aborted) return
 
     // Fall back to Steam Store search if cover or hero still needed
     if ((needsCover && !newCoverUrl) || (needsHero && !newHeroUrl)) {
       try {
         const match = await fetchSteamStorePoster(game.canonical_title)
+        const storeDownloads = []
         if (match?.coverUrl && needsCover && !newCoverUrl) {
           const dest = path.join(cacheDir, `${artworkSlug(game)}-cover.jpg`)
-          try { newCoverUrl = await downloadImage(match.coverUrl, dest) } catch { newCoverUrl = match.coverUrl }
+          const label = 'Steam Store Poster'
+          storeDownloads.push(
+            downloadImage(match.coverUrl, dest, signal, {
+              db,
+              gameId: game.id,
+              gameTitle: game.canonical_title,
+              assetType: label,
+              onComplete: (info) => {
+                newCoverUrl = pathToFileURL(info.finalDest || dest).href
+                onAssetDownloaded(label, info.bytes || 0)
+              }
+            }).catch(() => { newCoverUrl = match.coverUrl })
+          )
         }
         if (match?.heroUrl && needsHero && !newHeroUrl) {
           const destHero = path.join(cacheDir, `${artworkSlug(game)}-hero.jpg`)
-          try { newHeroUrl = await downloadImage(match.heroUrl, destHero) } catch { newHeroUrl = match.heroUrl }
+          const label = 'Steam Store Hero'
+          storeDownloads.push(
+            downloadImage(match.heroUrl, destHero, signal, {
+              db,
+              gameId: game.id,
+              gameTitle: game.canonical_title,
+              assetType: label,
+              onComplete: (info) => {
+                newHeroUrl = pathToFileURL(info.finalDest || destHero).href
+                onAssetDownloaded(label, info.bytes || 0)
+              }
+            }).catch(() => { newHeroUrl = match.heroUrl })
+          )
         }
+        if (storeDownloads.length > 0) await Promise.all(storeDownloads)
       } catch {}
     }
+
+    if (signal?.aborted) return
 
     // Fall back to executable icon if cover still needed
     let resolvedExe = null
@@ -661,25 +971,75 @@ async function runBulkArtworkSync(db, userDataPath, apiKey, onProgress, signal, 
       ).run(newCoverUrl, newHeroUrl, newLogoUrl, resolvedId || null, resolvedExe || null, game.id)
       updated++
     }
-    await new Promise((resolve) => setTimeout(resolve, 800))
+
+    completed++
+    if (onProgress) {
+      onProgress({
+        source: 'steamgriddb',
+        phase: 'fetching',
+        current: completed,
+        total: candidates.length,
+        title: game.canonical_title,
+        gameTitle: game.canonical_title,
+        currentAsset: lastAssetLabel || 'Artwork',
+        fileSizeBytes: currentFileBytes,
+        formattedCurrentFile: formatTransferBytes(currentFileBytes),
+        totalBytes: totalBytesThisSync,
+        formattedTransfer: formatTransferBytes(totalBytesThisSync),
+        assetsUpdated: totalAssetsUpdatedThisSync,
+        message: `Syncing Artwork: ${game.canonical_title} (${completed} / ${candidates.length})`,
+        subMessage: currentFileBytes > 0
+          ? `Current: ${formatTransferBytes(currentFileBytes)} (${lastAssetLabel || 'Asset'}) • Total Transferred: ${formatTransferBytes(totalBytesThisSync)}`
+          : `Total Transferred: ${formatTransferBytes(totalBytesThisSync)}`,
+      })
+    }
+
+    await abortableSleep(200, signal)
   }
+
+  let nextCandidateIdx = 0
+  const workers = Array.from({ length: Math.min(CONCURRENCY, candidates.length) }, async () => {
+    while (nextCandidateIdx < candidates.length && !signal?.aborted) {
+      const idx = nextCandidateIdx++
+      await processArtworkCandidate(candidates[idx])
+    }
+  })
+  await Promise.all(workers)
   if (onProgress) {
     onProgress({
       source: 'steamgriddb',
       phase: 'complete',
       current: candidates.length,
       total: candidates.length,
-      message: `Artwork sync complete: ${updated} games updated.`,
+      assetsUpdated: totalAssetsUpdatedThisSync,
+      totalBytes: totalBytesThisSync,
+      formattedTransfer: formatTransferBytes(totalBytesThisSync),
+      message: `Completed. ${totalAssetsUpdatedThisSync} assets updated (${formatTransferBytes(totalBytesThisSync)} downloaded).`,
     })
   }
-  return { updated, candidates: candidates.length }
+  return { updated, candidates: candidates.length, assetsUpdated: totalAssetsUpdatedThisSync, totalBytes: totalBytesThisSync, formattedTransfer: formatTransferBytes(totalBytesThisSync) }
 }
 
 async function refetchArtworkByExactId(db, userDataPath, game, exactId, apiKey) {
   const key = safeKey(apiKey)
   if (!game || !game.id) throw new Error('A valid game record is required.')
-  const cleanId = String(exactId || '').trim()
-  if (!cleanId) throw new Error('An ID is required.')
+  let cleanId = String(exactId || '').trim()
+
+  if (!cleanId) {
+    if (key) {
+      try {
+        const searchRes = await apiGet(`/search/autocomplete/${encodeURIComponent(cleanArtworkTitle(game.canonical_title))}`, key).catch(() => [])
+        const best = findBestAutocompleteMatch(searchRes, game.canonical_title)
+        if (best?.id) cleanId = String(best.id)
+      } catch {}
+    }
+    if (!cleanId) {
+      const steamId = await findSteamAppIdForTitle(game.canonical_title)
+      if (steamId) cleanId = String(steamId)
+    }
+  }
+
+  if (!cleanId) throw new Error(`Could not find artwork for "${game.canonical_title}". Enter a Steam App ID or SteamGridDB Game ID.`)
 
   const cacheDir = getArtworkDirectory(userDataPath)
 
@@ -688,15 +1048,22 @@ async function refetchArtworkByExactId(db, userDataPath, game, exactId, apiKey) 
 
   // 1. If we have a SteamGridDB key, query SteamGridDB
   if (key) {
-    const grids = await fetchGridsForId(cleanId, key)
-    if (grids?.[0]?.url) {
-      const dest = path.join(cacheDir, `${artworkSlug(game)}-cover.jpg`)
-      coverUrl = await downloadImage(grids[0].url, dest)
+    const preferAnimated = getAppSettingValue(db, 'prefer_animated_artwork', 'false') === 'true'
+    const preferAnimatedCovers = getAppSettingValue(db, 'prefer_animated_covers', 'false') === 'true'
+    const heroResolution = getAppSettingValue(db, 'hero_resolution', '2.5k')
+    const grids = await fetchGridsForId(cleanId, key, null, preferAnimatedCovers)
+    const bestGrid = pickBestGrid(grids, preferAnimatedCovers)
+    if (bestGrid?.url) {
+      const ext = getArtworkExtension(bestGrid.url, 'jpg')
+      const dest = path.join(cacheDir, `${artworkSlug(game)}-cover.${ext}`)
+      coverUrl = await downloadImage(bestGrid.url, dest)
     }
-    const heroes = await fetchHeroesForId(cleanId, key)
-    if (heroes?.[0]?.url) {
-      const destHero = path.join(cacheDir, `${artworkSlug(game)}-hero.jpg`)
-      heroUrl = await downloadImage(heroes[0].url, destHero)
+    const heroes = await fetchHeroesForId(cleanId, key, null, heroResolution, preferAnimated)
+    const bestHero = pickBestHero(heroes, heroResolution, preferAnimated)
+    if (bestHero?.url) {
+      const ext = getArtworkExtension(bestHero.url, 'jpg')
+      const destHero = path.join(cacheDir, `${artworkSlug(game)}-hero.${ext}`)
+      heroUrl = await downloadImage(bestHero.url, destHero)
     }
   }
 
@@ -743,16 +1110,66 @@ async function refetchSelectedArtwork(db, userDataPath, gameIds, apiKey, onProgr
   const key = safeKey(apiKey)
   const cacheDir = getArtworkDirectory(userDataPath)
   const heroResolution = getAppSettingValue(db, 'hero_resolution', '2.5k')
+  const preferAnimated = getAppSettingValue(db, 'prefer_animated_artwork', 'false') === 'true'
+  const preferAnimatedCovers = getAppSettingValue(db, 'prefer_animated_covers', 'false') === 'true'
 
   const ids = Array.isArray(gameIds) ? gameIds : [gameIds]
   let updated = 0
+  let totalBytesThisSync = 0
+  let totalAssetsUpdatedThisSync = 0
 
   for (let i = 0; i < ids.length; i++) {
     if (signal?.aborted) break
     const game = db.prepare('SELECT * FROM games WHERE id = ?').get(ids[i])
     if (!game) continue
 
-    if (onProgress) onProgress({ source: 'refetch-selected', phase: 'fetching', current: i + 1, total: ids.length, title: game.canonical_title, message: `Refetching: ${game.canonical_title}...` })
+    let currentFileBytes = 0
+    let lastAssetLabel = ''
+
+    const onAssetDownloaded = (assetLabel, byteSize) => {
+      currentFileBytes = byteSize
+      lastAssetLabel = assetLabel
+      totalBytesThisSync += byteSize
+      totalAssetsUpdatedThisSync++
+
+      if (onProgress) {
+        onProgress({
+          source: 'refetch-selected',
+          phase: 'fetching',
+          current: i + 1,
+          total: ids.length,
+          title: game.canonical_title,
+          gameTitle: game.canonical_title,
+          currentAsset: assetLabel,
+          fileSizeBytes: byteSize,
+          formattedCurrentFile: formatTransferBytes(byteSize),
+          totalBytes: totalBytesThisSync,
+          formattedTransfer: formatTransferBytes(totalBytesThisSync),
+          assetsUpdated: totalAssetsUpdatedThisSync,
+          message: `Syncing Artwork: ${game.canonical_title} (${i + 1} / ${ids.length})`,
+          subMessage: `Current: ${formatTransferBytes(byteSize)} (${assetLabel}) • Total Transferred: ${formatTransferBytes(totalBytesThisSync)}`,
+        })
+      }
+    }
+
+    if (onProgress) {
+      onProgress({
+        source: 'refetch-selected',
+        phase: 'fetching',
+        current: i + 1,
+        total: ids.length,
+        title: game.canonical_title,
+        gameTitle: game.canonical_title,
+        currentAsset: 'Searching...',
+        fileSizeBytes: 0,
+        formattedCurrentFile: '—',
+        totalBytes: totalBytesThisSync,
+        formattedTransfer: formatTransferBytes(totalBytesThisSync),
+        assetsUpdated: totalAssetsUpdatedThisSync,
+        message: `Syncing Artwork: ${game.canonical_title} (${i + 1} / ${ids.length})`,
+        subMessage: totalBytesThisSync > 0 ? `Total Transferred: ${formatTransferBytes(totalBytesThisSync)}` : 'Initiating download stream...',
+      })
+    }
 
     let newCoverUrl = null
     let newHeroUrl = null
@@ -763,8 +1180,8 @@ async function refetchSelectedArtwork(db, userDataPath, gameIds, apiKey, onProgr
         let grids = []
         let heroes = []
         if (targetId) {
-          grids = await fetchGridsForId(targetId, key, signal)
-          heroes = await fetchHeroesForId(targetId, key, signal, heroResolution)
+          grids = await fetchGridsForId(targetId, key, signal, preferAnimatedCovers)
+          heroes = await fetchHeroesForId(targetId, key, signal, heroResolution, preferAnimated)
         }
 
         // Check storefront IDs directly (Steam App ID or GOG ID)
@@ -773,20 +1190,22 @@ async function refetchSelectedArtwork(db, userDataPath, gameIds, apiKey, onProgr
             const sources = db.prepare("SELECT platform, platform_game_id FROM game_sources WHERE game_id = ?").all(game.id)
             for (const s of sources) {
               if (s.platform === 'steam' && /^\d+$/.test(s.platform_game_id)) {
-                if (!grids.length) grids = await apiGet(`/grids/steam/${s.platform_game_id}?dimensions=600x900`, key, signal).catch(() => [])
-                if (!grids.length) grids = await apiGet(`/grids/steam/${s.platform_game_id}`, key, signal).catch(() => [])
-                if (!heroes.length) heroes = await fetchHeroesForId(s.platform_game_id, key, signal, heroResolution)
+                const typesParam = preferAnimatedCovers ? '&types=static,animated' : ''
+                const typesQuery = preferAnimatedCovers ? '?types=static,animated' : ''
+                if (!grids.length) grids = await apiGet(`/grids/steam/${s.platform_game_id}?dimensions=600x900${typesParam}`, key, signal, { db, gameId: game.id, gameTitle: game.canonical_title, assetType: 'SteamGridDB Grid Query' }).catch(() => [])
+                if (!grids.length) grids = await apiGet(`/grids/steam/${s.platform_game_id}${typesQuery}`, key, signal, { db, gameId: game.id, gameTitle: game.canonical_title, assetType: 'SteamGridDB Grid Query' }).catch(() => [])
+                if (!heroes.length) heroes = await fetchHeroesForId(s.platform_game_id, key, signal, heroResolution, preferAnimated)
                 if (!targetId) {
-                  const gameInfo = await apiGet(`/games/steam/${s.platform_game_id}`, key, signal).catch(() => null)
+                  const gameInfo = await apiGet(`/games/steam/${s.platform_game_id}`, key, signal, { db, gameId: game.id, gameTitle: game.canonical_title, assetType: 'SteamGridDB Game Query' }).catch(() => null)
                   if (gameInfo?.id) targetId = String(gameInfo.id)
                 }
                 break
               } else if (s.platform === 'gog' && /^\d+$/.test(s.platform_game_id)) {
-                const gameInfo = await apiGet(`/games/gog/${s.platform_game_id}`, key, signal).catch(() => null)
+                const gameInfo = await apiGet(`/games/gog/${s.platform_game_id}`, key, signal, { db, gameId: game.id, gameTitle: game.canonical_title, assetType: 'SteamGridDB GOG Query' }).catch(() => null)
                 if (gameInfo?.id) {
                   targetId = String(gameInfo.id)
-                  if (!grids.length) grids = await fetchGridsForId(targetId, key, signal)
-                  if (!heroes.length) heroes = await fetchHeroesForId(targetId, key, signal, heroResolution)
+                  if (!grids.length) grids = await fetchGridsForId(targetId, key, signal, preferAnimatedCovers)
+                  if (!heroes.length) heroes = await fetchHeroesForId(targetId, key, signal, heroResolution, preferAnimated)
                 }
                 break
               }
@@ -796,28 +1215,46 @@ async function refetchSelectedArtwork(db, userDataPath, gameIds, apiKey, onProgr
 
         // Fall back to title search autocomplete
         if (!grids.length || !heroes.length) {
-          let searchRes = await apiGet(`/search/autocomplete/${encodeURIComponent(cleanArtworkTitle(game.canonical_title))}`, key, signal).catch(() => [])
+          let searchRes = await apiGet(`/search/autocomplete/${encodeURIComponent(cleanArtworkTitle(game.canonical_title))}`, key, signal, { db, gameId: game.id, gameTitle: game.canonical_title, assetType: 'SteamGridDB Autocomplete' }).catch(() => [])
           if (!searchRes?.length && (game.canonical_title.includes(':') || game.canonical_title.includes(' - '))) {
             const prefix = game.canonical_title.split(/[:–—]| - /)[0].trim()
             if (prefix && prefix !== game.canonical_title) {
-              searchRes = await apiGet(`/search/autocomplete/${encodeURIComponent(cleanArtworkTitle(prefix))}`, key, signal).catch(() => [])
+              searchRes = await apiGet(`/search/autocomplete/${encodeURIComponent(cleanArtworkTitle(prefix))}`, key, signal, { db, gameId: game.id, gameTitle: game.canonical_title, assetType: 'SteamGridDB Autocomplete' }).catch(() => [])
             }
           }
           const bestMatch = findBestAutocompleteMatch(searchRes, game.canonical_title)
           if (bestMatch?.id) {
             targetId = String(bestMatch.id)
-            if (!grids.length) grids = await fetchGridsForId(targetId, key, signal)
-            if (!heroes.length) heroes = await fetchHeroesForId(targetId, key, signal, heroResolution)
+            if (!grids.length) grids = await fetchGridsForId(targetId, key, signal, preferAnimatedCovers)
+            if (!heroes.length) heroes = await fetchHeroesForId(targetId, key, signal, heroResolution, preferAnimated)
           }
         }
-        if (grids?.[0]?.url) {
-          const dest = path.join(cacheDir, `${artworkSlug(game)}-cover.jpg`)
-          newCoverUrl = await downloadImage(grids[0].url, dest)
+        const bestGrid = pickBestGrid(grids, preferAnimatedCovers)
+        if (bestGrid?.url) {
+          const ext = getArtworkExtension(bestGrid.url, 'jpg')
+          const dest = path.join(cacheDir, `${artworkSlug(game)}-cover.${ext}`)
+          const label = preferAnimatedCovers && (ext === 'webm' || ext === 'mp4') ? 'Motion Poster' : 'Poster'
+          newCoverUrl = await downloadImage(bestGrid.url, dest, signal, {
+            db,
+            gameId: game.id,
+            gameTitle: game.canonical_title,
+            assetType: label,
+            onComplete: (info) => onAssetDownloaded(label, info.bytes || 0),
+          })
         }
-        const bestHero = pickBestHero(heroes, heroResolution)
+        const bestHero = pickBestHero(heroes, heroResolution, preferAnimated)
         if (bestHero?.url) {
-          const destHero = path.join(cacheDir, `${artworkSlug(game)}-hero.jpg`)
-          newHeroUrl = await downloadImage(bestHero.url, destHero)
+          const ext = getArtworkExtension(bestHero.url, 'jpg')
+          const destHero = path.join(cacheDir, `${artworkSlug(game)}-hero.${ext}`)
+          const isVideo = ext === 'webm' || ext === 'mp4'
+          const label = isVideo ? 'Motion Hero' : 'Hero Backdrop'
+          newHeroUrl = await downloadImage(bestHero.url, destHero, signal, {
+            db,
+            gameId: game.id,
+            gameTitle: game.canonical_title,
+            assetType: label,
+            onComplete: (info) => onAssetDownloaded(label, info.bytes || 0),
+          })
         }
       } catch {}
     }
@@ -827,11 +1264,29 @@ async function refetchSelectedArtwork(db, userDataPath, gameIds, apiKey, onProgr
         const match = await fetchSteamStorePoster(game.canonical_title)
         if (match?.coverUrl && !newCoverUrl) {
           const dest = path.join(cacheDir, `${artworkSlug(game)}-cover.jpg`)
-          try { newCoverUrl = await downloadImage(match.coverUrl, dest) } catch { newCoverUrl = match.coverUrl }
+          const label = 'Steam Store Poster'
+          try {
+            newCoverUrl = await downloadImage(match.coverUrl, dest, signal, {
+              db,
+              gameId: game.id,
+              gameTitle: game.canonical_title,
+              assetType: label,
+              onComplete: (info) => onAssetDownloaded(label, info.bytes || 0),
+            })
+          } catch { newCoverUrl = match.coverUrl }
         }
         if (match?.heroUrl && !newHeroUrl) {
           const destHero = path.join(cacheDir, `${artworkSlug(game)}-hero.jpg`)
-          try { newHeroUrl = await downloadImage(match.heroUrl, destHero) } catch { newHeroUrl = match.heroUrl }
+          const label = 'Steam Store Hero'
+          try {
+            newHeroUrl = await downloadImage(match.heroUrl, destHero, signal, {
+              db,
+              gameId: game.id,
+              gameTitle: game.canonical_title,
+              assetType: label,
+              onComplete: (info) => onAssetDownloaded(label, info.bytes || 0),
+            })
+          } catch { newHeroUrl = match.heroUrl }
         }
       } catch {}
     }
@@ -861,12 +1316,44 @@ async function refetchSelectedArtwork(db, userDataPath, gameIds, apiKey, onProgr
       updated++
     }
 
-    if (onProgress) onProgress({ source: 'refetch-selected', phase: 'fetching', current: i + 1, total: ids.length, title: game.canonical_title, message: (newCoverUrl || newHeroUrl) ? `Updated: ${game.canonical_title}` : `Not found: ${game.canonical_title}` })
+    if (onProgress) {
+      onProgress({
+        source: 'refetch-selected',
+        phase: 'fetching',
+        current: i + 1,
+        total: ids.length,
+        title: game.canonical_title,
+        gameTitle: game.canonical_title,
+        currentAsset: lastAssetLabel || 'Artwork',
+        fileSizeBytes: currentFileBytes,
+        formattedCurrentFile: formatTransferBytes(currentFileBytes),
+        totalBytes: totalBytesThisSync,
+        formattedTransfer: formatTransferBytes(totalBytesThisSync),
+        assetsUpdated: totalAssetsUpdatedThisSync,
+        message: `Syncing Artwork: ${game.canonical_title} (${i + 1} / ${ids.length})`,
+        subMessage: currentFileBytes > 0
+          ? `Current: ${formatTransferBytes(currentFileBytes)} (${lastAssetLabel || 'Asset'}) • Total Transferred: ${formatTransferBytes(totalBytesThisSync)}`
+          : `Total Transferred: ${formatTransferBytes(totalBytesThisSync)}`,
+      })
+    }
 
     await new Promise(r => setTimeout(r, key ? 650 : 800))
   }
 
-  return { updated, total: ids.length }
+  if (onProgress) {
+    onProgress({
+      source: 'refetch-selected',
+      phase: 'complete',
+      current: ids.length,
+      total: ids.length,
+      assetsUpdated: totalAssetsUpdatedThisSync,
+      totalBytes: totalBytesThisSync,
+      formattedTransfer: formatTransferBytes(totalBytesThisSync),
+      message: `Completed. ${totalAssetsUpdatedThisSync} assets updated (${formatTransferBytes(totalBytesThisSync)} downloaded).`,
+    })
+  }
+
+  return { updated, total: ids.length, assetsUpdated: totalAssetsUpdatedThisSync, totalBytes: totalBytesThisSync, formattedTransfer: formatTransferBytes(totalBytesThisSync) }
 }
 
 function copyManualArtwork(db, userDataPath, gameId, sourceFilePath) {
@@ -1000,9 +1487,11 @@ function repairBrokenArtworkLinks(db, userDataPath) {
 
 function fastTrackCompleteLocalMetadataBatch() { return 0 }
 
-async function fetchSteamAppDetails(appId, signal, retryCount = 0) {
+async function fetchSteamAppDetails(appId, signal, retryCount = 0, options = {}) {
   try {
-    const res = await fetch(`https://store.steampowered.com/api/appdetails?appids=${appId}&l=english`, {
+    const startTime = Date.now()
+    const url = `https://store.steampowered.com/api/appdetails?appids=${appId}&l=english`
+    const res = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
       signal,
     })
@@ -1010,10 +1499,35 @@ async function fetchSteamAppDetails(appId, signal, retryCount = 0) {
       console.warn(`[Steam] Rate-limited (429) on appId ${appId}. Backing off for ${(retryCount + 1) * 3}s...`)
       await new Promise((resolve) => setTimeout(resolve, (retryCount + 1) * 3000))
       if (signal?.aborted) return null
-      return fetchSteamAppDetails(appId, signal, retryCount + 1)
+      return fetchSteamAppDetails(appId, signal, retryCount + 1, options)
     }
+
+    const text = await res.text()
+    const bytes = Buffer.byteLength(text, 'utf8')
+    const durationMs = Date.now() - startTime
+
+    if (options && typeof options.onBytesTransferred === 'function') {
+      options.onBytesTransferred({ service: 'Steam Store', endpoint: url, bytes, assetType: 'Steam App Details' })
+    }
+    if (options?.db && logNetworkActivity) {
+      try {
+        logNetworkActivity(options.db, {
+          service: 'Steam Store',
+          endpoint: url,
+          method: 'GET',
+          statusCode: res.status,
+          bytesTransferred: bytes,
+          durationMs,
+          gameId: options.gameId || null,
+          gameTitle: options.gameTitle || null,
+          assetType: 'Steam App Details',
+          status: res.ok ? 'success' : 'failed',
+        })
+      } catch {}
+    }
+
     if (!res.ok) return null
-    const json = await res.json()
+    const json = JSON.parse(text)
     const appData = json?.[appId]?.data
     if (!appData) return null
 
@@ -1041,6 +1555,10 @@ async function fetchSteamAppDetails(appId, signal, retryCount = 0) {
 async function findSteamAppIdForTitle(title, signal, retryCount = 0) {
   const base = cleanArtworkTitle(title)
   const queries = [base]
+  const camel = splitCamelCase(title)
+  if (camel && camel !== base && !queries.includes(camel)) {
+    queries.push(camel)
+  }
   const stripped = stripTitleNoise(title)
   if (stripped && stripped !== base && !queries.includes(stripped)) {
     queries.push(stripped)
@@ -1076,7 +1594,7 @@ async function findSteamAppIdForTitle(title, signal, retryCount = 0) {
           const itLower = String(it.name || '').toLowerCase().trim()
           return itLower === lowerTitle || itLower === lowerClean || (lowerStripped && itLower === lowerStripped)
         })
-        const chosen = exact || findBestAutocompleteMatch(data.items, title) || data.items[0]
+        const chosen = exact || findBestAutocompleteMatch(data.items, title)
         if (chosen?.id) return String(chosen.id)
       }
     } catch {}
@@ -1186,7 +1704,16 @@ async function syncLibraryMetadata(db, userDataPath, apiKey, onProgress, signal,
       `).all()
 
   let updated = 0
+  let totalBytesThisSync = 0
+  let currentFileBytes = 0
+  let lastAssetLabel = ''
   const total = candidates.length
+
+  const onMetaDownloaded = (assetLabel, bytes) => {
+    currentFileBytes = bytes
+    lastAssetLabel = assetLabel
+    totalBytesThisSync += bytes
+  }
 
   for (let i = 0; i < total; i++) {
     if (signal?.aborted) break
@@ -1199,7 +1726,17 @@ async function syncLibraryMetadata(db, userDataPath, apiKey, onProgress, signal,
         current: i + 1,
         total,
         title: game.canonical_title,
-        message: `Syncing: ${i + 1} / ${total} — ${game.canonical_title}`,
+        gameTitle: game.canonical_title,
+        currentAsset: lastAssetLabel || 'Metadata Query',
+        fileSizeBytes: currentFileBytes,
+        formattedCurrentFile: formatTransferBytes(currentFileBytes),
+        totalBytes: totalBytesThisSync,
+        formattedTransfer: formatTransferBytes(totalBytesThisSync),
+        assetsUpdated: updated,
+        message: `Syncing Metadata: ${game.canonical_title} (${i + 1} / ${total})`,
+        subMessage: currentFileBytes > 0
+          ? `Current: ${formatTransferBytes(currentFileBytes)} (${lastAssetLabel || 'Metadata'}) • Total Transferred: ${formatTransferBytes(totalBytesThisSync)}`
+          : `Total Transferred: ${formatTransferBytes(totalBytesThisSync)}`,
       })
     }
 
@@ -1258,7 +1795,12 @@ async function syncLibraryMetadata(db, userDataPath, apiKey, onProgress, signal,
     let igdbMeta = null
     if (needsMeta && igdbClientId && igdbClientSecret) {
       try {
-        igdbMeta = await fetchIgdbMetadata(titleToSearch, igdbClientId, igdbClientSecret, signal, steamAppId)
+        igdbMeta = await fetchIgdbMetadata(titleToSearch, igdbClientId, igdbClientSecret, signal, steamAppId, {
+          db,
+          gameId: game.id,
+          gameTitle: game.canonical_title,
+          onBytesTransferred: (info) => onMetaDownloaded('IGDB Synopsis', info.bytes || 0),
+        })
       } catch {}
     }
 
@@ -1272,7 +1814,12 @@ async function syncLibraryMetadata(db, userDataPath, apiKey, onProgress, signal,
 
     let details = null
     if (needsMeta && stillMissingFields && steamAppId) {
-      details = await fetchSteamAppDetails(steamAppId, signal)
+      details = await fetchSteamAppDetails(steamAppId, signal, 0, {
+        db,
+        gameId: game.id,
+        gameTitle: game.canonical_title,
+        onBytesTransferred: (info) => onMetaDownloaded('Steam App Details', info.bytes || 0),
+      })
     }
 
     let resolvedSgdbId = game.steamgriddb_id ? String(game.steamgriddb_id).trim() : null
@@ -1282,11 +1829,23 @@ async function syncLibraryMetadata(db, userDataPath, apiKey, onProgress, signal,
           steamAppId = await findSteamAppIdForTitle(game.canonical_title, signal)
         }
         if (steamAppId) {
-          const gameInfo = await apiGet(`/games/steam/${steamAppId}`, key, signal).catch(() => null)
+          const gameInfo = await apiGet(`/games/steam/${steamAppId}`, key, signal, {
+            db,
+            gameId: game.id,
+            gameTitle: game.canonical_title,
+            assetType: 'SteamGridDB Game Query',
+            onBytes: (b) => onMetaDownloaded('SteamGridDB Info', b),
+          }).catch(() => null)
           if (gameInfo?.id) resolvedSgdbId = String(gameInfo.id)
         }
         if (!resolvedSgdbId) {
-          const searchRes = await apiGet(`/search/autocomplete/${encodeURIComponent(cleanArtworkTitle(game.canonical_title))}`, key, signal).catch(() => [])
+          const searchRes = await apiGet(`/search/autocomplete/${encodeURIComponent(cleanArtworkTitle(game.canonical_title))}`, key, signal, {
+            db,
+            gameId: game.id,
+            gameTitle: game.canonical_title,
+            assetType: 'SteamGridDB Autocomplete',
+            onBytes: (b) => onMetaDownloaded('SteamGridDB Autocomplete', b),
+          }).catch(() => [])
           const bestMatch = findBestAutocompleteMatch(searchRes, game.canonical_title)
           if (bestMatch?.id) resolvedSgdbId = String(bestMatch.id)
         }
@@ -1318,6 +1877,27 @@ async function syncLibraryMetadata(db, userDataPath, apiKey, onProgress, signal,
       updated++
     }
 
+    if (onProgress) {
+      onProgress({
+        source: 'metadata',
+        phase: 'fetching',
+        current: i + 1,
+        total,
+        title: game.canonical_title,
+        gameTitle: game.canonical_title,
+        currentAsset: lastAssetLabel || 'Metadata',
+        fileSizeBytes: currentFileBytes,
+        formattedCurrentFile: formatTransferBytes(currentFileBytes),
+        totalBytes: totalBytesThisSync,
+        formattedTransfer: formatTransferBytes(totalBytesThisSync),
+        assetsUpdated: updated,
+        message: `Syncing Metadata: ${game.canonical_title} (${i + 1} / ${total})`,
+        subMessage: currentFileBytes > 0
+          ? `Current: ${formatTransferBytes(currentFileBytes)} (${lastAssetLabel || 'Metadata'}) • Total Transferred: ${formatTransferBytes(totalBytesThisSync)}`
+          : `Total Transferred: ${formatTransferBytes(totalBytesThisSync)}`,
+      })
+    }
+
     await new Promise((resolve) => setTimeout(resolve, 800))
   }
 
@@ -1327,18 +1907,23 @@ async function syncLibraryMetadata(db, userDataPath, apiKey, onProgress, signal,
       phase: 'complete',
       current: total,
       total,
-      message: `Metadata sync complete: ${updated} games updated.`,
+      assetsUpdated: updated,
+      totalBytes: totalBytesThisSync,
+      formattedTransfer: formatTransferBytes(totalBytesThisSync),
+      message: `Completed. ${updated} metadata records updated (${formatTransferBytes(totalBytesThisSync)} downloaded).`,
     })
   }
 
-  return { metadataUpdated: updated, candidates: total }
+  return { metadataUpdated: updated, candidates: total, assetsUpdated: updated, totalBytes: totalBytesThisSync, formattedTransfer: formatTransferBytes(totalBytesThisSync) }
 }
 
 async function syncLibraryMetadataAndArt(db, userDataPath, apiKey, onProgress, signal, options = {}) {
   const key = safeKey(apiKey)
   const cacheDir = getArtworkDirectory(userDataPath)
-  const heroResolution = getAppSettingValue(db, 'hero_resolution', '2.5k')
-  const preferAnimated = Boolean(options?.preferAnimated ?? (getAppSettingValue(db, 'prefer_animated_artwork', 'false') === 'true'))
+  const heroResolution = options?.heroResolution || getAppSettingValue(db, 'hero_resolution', '2.5k')
+  const settingAnimated = getAppSettingValue(db, 'prefer_animated_artwork', 'false') === 'true'
+  const preferAnimated = Boolean(options?.preferAnimated ?? (settingAnimated || heroResolution === 'animated'))
+  const preferAnimatedCovers = Boolean(options?.preferAnimatedCovers ?? (getAppSettingValue(db, 'prefer_animated_covers', 'false') === 'true'))
   const igdbClientId = getAppSettingValue(db, 'igdb_client_id')
   const igdbClientSecret = getAppSettingValue(db, 'igdb_client_secret')
 
@@ -1354,23 +1939,16 @@ async function syncLibraryMetadataAndArt(db, userDataPath, apiKey, onProgress, s
   let updated = 0
   let metadataUpdated = 0
   let heroesUpdated = 0
+  let completed = 0
+  let totalBytesThisSync = 0
+  let totalAssetsUpdatedThisSync = 0
+  let currentFileBytes = 0
+  let lastAssetLabel = ''
   const total = candidates.length
+  const CONCURRENCY = 3
 
-  for (let i = 0; i < total; i++) {
-    if (signal?.aborted) break
-    const game = candidates[i]
-    const currentNum = i + 1
-
-    if (onProgress) {
-      onProgress({
-        source: 'sync',
-        phase: 'fetching',
-        current: currentNum,
-        total,
-        title: game.canonical_title,
-        message: `Syncing: ${currentNum} / ${total} — ${game.canonical_title}`,
-      })
-    }
+  async function processCandidate(game) {
+    if (signal?.aborted) return
 
     // 1. Dual-Fetch Metadata (IGDB + Steam Store Fallback)
     const needsDesc = !game.description || !String(game.description).trim()
@@ -1391,9 +1969,9 @@ async function syncLibraryMetadataAndArt(db, userDataPath, apiKey, onProgress, s
         const dev = localParent.developer || localParent.publisher || null
         const pub = localParent.publisher || localParent.developer || null
         const relDate = localParent.release_date || null
-        const parentCover = (needsCover && localParent.cover_url) ? localParent.cover_url : null
-        const parentHero = (needsHero && localParent.hero_url) ? localParent.hero_url : null
-        const parentLogo = (needsLogo && localParent.logo_url) ? localParent.logo_url : null
+        const parentCover = (!game.cover_url || game.cover_url.includes('.svg') || game.cover_url.includes('fallback')) && localParent.cover_url ? localParent.cover_url : null
+        const parentHero = (!game.hero_url || !String(game.hero_url).trim()) && localParent.hero_url ? localParent.hero_url : null
+        const parentLogo = (!game.logo_url || !String(game.logo_url).trim()) && localParent.logo_url ? localParent.logo_url : null
         const parentSgdb = localParent.steamgriddb_id || null
 
         db.prepare(`UPDATE games SET 
@@ -1416,7 +1994,18 @@ async function syncLibraryMetadataAndArt(db, userDataPath, apiKey, onProgress, s
         if (desc || genres || dev || pub || relDate) metadataUpdated++
         if (parentCover || parentHero || parentLogo) updated++
         if (parentHero) heroesUpdated++
-        continue
+        completed++
+        if (onProgress) {
+          onProgress({
+            source: 'sync',
+            phase: 'fetching',
+            current: completed,
+            total,
+            title: game.canonical_title,
+            message: `Syncing: ${completed} / ${total} — ${game.canonical_title}`,
+          })
+        }
+        return
       }
     }
 
@@ -1437,7 +2026,16 @@ async function syncLibraryMetadataAndArt(db, userDataPath, apiKey, onProgress, s
     let igdbMeta = null
     if (needsMeta && igdbClientId && igdbClientSecret) {
       try {
-        igdbMeta = await fetchIgdbMetadata(titleToSearch, igdbClientId, igdbClientSecret, signal, steamAppId)
+        igdbMeta = await fetchIgdbMetadata(titleToSearch, igdbClientId, igdbClientSecret, signal, steamAppId, {
+          db,
+          gameId: game.id,
+          gameTitle: game.canonical_title,
+          onBytesTransferred: (bytes) => {
+            totalBytesThisSync += bytes
+            currentFileBytes = bytes
+            lastAssetLabel = 'IGDB Synopsis'
+          },
+        })
       } catch {}
     }
 
@@ -1451,7 +2049,16 @@ async function syncLibraryMetadataAndArt(db, userDataPath, apiKey, onProgress, s
 
     let details = null
     if (needsMeta && stillNeedsMeta && steamAppId) {
-      details = await fetchSteamAppDetails(steamAppId, signal)
+      details = await fetchSteamAppDetails(steamAppId, signal, 0, {
+        db,
+        gameId: game.id,
+        gameTitle: game.canonical_title,
+        onBytesTransferred: (bytes) => {
+          totalBytesThisSync += bytes
+          currentFileBytes = bytes
+          lastAssetLabel = 'Steam Store Info'
+        },
+      })
     }
 
     // 2. Visual Assets (SteamGridDB Heroes, Covers & Logos)
@@ -1469,9 +2076,14 @@ async function syncLibraryMetadataAndArt(db, userDataPath, apiKey, onProgress, s
       let heroes = []
       let logos = []
       if (resolvedId && key) {
-        if (needsCover) grids = await fetchGridsForId(resolvedId, key, signal)
-        if (needsHero) heroes = await fetchHeroesForId(resolvedId, key, signal, heroResolution)
-        if (needsLogo) logos = await fetchLogosForId(resolvedId, key, signal)
+        const [gridsRes, heroesRes, logosRes] = await Promise.all([
+          needsCover ? fetchGridsForId(resolvedId, key, signal, preferAnimatedCovers).catch(() => []) : [],
+          needsHero ? fetchHeroesForId(resolvedId, key, signal, heroResolution, preferAnimated).catch(() => []) : [],
+          needsLogo ? fetchLogosForId(resolvedId, key, signal).catch(() => []) : [],
+        ])
+        grids = gridsRes || []
+        heroes = heroesRes || []
+        logos = logosRes || []
       }
 
       // Check storefront IDs directly (Steam App ID or GOG ID) for instant, exact lookup
@@ -1486,10 +2098,16 @@ async function syncLibraryMetadataAndArt(db, userDataPath, apiKey, onProgress, s
             }
           }
           if (targetSteamId) {
-            if (needsCover && !grids.length) grids = await apiGet(`/grids/steam/${targetSteamId}?dimensions=600x900`, key, signal).catch(() => [])
-            if (needsCover && !grids.length) grids = await apiGet(`/grids/steam/${targetSteamId}`, key, signal).catch(() => [])
-            if (needsHero && !heroes.length) heroes = await fetchHeroesForId(targetSteamId, key, signal, heroResolution)
-            if (needsLogo && !logos.length) logos = await apiGet(`/logos/steam/${targetSteamId}`, key, signal).catch(() => [])
+            const typesParam = preferAnimatedCovers ? '&types=static,animated' : ''
+            const typesQuery = preferAnimatedCovers ? '?types=static,animated' : ''
+            const [steamGrids, steamHeroes, steamLogos] = await Promise.all([
+              needsCover ? apiGet(`/grids/steam/${targetSteamId}?dimensions=600x900${typesParam}`, key, signal).catch(() => apiGet(`/grids/steam/${targetSteamId}${typesQuery}`, key, signal).catch(() => [])) : [],
+              needsHero ? fetchHeroesForId(targetSteamId, key, signal, heroResolution, preferAnimated) : [],
+              needsLogo ? apiGet(`/logos/steam/${targetSteamId}`, key, signal).catch(() => []) : [],
+            ])
+            if (needsCover && steamGrids?.length) grids = steamGrids
+            if (needsHero && steamHeroes?.length) heroes = steamHeroes
+            if (needsLogo && steamLogos?.length) logos = steamLogos
             if (!resolvedId) {
               const gameInfo = await apiGet(`/games/steam/${targetSteamId}`, key, signal).catch(() => null)
               if (gameInfo?.id) resolvedId = String(gameInfo.id)
@@ -1500,9 +2118,14 @@ async function syncLibraryMetadataAndArt(db, userDataPath, apiKey, onProgress, s
               const gameInfo = await apiGet(`/games/gog/${s.platform_game_id}`, key, signal).catch(() => null)
               if (gameInfo?.id) {
                 resolvedId = String(gameInfo.id)
-                if (needsCover && !grids.length) grids = await fetchGridsForId(resolvedId, key, signal)
-                if (needsHero && !heroes.length) heroes = await fetchHeroesForId(resolvedId, key, signal, heroResolution)
-                if (needsLogo && !logos.length) logos = await fetchLogosForId(resolvedId, key, signal)
+                const [gogGrids, gogHeroes, gogLogos] = await Promise.all([
+                  needsCover ? fetchGridsForId(resolvedId, key, signal, preferAnimatedCovers) : [],
+                  needsHero ? fetchHeroesForId(resolvedId, key, signal, heroResolution, preferAnimated) : [],
+                  needsLogo ? fetchLogosForId(resolvedId, key, signal) : [],
+                ])
+                if (needsCover && gogGrids?.length) grids = gogGrids
+                if (needsHero && gogHeroes?.length) heroes = gogHeroes
+                if (needsLogo && gogLogos?.length) logos = gogLogos
               }
               break
             }
@@ -1528,46 +2151,116 @@ async function syncLibraryMetadataAndArt(db, userDataPath, apiKey, onProgress, s
         const bestMatch = findBestAutocompleteMatch(searchRes, game.canonical_title)
         if (bestMatch?.id) {
           resolvedId = String(bestMatch.id)
-          if (needsCover && !grids.length) grids = await fetchGridsForId(resolvedId, key, signal)
-          if (needsHero && !heroes.length) heroes = await fetchHeroesForId(resolvedId, key, signal, heroResolution)
-          if (needsLogo && !logos.length) logos = await fetchLogosForId(resolvedId, key, signal)
+          const [matchGrids, matchHeroes, matchLogos] = await Promise.all([
+            needsCover ? fetchGridsForId(resolvedId, key, signal, preferAnimatedCovers) : [],
+            needsHero ? fetchHeroesForId(resolvedId, key, signal, heroResolution, preferAnimated) : [],
+            needsLogo ? fetchLogosForId(resolvedId, key, signal) : [],
+          ])
+          if (needsCover && matchGrids?.length) grids = matchGrids
+          if (needsHero && matchHeroes?.length) heroes = matchHeroes
+          if (needsLogo && matchLogos?.length) logos = matchLogos
         }
       }
 
-      const bestGrid = pickBestGrid(grids)
+      const bestGrid = pickBestGrid(grids, preferAnimatedCovers)
+      const bestHero = pickBestHero(heroes, heroResolution, preferAnimated)
+      const bestLogo = logos?.[0]
+
+      const downloadTasks = []
       if (bestGrid?.url && needsCover) {
         const ext = getArtworkExtension(bestGrid.url, 'jpg')
         const dest = path.join(cacheDir, `${artworkSlug(game)}-cover.${ext}`)
-        newCoverUrl = await downloadImage(bestGrid.url, dest)
+        downloadTasks.push(downloadImage(bestGrid.url, dest, signal, {
+          db,
+          gameId: game.id,
+          gameTitle: game.canonical_title,
+          assetType: 'Poster',
+          onComplete: (bytes) => {
+            totalBytesThisSync += bytes
+            totalAssetsUpdatedThisSync++
+            currentFileBytes = bytes
+            lastAssetLabel = 'Poster'
+          },
+        }).then(u => { newCoverUrl = u }).catch(() => {}))
       }
-      const bestHero = pickBestHero(heroes, heroResolution, preferAnimated)
       if (bestHero?.url && needsHero) {
         const ext = getArtworkExtension(bestHero.url, 'jpg')
         const destHero = path.join(cacheDir, `${artworkSlug(game)}-hero.${ext}`)
-        newHeroUrl = await downloadImage(bestHero.url, destHero)
+        downloadTasks.push(downloadImage(bestHero.url, destHero, signal, {
+          db,
+          gameId: game.id,
+          gameTitle: game.canonical_title,
+          assetType: 'Hero Backdrop',
+          onComplete: (bytes) => {
+            totalBytesThisSync += bytes
+            totalAssetsUpdatedThisSync++
+            currentFileBytes = bytes
+            lastAssetLabel = 'Hero Backdrop'
+          },
+        }).then(u => { newHeroUrl = u }).catch(() => {}))
       }
-      if (logos?.[0]?.url && needsLogo) {
+      if (bestLogo?.url && needsLogo) {
         const destLogo = path.join(cacheDir, `${artworkSlug(game)}-logo.png`)
-        try {
-          newLogoUrl = await downloadImage(logos[0].url, destLogo)
-        } catch {}
+        downloadTasks.push(downloadImage(bestLogo.url, destLogo, signal, {
+          db,
+          gameId: game.id,
+          gameTitle: game.canonical_title,
+          assetType: 'Logo',
+          onComplete: (bytes) => {
+            totalBytesThisSync += bytes
+            totalAssetsUpdatedThisSync++
+            currentFileBytes = bytes
+            lastAssetLabel = 'Logo'
+          },
+        }).then(u => { newLogoUrl = u }).catch(() => {}))
+      }
+      if (downloadTasks.length > 0) {
+        await Promise.all(downloadTasks)
       }
     } catch {}
+
+    if (signal?.aborted) return
 
     // Fall back to Steam Store search if cover or hero still needed
     if ((needsCover && !newCoverUrl) || (needsHero && !newHeroUrl)) {
       try {
         const match = await fetchSteamStorePoster(game.canonical_title)
+        const storeDownloads = []
         if (match?.coverUrl && needsCover && !newCoverUrl) {
           const dest = path.join(cacheDir, `${artworkSlug(game)}-cover.jpg`)
-          try { newCoverUrl = await downloadImage(match.coverUrl, dest) } catch { newCoverUrl = match.coverUrl }
+          storeDownloads.push(downloadImage(match.coverUrl, dest, signal, {
+            db,
+            gameId: game.id,
+            gameTitle: game.canonical_title,
+            assetType: 'Steam Cover',
+            onComplete: (bytes) => {
+              totalBytesThisSync += bytes
+              totalAssetsUpdatedThisSync++
+              currentFileBytes = bytes
+              lastAssetLabel = 'Steam Cover'
+            },
+          }).then(u => { newCoverUrl = u }).catch(() => { newCoverUrl = match.coverUrl }))
         }
         if (match?.heroUrl && needsHero && !newHeroUrl) {
           const destHero = path.join(cacheDir, `${artworkSlug(game)}-hero.jpg`)
-          try { newHeroUrl = await downloadImage(match.heroUrl, destHero) } catch { newHeroUrl = match.heroUrl }
+          storeDownloads.push(downloadImage(match.heroUrl, destHero, signal, {
+            db,
+            gameId: game.id,
+            gameTitle: game.canonical_title,
+            assetType: 'Steam Hero',
+            onComplete: (bytes) => {
+              totalBytesThisSync += bytes
+              totalAssetsUpdatedThisSync++
+              currentFileBytes = bytes
+              lastAssetLabel = 'Steam Hero'
+            },
+          }).then(u => { newHeroUrl = u }).catch(() => { newHeroUrl = match.heroUrl }))
         }
+        if (storeDownloads.length > 0) await Promise.all(storeDownloads)
       } catch {}
     }
+
+    if (signal?.aborted) return
 
     // 3. Database Update
     const desc = (igdbMeta?.synopsis || details?.description || '').trim() || null
@@ -1600,9 +2293,40 @@ async function syncLibraryMetadataAndArt(db, userDataPath, apiKey, onProgress, s
       if (newHeroUrl) heroesUpdated++
     }
 
-    // 4. API Throttling (Rate Limit Protection: 800ms)
-    await new Promise((resolve) => setTimeout(resolve, 800))
+    completed++
+    if (onProgress) {
+      onProgress({
+        source: 'sync',
+        phase: 'fetching',
+        current: completed,
+        total,
+        title: game.canonical_title,
+        gameTitle: game.canonical_title,
+        currentAsset: lastAssetLabel || 'Artwork & Data',
+        fileSizeBytes: currentFileBytes,
+        formattedCurrentFile: formatTransferBytes(currentFileBytes),
+        totalBytes: totalBytesThisSync,
+        formattedTransfer: formatTransferBytes(totalBytesThisSync),
+        assetsUpdated: updated,
+        message: `Syncing Artwork: ${game.canonical_title} (${completed} / ${total})`,
+        subMessage: currentFileBytes > 0
+          ? `Current: ${formatTransferBytes(currentFileBytes)} (${lastAssetLabel || 'Asset'}) • Total Transferred: ${formatTransferBytes(totalBytesThisSync)}`
+          : `Total Transferred: ${formatTransferBytes(totalBytesThisSync)}`,
+      })
+    }
+
+    // Rate Limit Protection: 200ms per worker pool thread
+    await abortableSleep(200, signal)
   }
+
+  let nextCandidateIdx = 0
+  const workers = Array.from({ length: Math.min(CONCURRENCY, candidates.length) }, async () => {
+    while (nextCandidateIdx < candidates.length && !signal?.aborted) {
+      const idx = nextCandidateIdx++
+      await processCandidate(candidates[idx])
+    }
+  })
+  await Promise.all(workers)
 
   if (onProgress) {
     onProgress({
@@ -1610,7 +2334,10 @@ async function syncLibraryMetadataAndArt(db, userDataPath, apiKey, onProgress, s
       phase: 'complete',
       current: total,
       total,
-      message: `Sync complete: ${updated} artwork updated, ${metadataUpdated} metadata updated.`,
+      assetsUpdated: updated,
+      totalBytes: totalBytesThisSync,
+      formattedTransfer: formatTransferBytes(totalBytesThisSync),
+      message: `Completed. ${updated} assets updated (${formatTransferBytes(totalBytesThisSync)} downloaded).`,
     })
   }
 
@@ -1619,6 +2346,8 @@ async function syncLibraryMetadataAndArt(db, userDataPath, apiKey, onProgress, s
     updated,
     metadataUpdated,
     heroesUpdated,
+    totalBytes: totalBytesThisSync,
+    formattedTransfer: formatTransferBytes(totalBytesThisSync),
   }
 }
 async function fetchGameMetadata(db, gameId, signal) {
@@ -1627,6 +2356,8 @@ async function fetchGameMetadata(db, gameId, signal) {
 
   const igdbClientId = getAppSettingValue(db, 'igdb_client_id')
   const igdbClientSecret = getAppSettingValue(db, 'igdb_client_secret')
+  const storeLower = String(game.store_name || '').toLowerCase()
+  const isStorePc = ['steam', 'epic', 'epic games', 'gog', 'ea', 'ea games', 'ubisoft', 'xbox'].some((s) => storeLower.includes(s))
 
   let steamAppId = null
   try {
@@ -1643,7 +2374,7 @@ async function fetchGameMetadata(db, gameId, signal) {
   let igdbMeta = null
   if (igdbClientId && igdbClientSecret) {
     try {
-      igdbMeta = await fetchIgdbMetadata(game.canonical_title, igdbClientId, igdbClientSecret, signal, steamAppId)
+      igdbMeta = await fetchIgdbMetadata(game.canonical_title, igdbClientId, igdbClientSecret, signal, steamAppId, { isStorePc })
     } catch {}
   }
 
@@ -1658,6 +2389,16 @@ async function fetchGameMetadata(db, gameId, signal) {
   let details = null
   if (stillMissing && steamAppId) {
     details = await fetchSteamAppDetails(steamAppId, signal)
+  }
+
+  let sgdbId = game.steamgriddb_id ? String(game.steamgriddb_id).trim() : null
+  const sgdbKey = getAppSettingValue(db, 'steamgriddb_api_key')
+  if (!sgdbId && sgdbKey) {
+    try {
+      const searchRes = await apiGet(`/search/autocomplete/${encodeURIComponent(cleanArtworkTitle(game.canonical_title))}`, sgdbKey, signal).catch(() => [])
+      const best = findBestAutocompleteMatch(searchRes, game.canonical_title)
+      if (best?.id) sgdbId = String(best.id)
+    } catch {}
   }
 
   const desc = (igdbMeta?.synopsis || details?.description || '').trim() || null
@@ -1676,9 +2417,105 @@ async function fetchGameMetadata(db, gameId, signal) {
     releaseDate: relDate,
     steamAppId: steamAppId || null,
     igdbId: igdbMeta?.igdbId || null,
+    steamGridDbId: sgdbId || null,
   }
 }
 function fetchMissingArtwork(db, userDataPath, apiKey, onProgress) { return runBulkArtworkSync(db, userDataPath, apiKey, onProgress) }
+
+function restoreStaticCoversLocal(db, userDataPath) {
+  const rows = db.prepare(`
+    SELECT id, canonical_title, cover_url, hero_url 
+    FROM games 
+    WHERE cover_url LIKE '%.webp%' OR cover_url LIKE '%.gif%' OR cover_url LIKE '%.webm%' OR cover_url LIKE '%.mp4%'
+       OR hero_url LIKE '%.webm%' OR hero_url LIKE '%.mp4%'
+  `).all()
+
+  let updated = 0
+  const updateStmt = db.prepare('UPDATE games SET cover_url = ?, hero_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+
+  for (const game of rows) {
+    let nextCover = game.cover_url
+    let nextHero = game.hero_url
+
+    // 1. Process cover_url
+    if (game.cover_url && (game.cover_url.includes('.webp') || game.cover_url.includes('.gif') || game.cover_url.includes('.webm') || game.cover_url.includes('.mp4'))) {
+      let localPath = ''
+      try {
+        const parsed = new URL(game.cover_url)
+        localPath = decodeURIComponent(parsed.pathname)
+        if (process.platform === 'win32' && localPath.startsWith('/')) {
+          localPath = localPath.slice(1)
+        }
+      } catch {
+        localPath = game.cover_url
+      }
+
+      const ext = path.extname(localPath).toLowerCase()
+      const staticPath = localPath.replace(new RegExp(`\\${ext}$`, 'i'), '-static.jpg')
+      const staticUrl = `file:///${staticPath.replace(/\\/g, '/')}`
+
+      if (fs.existsSync(staticPath)) {
+        nextCover = staticUrl
+        updated++
+      } else if (fs.existsSync(localPath)) {
+        try {
+          const { nativeImage } = require('electron')
+          const img = nativeImage.createFromPath(localPath)
+          if (!img.isEmpty()) {
+            const jpgBuf = img.toJPEG(92)
+            fs.writeFileSync(staticPath, jpgBuf)
+            nextCover = staticUrl
+            updated++
+          }
+        } catch (err) {
+          console.warn(`[artworkService] Failed to extract static frame for ${game.canonical_title}:`, err)
+        }
+      }
+    }
+
+    // 2. Process hero_url (replace .webm/.mp4 with static .jpg if available)
+    if (game.hero_url && (game.hero_url.includes('.webm') || game.hero_url.includes('.mp4'))) {
+      let heroLocalPath = ''
+      try {
+        const parsedHero = new URL(game.hero_url)
+        heroLocalPath = decodeURIComponent(parsedHero.pathname)
+        if (process.platform === 'win32' && heroLocalPath.startsWith('/')) {
+          heroLocalPath = heroLocalPath.slice(1)
+        }
+      } catch {
+        heroLocalPath = game.hero_url
+      }
+
+      const heroExt = path.extname(heroLocalPath).toLowerCase()
+      const heroStaticPath = heroLocalPath.replace(new RegExp(`\\${heroExt}$`, 'i'), '.jpg')
+      const heroStaticUrl = `file:///${heroStaticPath.replace(/\\/g, '/')}`
+
+      if (fs.existsSync(heroStaticPath)) {
+        nextHero = heroStaticUrl
+        updated++
+      }
+    }
+
+    if (nextCover !== game.cover_url || nextHero !== game.hero_url) {
+      updateStmt.run(nextCover, nextHero, game.id)
+    }
+  }
+
+  try {
+    const setSetting = (k, v) => {
+      const existing = db.prepare('SELECT value FROM app_settings WHERE key = ?').get(k)
+      if (existing) {
+        db.prepare('UPDATE app_settings SET value = ? WHERE key = ?').run(v, k)
+      } else {
+        db.prepare('INSERT INTO app_settings (key, value) VALUES (?, ?)').run(k, v)
+      }
+    }
+    setSetting('prefer_animated_covers', 'false')
+    setSetting('prefer_animated_artwork', 'false')
+  } catch {}
+
+  return { success: true, updated }
+}
 
 module.exports = {
   getArtworkDirectory,
@@ -1693,6 +2530,7 @@ module.exports = {
   fetchMissingArtwork,
   fetchGameMetadata,
   runBulkArtworkSync,
+  restoreStaticCoversLocal,
   refetchArtworkByExactId,
   refetchSelectedArtwork,
   copyManualArtwork,

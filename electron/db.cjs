@@ -5,6 +5,8 @@ const path = require('node:path')
 const { fileURLToPath } = require('node:url')
 const { isUtilityTitle, isHiddenByDefaultTitle, isDlcTitle, isDlcException } = require('../src/main/services/utilityRules.cjs')
 const { normalizeCanonicalTitle, cleanTitlePrefixes } = require('../src/main/services/deduplicationService.cjs')
+const indexerService = require('../src/main/services/indexerService.cjs')
+const { toPortablePath, resolvePortablePath } = require('./pathUtils.cjs')
 
 function normalizeTitle(title) {
   return normalizeCanonicalTitle(title)
@@ -76,8 +78,55 @@ function cleanupLegacyGameRecords(db) {
       }
     })
     migrate()
+  } catch {}
+}
+
+function reconcileSteamAppIds(db) {
+  try {
+    const { getSteamAppCache, findSteamRoot, normalizeTitleKey } = require('../src/main/services/steamFamilyService.cjs')
+    const steamRoot = findSteamRoot()
+    if (!steamRoot) return
+    const appCache = getSteamAppCache(steamRoot)
+    if (!appCache || !appCache.titlesByAppId || Object.keys(appCache.titlesByAppId).length === 0) return
+
+    const rows = db.prepare(`
+      SELECT s.id, g.canonical_title, s.platform_game_id
+      FROM game_sources s
+      JOIN games g ON g.id = s.game_id
+      WHERE s.platform = 'steam' AND (s.id_source = 'title-fallback' OR s.platform_game_id NOT GLOB '[0-9]*')
+    `).all()
+
+    if (!rows || rows.length === 0) return
+
+    const updateStmt = db.prepare(`
+      UPDATE game_sources
+      SET platform_game_id = @appId,
+          platform_launch_id = @appId,
+          id_source = 'steam-appinfo:appid',
+          launch_uri = @launchUri,
+          install_uri = @installUri
+      WHERE id = @id
+    `)
+
+    const tx = db.transaction(() => {
+      for (const row of rows) {
+        const title = row.canonical_title
+        if (!title) continue
+        const norm = normalizeTitleKey(title)
+        const appId = appCache.appIdsByNormTitle?.[norm] || appCache.appIdsByTitle?.[title.trim().toLowerCase()]
+        if (appId) {
+          updateStmt.run({
+            id: row.id,
+            appId,
+            launchUri: `steam://rungameid/${appId}`,
+            installUri: `steam://install/${appId}`,
+          })
+        }
+      }
+    })
+    tx()
   } catch (err) {
-    console.warn('[DB] cleanupLegacyGameRecords warning:', err?.message)
+    console.warn('[reconcileSteamAppIds] Notice:', err?.message)
   }
 }
 
@@ -121,13 +170,22 @@ function getSqliteNativeBinding() {
   return null
 }
 
+let _activeDb = null
+
+function getActiveDatabase() {
+  return _activeDb
+}
+
 function openDatabase(dbPath, options = {}) {
   const binding = getSqliteNativeBinding()
   const dbOptions = { ...options }
   if (binding && !dbOptions.nativeBinding) {
     dbOptions.nativeBinding = binding
   }
-  return new Database(dbPath, dbOptions)
+  const db = new Database(dbPath, dbOptions)
+  _activeDb = db
+  indexerService.setActiveDb(db)
+  return db
 }
 
 function createDatabase(dbPath) {
@@ -170,6 +228,8 @@ function createDatabase(dbPath) {
       is_dlc INTEGER DEFAULT 0,
       is_hidden INTEGER DEFAULT 0,
       hidden_reason TEXT,
+      save_dir_path TEXT,
+      active_mod_profile TEXT,
       drive_status TEXT DEFAULT 'online' CHECK(drive_status IN ('online', 'offline')),
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -208,6 +268,23 @@ function createDatabase(dbPath) {
       timestamp INTEGER,
       details TEXT
     );
+    CREATE TABLE IF NOT EXISTS network_activity_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      timestamp INTEGER NOT NULL,
+      service TEXT NOT NULL,
+      endpoint TEXT NOT NULL,
+      method TEXT NOT NULL DEFAULT 'GET',
+      status_code INTEGER DEFAULT 200,
+      bytes_transferred INTEGER NOT NULL DEFAULT 0,
+      duration_ms INTEGER DEFAULT 0,
+      game_id TEXT,
+      game_title TEXT,
+      asset_type TEXT,
+      status TEXT NOT NULL DEFAULT 'success',
+      details TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_network_activity_timestamp ON network_activity_log(timestamp DESC);
+    CREATE INDEX IF NOT EXISTS idx_network_activity_service ON network_activity_log(service);
     CREATE TABLE IF NOT EXISTS user_captures (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       game_id TEXT NOT NULL,
@@ -217,8 +294,85 @@ function createDatabase(dbPath) {
       FOREIGN KEY(game_id) REFERENCES games(id) ON DELETE CASCADE
     );
     CREATE INDEX IF NOT EXISTS idx_user_captures_game_id ON user_captures(game_id);
+
+    CREATE TABLE IF NOT EXISTS game_knowledge (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      game_id TEXT NOT NULL,
+      canonical_title TEXT NOT NULL,
+      section_title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(game_id) REFERENCES games(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_game_knowledge_game_id ON game_knowledge(game_id);
+
+    CREATE VIRTUAL TABLE IF NOT EXISTS game_knowledge_fts USING fts5(
+      section_title,
+      content,
+      game_id UNINDEXED,
+      content='game_knowledge',
+      content_rowid='id'
+    );
+
+    CREATE TRIGGER IF NOT EXISTS game_knowledge_ai AFTER INSERT ON game_knowledge BEGIN
+      INSERT INTO game_knowledge_fts(rowid, section_title, content, game_id) VALUES (new.id, new.section_title, new.content, new.game_id);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS game_knowledge_ad AFTER DELETE ON game_knowledge BEGIN
+      INSERT INTO game_knowledge_fts(game_knowledge_fts, rowid, section_title, content, game_id) VALUES('delete', old.id, old.section_title, old.content, old.game_id);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS game_knowledge_au AFTER UPDATE ON game_knowledge BEGIN
+      INSERT INTO game_knowledge_fts(game_knowledge_fts, rowid, section_title, content, game_id) VALUES('delete', old.id, old.section_title, old.content, old.game_id);
+      INSERT INTO game_knowledge_fts(rowid, section_title, content, game_id) VALUES (new.id, new.section_title, new.content, new.game_id);
+    END;
+
+    CREATE TABLE IF NOT EXISTS save_backups (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      game_id TEXT NOT NULL,
+      archive_path TEXT NOT NULL,
+      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(game_id) REFERENCES games(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_save_backups_game_id ON save_backups(game_id);
+
+    CREATE VIRTUAL TABLE IF NOT EXISTS tech_knowledge_fts USING fts5(
+      game_id UNINDEXED,
+      section_title,
+      content,
+      tokenize = 'porter unicode61'
+    );
   `)
   db.prepare("INSERT OR IGNORE INTO app_settings (key, value) VALUES ('auto_hide_support_entries', '1')").run()
+  try {
+    const ftsCols = db.prepare('PRAGMA table_info(game_knowledge_fts)').all().map((c) => c.name)
+    if (ftsCols.length > 0 && !ftsCols.includes('game_id')) {
+      db.exec(`
+        DROP TABLE IF EXISTS game_knowledge_fts;
+        DROP TRIGGER IF EXISTS game_knowledge_ai;
+        DROP TRIGGER IF EXISTS game_knowledge_ad;
+        DROP TRIGGER IF EXISTS game_knowledge_au;
+        CREATE VIRTUAL TABLE game_knowledge_fts USING fts5(
+          section_title,
+          content,
+          game_id UNINDEXED,
+          content='game_knowledge',
+          content_rowid='id'
+        );
+        INSERT INTO game_knowledge_fts(game_knowledge_fts) VALUES('rebuild');
+        CREATE TRIGGER IF NOT EXISTS game_knowledge_ai AFTER INSERT ON game_knowledge BEGIN
+          INSERT INTO game_knowledge_fts(rowid, section_title, content, game_id) VALUES (new.id, new.section_title, new.content, new.game_id);
+        END;
+        CREATE TRIGGER IF NOT EXISTS game_knowledge_ad AFTER DELETE ON game_knowledge BEGIN
+          INSERT INTO game_knowledge_fts(game_knowledge_fts, rowid, section_title, content, game_id) VALUES('delete', old.id, old.section_title, old.content, old.game_id);
+        END;
+        CREATE TRIGGER IF NOT EXISTS game_knowledge_au AFTER UPDATE ON game_knowledge BEGIN
+          INSERT INTO game_knowledge_fts(game_knowledge_fts, rowid, section_title, content, game_id) VALUES('delete', old.id, old.section_title, old.content, old.game_id);
+          INSERT INTO game_knowledge_fts(rowid, section_title, content, game_id) VALUES (new.id, new.section_title, new.content, new.game_id);
+        END;
+      `)
+    }
+  } catch {}
   const activityCols = db.prepare('PRAGMA table_info(activity_log)').all().map((c) => c.name)
   if (!activityCols.includes('event_type')) db.exec("ALTER TABLE activity_log ADD COLUMN event_type TEXT NOT NULL DEFAULT 'scan'")
   if (!activityCols.includes('game_id')) db.exec('ALTER TABLE activity_log ADD COLUMN game_id INTEGER')
@@ -256,6 +410,35 @@ function createDatabase(dbPath) {
   if (!columns.includes('hidden_reason')) db.exec('ALTER TABLE games ADD COLUMN hidden_reason TEXT')
   if (!columns.includes('status')) db.exec("ALTER TABLE games ADD COLUMN status TEXT DEFAULT 'unplayed'")
   if (!columns.includes('completed_at')) db.exec('ALTER TABLE games ADD COLUMN completed_at TEXT')
+  if (!columns.includes('hltb_id')) db.exec('ALTER TABLE games ADD COLUMN hltb_id INTEGER')
+  if (!columns.includes('hltb_main_hours')) db.exec('ALTER TABLE games ADD COLUMN hltb_main_hours REAL')
+  if (!columns.includes('hltb_extra_hours')) db.exec('ALTER TABLE games ADD COLUMN hltb_extra_hours REAL')
+  if (!columns.includes('hltb_completionist_hours')) db.exec('ALTER TABLE games ADD COLUMN hltb_completionist_hours REAL')
+  if (!columns.includes('hltb_score')) db.exec('ALTER TABLE games ADD COLUMN hltb_score INTEGER')
+  if (!columns.includes('has_guide')) db.exec('ALTER TABLE games ADD COLUMN has_guide INTEGER DEFAULT 0')
+  if (!columns.includes('save_dir_path')) db.exec('ALTER TABLE games ADD COLUMN save_dir_path TEXT')
+  if (!columns.includes('active_mod_profile')) db.exec('ALTER TABLE games ADD COLUMN active_mod_profile TEXT')
+  if (!columns.includes('last_checkpoint_note')) db.exec('ALTER TABLE games ADD COLUMN last_checkpoint_note TEXT')
+  if (!columns.includes('last_checkpoint_at')) db.exec('ALTER TABLE games ADD COLUMN last_checkpoint_at DATETIME')
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS save_backups (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        game_id TEXT NOT NULL,
+        archive_path TEXT NOT NULL,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(game_id) REFERENCES games(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_save_backups_game_id ON save_backups(game_id);
+
+      CREATE VIRTUAL TABLE IF NOT EXISTS tech_knowledge_fts USING fts5(
+        game_id UNINDEXED,
+        section_title,
+        content,
+        tokenize = 'porter unicode61'
+      );
+    `)
+  } catch {}
   try {
     db.prepare("UPDATE games SET status = COALESCE(NULLIF(status, ''), backlog_status, 'unplayed') WHERE status IS NULL OR status = ''").run()
   } catch {}
@@ -265,6 +448,7 @@ function createDatabase(dbPath) {
   db.prepare("UPDATE games SET genres = genre WHERE (genres IS NULL OR TRIM(genres) = '') AND genre IS NOT NULL AND TRIM(genre) <> ''").run()
   cleanupLegacyGameRecords(db)
   enforceDlcClassification(db)
+  reconcileSteamAppIds(db)
   return db
 }
 
@@ -314,6 +498,7 @@ function getGames(db, filters = {}, sort = {}) {
         'platformLaunchId', gs.platform_launch_id,
         'idSource', gs.id_source,
         'launchUri', gs.launch_uri,
+        'installUri', gs.install_uri,
         'playTimeSeconds', gs.play_time_seconds,
         'sourceName', gs.source_name,
         'ownershipStatus', gs.ownership_status
@@ -326,6 +511,8 @@ function getGames(db, filters = {}, sort = {}) {
   `).all(params)
   return rows.map((row) => ({
     ...row,
+    executable_path: resolvePortablePath(row.executable_path),
+    install_path: resolvePortablePath(row.install_path),
     status: row.status || row.backlog_status || 'unplayed',
     completed_at: row.completed_at || null,
     is_installed: Boolean(row.is_installed),
@@ -333,6 +520,11 @@ function getGames(db, filters = {}, sort = {}) {
     is_utility: Boolean(row.is_utility),
     is_dlc: Boolean(row.is_dlc),
     is_hidden: Boolean(row.is_hidden),
+    has_guide: Boolean(row.has_guide),
+    save_dir_path: row.save_dir_path || null,
+    active_mod_profile: row.active_mod_profile || null,
+    last_checkpoint_note: row.last_checkpoint_note || null,
+    last_checkpoint_at: row.last_checkpoint_at || null,
     sources: JSON.parse(row.sources_json).filter((source) => source.platform !== null),
     install_size_gb: Number((row.install_size_bytes / (1024 ** 3)).toFixed(2)),
   }))
@@ -381,6 +573,7 @@ function updateGameStatus(db, gameId, status) {
         'platformLaunchId', gs.platform_launch_id,
         'idSource', gs.id_source,
         'launchUri', gs.launch_uri,
+        'installUri', gs.install_uri,
         'playTimeSeconds', gs.play_time_seconds,
         'sourceName', gs.source_name,
         'ownershipStatus', gs.ownership_status
@@ -395,6 +588,8 @@ function updateGameStatus(db, gameId, status) {
 
   return {
     ...updatedRow,
+    executable_path: resolvePortablePath(updatedRow.executable_path),
+    install_path: resolvePortablePath(updatedRow.install_path),
     status: updatedRow.status || updatedRow.backlog_status || 'unplayed',
     completed_at: updatedRow.completed_at || null,
     is_installed: Boolean(updatedRow.is_installed),
@@ -407,12 +602,36 @@ function updateGameStatus(db, gameId, status) {
   }
 }
 
+function recordPlaySession(db, gameId, elapsedSeconds) {
+  if (!gameId || typeof elapsedSeconds !== 'number' || elapsedSeconds <= 0) return null
+  const now = new Date().toISOString()
+  db.prepare(`
+    UPDATE games SET
+      play_time_seconds = COALESCE(play_time_seconds, 0) + ?,
+      last_played = ?,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(elapsedSeconds, now, gameId)
+
+  try {
+    db.prepare(`
+      UPDATE game_sources SET
+        play_time_seconds = COALESCE(play_time_seconds, 0) + ?
+      WHERE game_id = ?
+    `).run(elapsedSeconds, gameId)
+  } catch {}
+
+  return db.prepare('SELECT id, canonical_title, play_time_seconds, last_played FROM games WHERE id = ?').get(gameId)
+}
+
 function getLibrarySettings(db) {
   const storedKey = getAppSetting(db, 'steamgriddb_api_key', '')
   const storedIgdbId = getAppSetting(db, 'igdb_client_id', '')
   const storedIgdbSecret = getAppSetting(db, 'igdb_client_secret', '')
   const storedHeroRes = getAppSetting(db, 'hero_resolution', '2.5k')
   const storedPreferAnimated = getAppSetting(db, 'prefer_animated_artwork', 'false')
+  const storedPreferAnimatedCovers = getAppSetting(db, 'prefer_animated_covers', 'false')
+  const storedMinimizeToTray = getAppSetting(db, 'minimize_to_tray', 'false')
   return {
     autoHideSupportEntries: Boolean(autoHideSupportEntriesEnabled(db)),
     steamGridDbApiKey: typeof storedKey === 'string' ? storedKey : '',
@@ -420,6 +639,8 @@ function getLibrarySettings(db) {
     igdbClientSecret: typeof storedIgdbSecret === 'string' ? storedIgdbSecret : '',
     heroResolution: typeof storedHeroRes === 'string' && storedHeroRes ? storedHeroRes : '2.5k',
     preferAnimatedArtwork: storedPreferAnimated === 'true' || storedPreferAnimated === '1',
+    preferAnimatedCovers: storedPreferAnimatedCovers === 'true' || storedPreferAnimatedCovers === '1',
+    minimizeToTray: storedMinimizeToTray === 'true' || storedMinimizeToTray === '1',
   }
 }
 
@@ -431,6 +652,8 @@ function setLibrarySettings(db, settings = {}) {
   if (settings.igdbClientSecret !== undefined && (typeof settings.igdbClientSecret !== 'string' || settings.igdbClientSecret.length > 300)) throw new Error('Invalid IGDB Client Secret.')
   if (settings.heroResolution !== undefined && typeof settings.heroResolution !== 'string') throw new Error('Invalid hero resolution.')
   if (settings.preferAnimatedArtwork !== undefined && typeof settings.preferAnimatedArtwork !== 'boolean') throw new Error('Invalid prefer-animated setting.')
+  if (settings.preferAnimatedCovers !== undefined && typeof settings.preferAnimatedCovers !== 'boolean') throw new Error('Invalid prefer-animated-covers setting.')
+  if (settings.minimizeToTray !== undefined && typeof settings.minimizeToTray !== 'boolean') throw new Error('Invalid minimize-to-tray setting.')
 
   if (settings.autoHideSupportEntries !== undefined) db.prepare("INSERT INTO app_settings (key, value) VALUES ('auto_hide_support_entries', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(settings.autoHideSupportEntries ? '1' : '0')
   if (settings.steamGridDbApiKey !== undefined) db.prepare("INSERT INTO app_settings (key, value) VALUES ('steamgriddb_api_key', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(String(settings.steamGridDbApiKey).trim())
@@ -438,6 +661,8 @@ function setLibrarySettings(db, settings = {}) {
   if (settings.igdbClientSecret !== undefined) db.prepare("INSERT INTO app_settings (key, value) VALUES ('igdb_client_secret', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(String(settings.igdbClientSecret).trim())
   if (settings.heroResolution !== undefined) db.prepare("INSERT INTO app_settings (key, value) VALUES ('hero_resolution', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(String(settings.heroResolution).trim())
   if (settings.preferAnimatedArtwork !== undefined) db.prepare("INSERT INTO app_settings (key, value) VALUES ('prefer_animated_artwork', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(settings.preferAnimatedArtwork ? 'true' : 'false')
+  if (settings.preferAnimatedCovers !== undefined) db.prepare("INSERT INTO app_settings (key, value) VALUES ('prefer_animated_covers', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(settings.preferAnimatedCovers ? 'true' : 'false')
+  if (settings.minimizeToTray !== undefined) db.prepare("INSERT INTO app_settings (key, value) VALUES ('minimize_to_tray', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(settings.minimizeToTray ? 'true' : 'false')
 
   if (settings.autoHideSupportEntries !== undefined) enforceHiddenClassification(db)
   return getLibrarySettings(db)
@@ -448,18 +673,26 @@ function updateGameMetadata(db, gameId, fields = {}) {
   if (!fields || typeof fields !== 'object' || Array.isArray(fields)) throw new Error('Invalid metadata update.')
   const current = db.prepare('SELECT * FROM games WHERE id = ?').get(gameId)
   if (!current) throw new Error('The selected game could not be found.')
-  const value = (key, limit) => fields[key] === undefined ? current[key] || '' : String(fields[key] || '').trim().slice(0, limit)
-  const title = value('title', 240)
+  const value = (key, limit, snakeKey) => {
+    const val = fields[key] !== undefined ? fields[key] : (snakeKey && fields[snakeKey] !== undefined ? fields[snakeKey] : (current[snakeKey || key] ?? current[key] ?? ''))
+    return String(val || '').trim().slice(0, limit)
+  }
+  const title = value('title', 240, 'canonical_title') || current.canonical_title
   if (!title) throw new Error('Title cannot be empty.')
-  const description = value('description', 12000)
-  const genres = value('genres', 500)
-  const developer = value('developer', 500)
-  const publisher = value('publisher', 500)
-  const releaseDate = value('releaseDate', 120)
-  const storeName = value('storeName', 120)
-  const executablePath = value('executablePath', 1000)
-  const launchArguments = value('launchArguments', 2000)
-  const tags = value('tags', 500)
+  const description = value('description', 12000, 'description')
+  const genres = value('genres', 500, 'genres') || value('genre', 500, 'genre')
+  const developer = value('developer', 500, 'developer')
+  const publisher = value('publisher', 500, 'publisher')
+  const releaseDate = value('releaseDate', 120, 'release_date')
+  const storeName = value('storeName', 120, 'store_name')
+  let rawExecutablePath = fields.executablePath !== undefined ? fields.executablePath : (fields.executable_path !== undefined ? fields.executable_path : (current.executable_path || ''))
+  let executablePath = toPortablePath(String(rawExecutablePath || '').replace(/^["']|["']$/g, '').trim().slice(0, 1000))
+  if (executablePath && !/\.exe$/i.test(executablePath)) {
+    // Discard non-executable files (like .ico or directory paths) rather than failing metadata edits
+    executablePath = null
+  }
+  const launchArguments = value('launchArguments', 2000, 'launch_arguments')
+  const tags = value('tags', 500, 'tags')
   const hasFavorite = fields.is_favorite !== undefined || fields.isFavorite !== undefined
   const isFavorite = hasFavorite ? (Boolean(fields.is_favorite ?? fields.isFavorite) ? 1 : 0) : (current.is_favorite ? 1 : 0)
   const hasBacklog = fields.backlog_status !== undefined || fields.backlogStatus !== undefined
@@ -468,7 +701,6 @@ function updateGameMetadata(db, gameId, fields = {}) {
   const steamGridDbId = hasSteamGridDbField ? String(fields.steamGridDbId ?? fields.steamgriddbId ?? '').trim().slice(0, 120) : String(current.steamgriddb_id || '')
   const steamGridDbIdChanged = hasSteamGridDbField && steamGridDbId !== String(current.steamgriddb_id || '')
   const explicitCover = fields.coverUrl !== undefined || fields.cover_url !== undefined ? String(fields.coverUrl ?? fields.cover_url ?? '').trim() : null
-  if (executablePath && !/\.exe$/i.test(executablePath)) throw new Error('Executable path must point to a .exe file.')
   db.prepare(`UPDATE games SET
     canonical_title = @title,
     normalized_title = @normalizedTitle,
@@ -496,6 +728,26 @@ function updateGameMetadata(db, gameId, fields = {}) {
   return db.prepare('SELECT * FROM games WHERE id = ?').get(gameId)
 }
 
+function updateGameHltb(db, gameId, stats) {
+  if (!db || !gameId || !stats) return null
+  db.prepare(`UPDATE games SET
+    hltb_id = @hltbId,
+    hltb_main_hours = @mainHours,
+    hltb_extra_hours = @extraHours,
+    hltb_completionist_hours = @completionistHours,
+    hltb_score = @score,
+    updated_at = CURRENT_TIMESTAMP
+    WHERE id = @id`).run({
+      id: gameId,
+      hltbId: stats.hltbId ?? null,
+      mainHours: stats.mainHours ?? null,
+      extraHours: stats.extraHours ?? null,
+      completionistHours: stats.completionistHours ?? null,
+      score: stats.score ?? null,
+    })
+  return db.prepare('SELECT * FROM games WHERE id = ?').get(gameId)
+}
+
 function getAppConfig(db, key, fallback = null) {
   try {
     const row = db.prepare('SELECT value FROM app_config WHERE key = ?').get(key)
@@ -508,9 +760,7 @@ function getAppConfig(db, key, fallback = null) {
 function setAppConfig(db, key, value) {
   try {
     db.prepare('INSERT INTO app_config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, String(value))
-  } catch (err) {
-    console.warn('Failed setting app_config:', err.message)
-  }
+  } catch {}
 }
 
 function logActivity(db, eventType, gameId = null, details = null) {
@@ -557,9 +807,7 @@ function logActivity(db, eventType, gameId = null, details = null) {
         VALUES (?, ?, ?, ?)
       `).run(safeEventType, safeGameId, now, detailsStr)
     }
-  } catch (err) {
-    console.warn('Failed logging activity:', err.message)
-  }
+  } catch {}
 }
 
 function getActivityLog(db, limit = 50) {
@@ -586,6 +834,79 @@ function getActivityLog(db, limit = 50) {
     }
   })
 }
+
+function logNetworkActivity(db, item = {}) {
+  if (!db) return null
+  const now = Number(item.timestamp) || Date.now()
+  const service = String(item.service || 'Network').slice(0, 100)
+  const endpoint = String(item.endpoint || '').slice(0, 2000)
+  const method = String(item.method || 'GET').toUpperCase().slice(0, 10)
+  const statusCode = typeof item.statusCode === 'number' ? item.statusCode : 200
+  const bytes = Math.max(0, Number(item.bytesTransferred || item.bytes) || 0)
+  const durationMs = Math.max(0, Number(item.durationMs) || 0)
+  const gameId = item.gameId !== undefined && item.gameId !== null ? String(item.gameId) : null
+  const gameTitle = item.gameTitle ? String(item.gameTitle).slice(0, 300) : null
+  const assetType = item.assetType ? String(item.assetType).slice(0, 100) : null
+  const status = String(item.status || 'success').slice(0, 50)
+  const details = typeof item.details === 'string' ? item.details : item.details ? JSON.stringify(item.details) : null
+
+  try {
+    const stmt = db.prepare(`
+      INSERT INTO network_activity_log (
+        timestamp, service, endpoint, method, status_code, bytes_transferred,
+        duration_ms, game_id, game_title, asset_type, status, details
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    return stmt.run(now, service, endpoint, method, statusCode, bytes, durationMs, gameId, gameTitle, assetType, status, details)
+  } catch {
+    return null
+  }
+}
+
+function getNetworkActivityLog(db, limit = 100) {
+  if (!db) return []
+  const safeLimit = Math.max(1, Math.min(1000, Number(limit) || 100))
+  try {
+    return db.prepare('SELECT * FROM network_activity_log ORDER BY id DESC LIMIT ?').all(safeLimit) || []
+  } catch {
+    return []
+  }
+}
+
+function getNetworkActivityStats(db) {
+  if (!db) return { totalRequests: 0, totalBytesTransferred: 0, serviceBreakdown: [] }
+  try {
+    const totalRow = db.prepare('SELECT COUNT(*) as count, SUM(bytes_transferred) as totalBytes FROM network_activity_log').get()
+    const breakdown = db.prepare('SELECT service, COUNT(*) as count, SUM(bytes_transferred) as bytes FROM network_activity_log GROUP BY service').all()
+    return {
+      totalRequests: totalRow?.count || 0,
+      totalBytesTransferred: totalRow?.totalBytes || 0,
+      serviceBreakdown: breakdown || [],
+    }
+  } catch {
+    return { totalRequests: 0, totalBytesTransferred: 0, serviceBreakdown: [] }
+  }
+}
+
+function clearNetworkActivityLog(db) {
+  if (!db) return { cleared: 0 }
+  try {
+    const info = db.prepare('DELETE FROM network_activity_log').run()
+    return { cleared: info.changes || 0 }
+  } catch {
+    return { cleared: 0 }
+  }
+}
+
+const {
+  insertKnowledgeChunk,
+  searchGameKnowledge,
+  hasGuide,
+  deleteGameKnowledge,
+  findRecommendationCandidates,
+  resolveGameByQuery,
+  findGameEntityInText,
+} = indexerService
 
 function getLibraryHealth(db) {
   const totalRow = db.prepare('SELECT COUNT(*) AS total, SUM(is_installed) AS installed FROM games').get()
@@ -785,6 +1106,8 @@ function getLibraryStats(db) {
     SUM(CASE WHEN is_hidden = 1 AND is_utility = 0 AND is_dlc = 1 THEN 1 ELSE 0 END) AS hiddenDlc,
     SUM(CASE WHEN is_hidden = 1 AND is_utility = 0 AND is_dlc = 1 AND is_installed = 1 THEN 1 ELSE 0 END) AS hiddenInstalledDlc,
     SUM(CASE WHEN is_installed = 0 AND is_utility = 0 AND is_dlc = 0 AND is_hidden = 0 THEN 1 ELSE 0 END) AS readyToInstall,
+    SUM(CASE WHEN (has_guide = 1 OR id IN (SELECT DISTINCT game_id FROM game_knowledge)) AND is_utility = 0 AND is_dlc = 0 AND is_hidden = 0 THEN 1 ELSE 0 END) AS gamesWithGuides,
+    SUM(CASE WHEN (has_guide = 1 OR id IN (SELECT DISTINCT game_id FROM game_knowledge)) AND is_utility = 0 AND is_dlc = 0 AND is_hidden = 0 AND is_installed = 1 THEN 1 ELSE 0 END) AS installedWithGuides,
     SUM(CASE 
       WHEN cover_url IS NOT NULL 
        AND TRIM(cover_url) != '' 
@@ -800,6 +1123,12 @@ function getLibraryStats(db) {
     SUM(install_size_bytes) AS bytes FROM games`).get()
   const platforms = db.prepare(`SELECT ${platformKeySql('gs.platform')} AS platform, COUNT(DISTINCT gs.game_id) AS count
     FROM game_sources gs GROUP BY ${platformKeySql('gs.platform')} ORDER BY count DESC`).all()
+
+  let totalKnowledgeChunks = 0
+  try {
+    totalKnowledgeChunks = db.prepare('SELECT COUNT(*) as cnt FROM game_knowledge').get()?.cnt || 0
+  } catch {}
+
   return {
     totalGames: totals.total || 0,
     installedGames: totals.installed || 0,
@@ -816,6 +1145,11 @@ function getLibraryStats(db) {
     readyToInstallCount: totals.readyToInstall || 0,
     artworkCovered: totals.artworkCovered || 0,
     missingArtwork: Math.max(0, (totals.total || 0) - (totals.artworkCovered || 0)),
+    gamesWithGuides: totals.gamesWithGuides || 0,
+    missingGuidesCount: Math.max(0, (totals.visibleGames || 0) - (totals.gamesWithGuides || 0)),
+    installedWithGuides: totals.installedWithGuides || 0,
+    missingInstalledGuidesCount: Math.max(0, (totals.visibleInstalledGames || 0) - (totals.installedWithGuides || 0)),
+    totalKnowledgeChunks,
     totalStorageGb: Number(((totals.bytes || 0) / (1024 ** 3)).toFixed(2)),
     platformBreakdown: platforms,
   }
@@ -825,8 +1159,7 @@ function getUserCaptures(db, gameId) {
   if (!gameId || typeof gameId !== 'string') return []
   try {
     return db.prepare('SELECT * FROM user_captures WHERE game_id = ? ORDER BY id DESC').all(gameId)
-  } catch (err) {
-    console.warn('[DB] getUserCaptures error:', err?.message)
+  } catch {
     return []
   }
 }
@@ -843,4 +1176,100 @@ function deleteUserCapture(db, captureId) {
   return db.prepare('DELETE FROM user_captures WHERE id = ?').run(captureId)
 }
 
-module.exports = { createDatabase, openDatabase, seedIfEmpty, getGames, setGameHidden, updateGameStatus, updateGameMetadata, deleteGames, bulkUpdateGames, moveGameCategory, bulkMoveGameCategory, bulkSetGameHidden, getLibrarySettings, setLibrarySettings, getActivityLog, logActivity, getAppConfig, setAppConfig, getLibraryHealth, getRandomInstalledGame, getLibraryStats, exportLibraryCsv, exportSelectedCsv, purgeLibrary, enforceUtilityClassification, enforceDlcClassification, getUserCaptures, addUserCapture, deleteUserCapture }
+function insertTechKnowledge(db, gameId, sectionTitle, content) {
+  const targetDb = db || getActiveDatabase()
+  if (!targetDb || !gameId || !content) return null
+  try {
+    targetDb.prepare('DELETE FROM tech_knowledge_fts WHERE game_id = ? AND section_title = ?').run(String(gameId), String(sectionTitle))
+  } catch {}
+  try {
+    const stmt = targetDb.prepare('INSERT INTO tech_knowledge_fts (game_id, section_title, content) VALUES (?, ?, ?)')
+    stmt.run(String(gameId), String(sectionTitle), String(content))
+    return true
+  } catch {
+    return false
+  }
+}
+
+function searchTechKnowledge(db, gameId, query) {
+  const targetDb = db || getActiveDatabase()
+  if (!targetDb || !query) return []
+  const cleanQ = String(query).replace(/["*]/g, '').trim()
+  if (!cleanQ) return []
+  try {
+    if (gameId) {
+      return targetDb.prepare('SELECT section_title, content FROM tech_knowledge_fts WHERE game_id = ? AND tech_knowledge_fts MATCH ? LIMIT 10').all(String(gameId), cleanQ)
+    }
+    return targetDb.prepare('SELECT game_id, section_title, content FROM tech_knowledge_fts WHERE tech_knowledge_fts MATCH ? LIMIT 10').all(cleanQ)
+  } catch {
+    return []
+  }
+}
+
+function recordSaveBackup(db, gameId, archivePath) {
+  const targetDb = db || getActiveDatabase()
+  if (!targetDb || !gameId || !archivePath) return null
+  try {
+    const stmt = targetDb.prepare('INSERT INTO save_backups (game_id, archive_path) VALUES (?, ?)')
+    const res = stmt.run(String(gameId), String(archivePath))
+    return { id: res.lastInsertRowid, game_id: gameId, archive_path: archivePath }
+  } catch {
+    return null
+  }
+}
+
+function getSaveBackups(db, gameId) {
+  const targetDb = db || getActiveDatabase()
+  if (!targetDb || !gameId) return []
+  try {
+    return targetDb.prepare('SELECT id, game_id, archive_path, timestamp FROM save_backups WHERE game_id = ? ORDER BY id DESC').all(String(gameId))
+  } catch {
+    return []
+  }
+}
+
+function updateGameSavePath(db, gameId, saveDirPath) {
+  const targetDb = db || getActiveDatabase()
+  if (!targetDb || !gameId) return null
+  try {
+    targetDb.prepare('UPDATE games SET save_dir_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(saveDirPath || null, String(gameId))
+    return true
+  } catch {
+    return false
+  }
+}
+
+function updateGameModProfile(db, gameId, activeModProfile) {
+  const targetDb = db || getActiveDatabase()
+  if (!targetDb || !gameId) return null
+  try {
+    targetDb.prepare('UPDATE games SET active_mod_profile = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(activeModProfile || null, String(gameId))
+    return true
+  } catch {
+    return false
+  }
+}
+
+function updateCheckpointNote(db, gameId, note) {
+  const targetDb = db || getActiveDatabase()
+  if (!targetDb || !gameId) return null
+  try {
+    targetDb.prepare('UPDATE games SET last_checkpoint_note = ?, last_checkpoint_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(note || null, String(gameId))
+    return true
+  } catch {
+    return false
+  }
+}
+
+function deleteSaveBackup(db, backupId) {
+  const targetDb = db || getActiveDatabase()
+  if (!targetDb || !backupId) return false
+  try {
+    targetDb.prepare('DELETE FROM save_backups WHERE id = ?').run(Number(backupId))
+    return true
+  } catch {
+    return false
+  }
+}
+
+module.exports = { createDatabase, openDatabase, getActiveDatabase, seedIfEmpty, getGames, setGameHidden, updateGameStatus, updateGameMetadata, updateGameHltb, recordPlaySession, deleteGames, bulkUpdateGames, moveGameCategory, bulkMoveGameCategory, bulkSetGameHidden, getLibrarySettings, setLibrarySettings, getActivityLog, logActivity, logNetworkActivity, getNetworkActivityLog, getNetworkActivityStats, clearNetworkActivityLog, insertKnowledgeChunk, searchGameKnowledge, hasGuide, deleteGameKnowledge, findRecommendationCandidates, resolveGameByQuery, findGameEntityInText, getAppConfig, setAppConfig, getLibraryHealth, getRandomInstalledGame, getLibraryStats, exportLibraryCsv, exportSelectedCsv, purgeLibrary, enforceUtilityClassification, enforceDlcClassification, reconcileSteamAppIds, getUserCaptures, addUserCapture, deleteUserCapture, insertTechKnowledge, searchTechKnowledge, recordSaveBackup, getSaveBackups, deleteSaveBackup, updateGameSavePath, updateGameModProfile, updateCheckpointNote, toPortablePath, resolvePortablePath }

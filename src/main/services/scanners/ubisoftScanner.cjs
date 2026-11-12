@@ -47,7 +47,7 @@ function scanUbisoft(onProgress) {
         idSource: 'ubisoft-registry:uninstall-key',
         launchUri: `uplay://launch/${encodeURIComponent(gameId)}/0`,
         installUri: null,
-        executable: displayIcon ? displayIcon.replace(/,\d+$/, '') : null,
+        executable: (displayIcon && /\.exe$/i.test(displayIcon.replace(/,\d+$/, '').replace(/^["']|["']$/g, '').trim())) ? displayIcon.replace(/,\d+$/, '').replace(/^["']|["']$/g, '').trim() : null,
         source: 'local-scan',
         driveStatus: isOnline ? 'online' : 'offline',
       })

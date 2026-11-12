@@ -152,7 +152,7 @@ function normalizeStoreName(name) {
   if (lower === 'gog' || lower === 'gog galaxy') return 'GOG'
   if (lower === 'steam') return 'Steam'
   if (lower === 'xbox' || lower === 'microsoft' || lower === 'ms-xbl' || lower === 'ms-windows-store') return 'Xbox'
-  if (lower === 'repack') return 'Repack'
+  if (lower === 'repack' || lower === 'standalone') return 'Standalone'
   if (lower === 'amazon' || lower === 'amazon games') return 'Amazon Games'
   if (lower === 'battlenet' || lower === 'battle.net') return 'Battle.net'
   if (lower === 'itch' || lower === 'itch.io') return 'Itch.io'

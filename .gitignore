@@ -31,4 +31,21 @@ Thumbs.db
 
 # Logpile portable data & compiled binaries
 logpile_data/
+captures/
+UserData/
 *.exe
+
+# Internal notes & AI handoff docs
+HANDOFF*.md
+handoff*.md
+*.handoff.md
+prd.json
+progress.txt
+scratch/
+temp_*
+*.tmp
+
+# AI models & local resources
+*.gguf
+resources/
+models/

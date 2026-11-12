@@ -48,7 +48,7 @@ function scanEA(onProgress) {
         idSource: 'ea-registry:uninstall-key',
         launchUri: null,
         installUri: null,
-        executable: displayIcon ? displayIcon.replace(/,\d+$/, '').replace(/^"|"$/g, '') : null,
+        executable: (displayIcon && /\.exe$/i.test(displayIcon.replace(/,\d+$/, '').replace(/^["']|["']$/g, '').trim())) ? displayIcon.replace(/,\d+$/, '').replace(/^["']|["']$/g, '').trim() : null,
         source: 'local-scan',
         driveStatus: isOnline ? 'online' : 'offline',
       })

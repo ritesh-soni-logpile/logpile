@@ -8,7 +8,8 @@ function normalizeHeader(value) {
 }
 
 function firstValue(row, aliases) {
-  const keys = Object.keys(row)
+  if (!row || typeof row !== 'object') return ''
+  const keys = Object.keys(row).filter((k) => k !== '__proto__' && k !== 'constructor' && k !== 'prototype')
   const normalizedAliases = aliases.map(normalizeHeader)
   const key = keys.find((candidate) => normalizedAliases.includes(normalizeHeader(candidate)))
   return key ? row[key] : ''
@@ -195,9 +196,16 @@ function processWorkbook(workbook, sourceIdentifier, onProgress) {
   const records = []
   const sheetSummaries = []
   sheets.forEach((sheetName, sheetIndex) => {
-    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' })
+    const rawRows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' })
     let imported = 0
-    for (const row of rows) {
+    for (const rawRow of rawRows) {
+      if (!rawRow || typeof rawRow !== 'object') continue
+      const row = Object.create(null)
+      for (const [k, v] of Object.entries(rawRow)) {
+        if (k !== '__proto__' && k !== 'constructor' && k !== 'prototype') {
+          row[k] = v
+        }
+      }
       const record = parseRow(row, sheetName)
       if (record) { records.push(record); imported += 1 }
     }
@@ -207,4 +215,77 @@ function processWorkbook(workbook, sourceIdentifier, onProgress) {
   return { filePath: sourceIdentifier, sheets: sheetSummaries, records, totalRows: records.length }
 }
 
-module.exports = { importCatalog, importCatalogFromBuffer, parseRow, inferPlatform, inferStoreName, autoLabelCustomStore, parsePlayTime, parseBacklogStatus, parseRating, parseBoolean, normalizeHeader }
+function generateBlankTemplateBuffer(format = 'xlsx') {
+  const headers = [
+    'Title',
+    'Platform',
+    'Status',
+    'Genre',
+    'Developer',
+    'Publisher',
+    'Playtime_Hours',
+    'Is_Installed',
+    'Notes'
+  ]
+
+  const sampleRows = [
+    [
+      'The Witcher 3: Wild Hunt',
+      'Steam',
+      'completed',
+      'RPG, Action',
+      'CD PROJEKT RED',
+      'CD PROJEKT RED',
+      120,
+      true,
+      'Main story + Blood & Wine complete'
+    ],
+    [
+      'Ghostwire Tokyo',
+      'Epic Games',
+      'unplayed',
+      'Action, Supernatural',
+      'Tango Gameworks',
+      'Bethesda Softworks',
+      0,
+      false,
+      'Uninstalled backlog from Epic giveaway'
+    ],
+    [
+      'Hades',
+      'Steam',
+      'playing',
+      'Roguelike, Action',
+      'Supergiant Games',
+      'Supergiant Games',
+      45,
+      true,
+      'Currently on heat level 8'
+    ],
+  ]
+
+  const wsData = [headers, ...sampleRows]
+  const ws = XLSX.utils.aoa_to_sheet(wsData)
+
+  ws['!cols'] = [
+    { wch: 30 },
+    { wch: 15 },
+    { wch: 12 },
+    { wch: 22 },
+    { wch: 20 },
+    { wch: 20 },
+    { wch: 16 },
+    { wch: 14 },
+    { wch: 35 },
+  ]
+
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Logpile Catalog')
+
+  if (format === 'csv') {
+    return Buffer.from(XLSX.utils.sheet_to_csv(ws), 'utf8')
+  }
+  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
+}
+
+module.exports = { importCatalog, importCatalogFromBuffer, generateBlankTemplateBuffer, parseRow, inferPlatform, inferStoreName, autoLabelCustomStore, parsePlayTime, parseBacklogStatus, parseRating, parseBoolean, normalizeHeader }

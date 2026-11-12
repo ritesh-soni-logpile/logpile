@@ -11,7 +11,7 @@ import {
   SiItchdotio,
 } from 'react-icons/si'
 import { FaXbox, FaAmazon } from 'react-icons/fa6'
-import { LuPackage, LuGamepad2, LuFolder } from 'react-icons/lu'
+import { LuPackage, LuGamepad2 } from 'react-icons/lu'
 
 export function SourceIcon({ source, size = 15, className = '' }) {
   const s = String(source || '').toLowerCase().trim()
@@ -69,8 +69,8 @@ export function SourceIcon({ source, size = 15, className = '' }) {
     return <SiItchdotio size={size} className={className} />
   }
 
-  // Repack / Custom installer
-  if (s.includes('repack') || s.includes('fitgirl') || s.includes('dodi') || s.includes('custom')) {
+  // Standalone / Custom installer
+  if (s.includes('repack') || s.includes('fitgirl') || s.includes('dodi') || s.includes('custom') || s.includes('standalone')) {
     return <LuPackage size={size} className={className} />
   }
 

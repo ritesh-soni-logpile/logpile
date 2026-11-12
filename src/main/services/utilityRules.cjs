@@ -6,6 +6,7 @@ const UTILITY_TITLES = Object.freeze([
   'Lossless Scaling',
   'OCCT',
   'Steamworks Common Redistributables',
+  'Razer Cortex',
 ])
 
 const UTILITY_KEYS = new Set(UTILITY_TITLES.map((title) => normalizeKey(title)))
@@ -15,6 +16,8 @@ const UTILITY_PATTERNS = Object.freeze([
   /\bunreal (?:editor|engine)\b/i,
   /\b3dmark\b/i,
   /\bmodkit\b/i,
+  /\brazer cortex\b/i,
+  /\b(?:minecraft\s+launcher|game\s+launcher|replikant\s+chat|festival\s+suite)\b/i,
 ])
 
 const HIDDEN_EXACT_TITLES = new Set([
@@ -34,12 +37,13 @@ const DLC_TITLE_PATTERNS = Object.freeze([
   /\b(season pass|expansion pass|battle pass|starter pass|year \d+ pass)\b/i,
   /\b(soundtrack|soundtracks|original soundtrack|ost)\b/i,
   /\b(artbook|digital artbook|goodies|bonus content)\b/i,
-  /\b(content pack|starter pack|booster pack|item pack|skin pack|costume pack|texture pack|weapon pack|character pack|voice pack|livery(?: pack)?|starter access|legendary status)\b/i,
+  /\b(content pack|starter pack|booster pack|item pack|skin pack|costume pack|texture pack|weapon pack|character pack|voice pack|livery(?: pack)?|starter access|legendary status|extras pack|anniversary pack|party pack|mega pack|giveaway)\b/i,
   /\b(deluxe upgrade|upgrade pack)\b/i,
   /^(?:complete|deluxe|standard|gold|ultimate) edition$/i,
   /\b(redmod)\b/i,
   /\b(wrap|livery)\b/i,
   / - .*\b(costume|wheels|cap|gift|airborne|winter warfare|near miss|legendary status|starter access|outfit|skin pack)\b/i,
+  /\b(retro set|arsenal set)\b/i,
   /\barchinteriors\b/i,
   /\bpack\b/i,
   /\bbundle\b/i,

@@ -182,5 +182,3 @@ export function CustomDropdown({
     </>
   )
 }
-
-export default CustomDropdown

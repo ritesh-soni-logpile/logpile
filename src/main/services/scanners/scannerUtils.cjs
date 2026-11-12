@@ -133,7 +133,4 @@ module.exports = {
   unique,
   emitProgress,
   getUninstallRegistryEntries,
-  path,
-  fs,
-  fsPromises,
 }

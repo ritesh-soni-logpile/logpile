@@ -1,18 +1,28 @@
-const { app, BrowserWindow, ipcMain, shell, dialog, protocol, net } = require('electron')
+const { app, BrowserWindow, ipcMain, shell, dialog, protocol, net, clipboard, nativeImage, Tray, Menu, globalShortcut } = require('electron')
 const path = require('node:path')
 const fs = require('node:fs')
-const { spawn } = require('node:child_process')
+const os = require('node:os')
+const { spawn, execFile } = require('node:child_process')
 const windowStateKeeper = require('electron-window-state')
 const { pathToFileURL } = require('node:url')
 
-// Force all app data, databases, and caches to save alongside the executable
+// Force all app data, databases, and caches to save alongside the executable (Zero-C-Drive)
 const isPackaged = app.isPackaged;
-if (isPackaged) {
-  const exePath = path.dirname(app.getPath('exe'));
-  app.setPath('userData', path.join(exePath, 'logpile_data'));
-} else {
-  app.setPath('userData', path.join(app.getPath('appData'), 'logpile'));
+const APP_DATA_DIR = isPackaged
+  ? path.join(path.dirname(app.getPath('exe')), 'logpile_data')
+  : path.join(__dirname, '..', 'logpile_data');
+
+try {
+  fs.mkdirSync(APP_DATA_DIR, { recursive: true });
+} catch (err) {
+  console.error('[Storage] Failed to create APP_DATA_DIR:', err);
 }
+
+app.setPath('userData', APP_DATA_DIR);
+app.setPath('sessionData', path.join(APP_DATA_DIR, 'session'));
+app.setPath('temp', path.join(APP_DATA_DIR, 'temp'));
+process.env.HF_HOME = path.join(APP_DATA_DIR, 'cache');
+process.env.XDG_CACHE_HOME = path.join(APP_DATA_DIR, 'cache');
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -35,6 +45,7 @@ const {
   setGameHidden,
   updateGameStatus,
   updateGameMetadata,
+  recordPlaySession,
   deleteGames,
   bulkUpdateGames,
   moveGameCategory,
@@ -49,13 +60,22 @@ const {
   setLibrarySettings,
   getActivityLog,
   logActivity,
-  getAppConfig,
   setAppConfig,
   getLibraryHealth,
   getUserCaptures,
   addUserCapture,
   deleteUserCapture,
+  getNetworkActivityLog,
+  getNetworkActivityStats,
+  clearNetworkActivityLog,
+  searchGameKnowledge,
+  hasGuide,
+  resolveGameByQuery,
+  findGameEntityInText,
+  updateGameModProfile,
+  updateCheckpointNote,
 } = require('./db.cjs')
+const { scanAndImportGuides, startGuideWatcher } = require('../src/main/services/guideImporter.cjs')
 const { scanAll, importFile, importBuffer } = require('../src/main/services/scanService.cjs')
 const {
   fetchMissingArtwork,
@@ -69,10 +89,28 @@ const {
   refetchSelectedArtwork,
   repairBrokenArtworkLinks,
   fetchGameMetadata,
+  restoreStaticCoversLocal,
 } = require('../src/main/services/artworkService.cjs')
 const { testIgdbConnection } = require('../src/main/services/igdbService.cjs')
 const { backupArtworkCache, restoreArtworkCache } = require('../src/main/services/archiveService.cjs')
 const { getSystemSpecs } = require('../src/main/services/systemSpecsService.cjs')
+const {
+  getModelStatus,
+  getModelsDirectory,
+  askGamingAssistant,
+  recommendFromLibrary,
+  unloadEngine,
+  parseLibraryFilterIntent,
+} = require('../src/main/services/aiService.cjs')
+const {
+  getFamilyLocks,
+  startSteamFamilyWatcher,
+  stopSteamFamilyWatcher,
+} = require('../src/main/services/steamFamilyService.cjs')
+const { createSaveBackup, restoreSaveBackup, checkSaveConflict, listSaveBackupsForGame } = require('./saveWatcher.cjs')
+const { fetchPcgwTechDataManual } = require('../src/main/services/pcgwService.cjs')
+const voiceService = require('./voiceService.cjs')
+const { toPortablePath, resolvePortablePath } = require('./pathUtils.cjs')
 
 let mainWindow
 let bulkArtworkSyncPromise = null
@@ -318,6 +356,327 @@ async function restoreDatabaseBackup(targetBackupPath, userDataPath) {
   }
 }
 
+
+// --- Session Tracking & System Tray (Step 1 & 2) ---
+let tray = null;
+const activeGameSessions = new Map();
+
+function setupTray(win, database) {
+  if (tray) return;
+  const iconPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'icon.ico')
+    : path.join(__dirname, '..', 'build', 'icon.ico');
+
+  const trayIcon = fs.existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : nativeImage.createEmpty();
+  tray = new Tray(trayIcon);
+  tray.setToolTip('Logpile');
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: 'Open Logpile',
+      click: () => {
+        if (win && !win.isDestroyed()) {
+          win.show();
+          win.focus();
+        }
+      },
+    },
+    { type: 'separator' },
+    {
+      label: 'Quit Logpile',
+      click: () => {
+        app.isQuitting = true;
+        app.quit();
+      },
+    },
+  ]);
+
+  tray.setContextMenu(contextMenu);
+  tray.on('double-click', () => {
+    if (win && !win.isDestroyed()) {
+      win.show();
+      win.focus();
+    }
+  });
+  tray.on('click', () => {
+    if (win && !win.isDestroyed()) {
+      if (win.isVisible()) {
+        win.focus();
+      } else {
+        win.show();
+        win.focus();
+      }
+    }
+  });
+}
+
+function findGameExecutables(installPath) {
+  const exeNames = new Set();
+  if (!installPath || typeof installPath !== 'string' || !fs.existsSync(installPath)) return exeNames;
+  try {
+    const entries = fs.readdirSync(installPath, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isFile() && entry.name.toLowerCase().endsWith('.exe')) {
+        const lower = entry.name.toLowerCase();
+        if (!lower.includes('crash') && !lower.includes('unins') && !lower.includes('setup') && !lower.includes('redist') && !lower.includes('unitycrash')) {
+          exeNames.add(lower);
+        }
+      } else if (entry.isDirectory()) {
+        const sub = path.join(installPath, entry.name);
+        try {
+          const subEntries = fs.readdirSync(sub, { withFileTypes: true });
+          for (const s of subEntries) {
+            if (s.isFile() && s.name.toLowerCase().endsWith('.exe')) {
+              const lower = s.name.toLowerCase();
+              if (!lower.includes('crash') && !lower.includes('unins') && !lower.includes('setup') && !lower.includes('redist') && !lower.includes('unitycrash')) {
+                exeNames.add(lower);
+              }
+            } else if (s.isDirectory()) {
+              const sub2 = path.join(sub, s.name);
+              try {
+                const sub2Entries = fs.readdirSync(sub2, { withFileTypes: true });
+                for (const s2 of sub2Entries) {
+                  if (s2.isFile() && s2.name.toLowerCase().endsWith('.exe')) {
+                    const lower = s2.name.toLowerCase();
+                    if (!lower.includes('crash') && !lower.includes('unins') && !lower.includes('setup') && !lower.includes('redist') && !lower.includes('unitycrash')) {
+                      exeNames.add(lower);
+                    }
+                  }
+                }
+              } catch {}
+            }
+          }
+        } catch {}
+      }
+    }
+  } catch {}
+  return exeNames;
+}
+
+function getRunningProcessNames() {
+  return new Promise((resolve) => {
+    execFile('tasklist', ['/FO', 'CSV', '/NH'], { windowsHide: true }, (err, stdout) => {
+      if (err || !stdout) return resolve(new Set());
+      const set = new Set();
+      const lines = stdout.split(/\r?\n/);
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const match = line.match(/^"([^"]+)"/);
+        if (match) set.add(match[1].toLowerCase());
+      }
+      resolve(set);
+    });
+  });
+}
+
+function startTrackingGameSession(gameId, title, executablePath = null, installPath = null) {
+  if (!gameId) return;
+  if (activeGameSessions.has(gameId)) return;
+
+  let resolvedInstallPath = installPath;
+  let resolvedExecutablePath = executablePath;
+  let resolvedTitle = title;
+
+  if (db && (!resolvedInstallPath || !resolvedExecutablePath)) {
+    try {
+      const row = db.prepare('SELECT install_path, executable_path, canonical_title FROM games WHERE id = ?').get(gameId);
+      if (row) {
+        if (!resolvedInstallPath && row.install_path) resolvedInstallPath = row.install_path;
+        if (!resolvedExecutablePath && row.executable_path) resolvedExecutablePath = row.executable_path;
+        if (!resolvedTitle && row.canonical_title) resolvedTitle = row.canonical_title;
+      }
+    } catch {}
+  }
+
+  const candidateExes = new Set();
+  if (resolvedExecutablePath) {
+    candidateExes.add(path.basename(resolvedExecutablePath).toLowerCase());
+  }
+  if (resolvedInstallPath) {
+    const fromFolder = findGameExecutables(resolvedInstallPath);
+    for (const name of fromFolder) candidateExes.add(name);
+  }
+
+  const session = {
+    gameId,
+    title: resolvedTitle || 'Game',
+    startTime: Date.now(),
+    candidateExes,
+    hasBeenDetected: false,
+    consecutiveMisses: 0,
+    timer: null,
+  };
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    try { mainWindow.webContents.send('game:sessionStarted', { gameId, title: session.title }) } catch {}
+  }
+
+  session.timer = setInterval(async () => {
+    const running = await getRunningProcessNames();
+    let isRunning = false;
+
+    for (const exe of session.candidateExes) {
+      if (running.has(exe)) {
+        isRunning = true;
+        break;
+      }
+    }
+
+    if (isRunning) {
+      session.hasBeenDetected = true;
+      session.consecutiveMisses = 0;
+    } else {
+      if (!session.hasBeenDetected) {
+        session.consecutiveMisses++;
+        if (session.consecutiveMisses > 15) {
+          clearInterval(session.timer);
+          activeGameSessions.delete(gameId);
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            try { mainWindow.webContents.send('game:sessionEnded', { gameId, title: session.title }) } catch {}
+          }
+        }
+      } else {
+        session.consecutiveMisses++;
+        if (session.consecutiveMisses >= 2) {
+          clearInterval(session.timer);
+          activeGameSessions.delete(gameId);
+          endGameSession(session);
+        }
+      }
+    }
+  }, 4000);
+
+  activeGameSessions.set(gameId, session);
+}
+
+function endGameSession(session) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    try { mainWindow.webContents.send('game:sessionEnded', { gameId: session.gameId, title: session.title }) } catch {}
+    try { mainWindow.webContents.send('game:promptCheckpointNote', { gameId: session.gameId, title: session.title }) } catch {}
+  }
+  const elapsedSeconds = Math.round((Date.now() - session.startTime) / 1000);
+  if (elapsedSeconds >= 10 && db) {
+    try {
+      recordPlaySession(db, session.gameId, elapsedSeconds);
+      logActivity(db, 'game_session_ended', session.gameId, {
+        title: session.title,
+        durationMinutes: Math.round(elapsedSeconds / 60),
+        durationSeconds: elapsedSeconds,
+      });
+      // Smart Save Watcher (100% offline, skips unchanged saves, 100MB circuit breaker, FIFO 3-cap)
+      try {
+        createSaveBackup(db, session.gameId, app.getPath('userData'), { isAuto: true });
+      } catch {}
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('library:updated');
+      }
+    } catch (err) {
+      console.error('[SessionTracker] Failed to record play session:', err);
+    }
+  }
+}
+
+function flushAllActiveSessions() {
+  for (const [_gameId, session] of activeGameSessions.entries()) {
+    if (session.timer) clearInterval(session.timer);
+    if (session.hasBeenDetected) {
+      endGameSession(session);
+    }
+  }
+  activeGameSessions.clear();
+}
+
+
+let overlayWindow = null;
+let lastFocusedGame = { id: null, title: '' };
+
+const isAllowedAppUrl = (targetUrl) => {
+  try {
+    const isDev = !app.isPackaged && (process.argv.includes('--dev') || process.env.NODE_ENV === 'development')
+    const rendererUrl = !app.isPackaged ? (process.env.ELECTRON_RENDERER_URL || (isDev ? 'http://127.0.0.1:5173' : null)) : null
+    const indexPath = path.join(__dirname, '..', 'app-dist', 'index.html')
+    const parsed = new URL(targetUrl)
+    if (rendererUrl) {
+      const expected = new URL(rendererUrl)
+      return parsed.origin === expected.origin && (parsed.pathname === expected.pathname || parsed.pathname === '/' || parsed.pathname === '')
+    }
+    const expectedFileUrl = pathToFileURL(indexPath).href
+    const parsedExpected = new URL(expectedFileUrl)
+    return parsed.protocol === 'file:' && parsed.pathname.toLowerCase() === parsedExpected.pathname.toLowerCase()
+  } catch {
+    return false
+  }
+}
+
+function createOverlayWindow() {
+  if (overlayWindow && !overlayWindow.isDestroyed()) return;
+  overlayWindow = new BrowserWindow({
+    width: 820,
+    height: 600,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    show: false,
+    resizable: false,
+    backgroundColor: '#00000000',
+    hasShadow: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+  });
+
+  overlayWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('https://')) shell.openExternal(url);
+    return { action: 'deny' };
+  });
+
+  overlayWindow.webContents.on('will-navigate', (event, navigationUrl) => {
+    if (!isAllowedAppUrl(navigationUrl)) {
+      event.preventDefault();
+    }
+  });
+
+  overlayWindow.webContents.on('will-redirect', (event, navigationUrl) => {
+    if (!isAllowedAppUrl(navigationUrl)) {
+      event.preventDefault();
+    }
+  });
+
+  const isDev = !app.isPackaged && (process.argv.includes('--dev') || process.env.NODE_ENV === 'development');
+  const rendererUrl = !app.isPackaged ? (process.env.ELECTRON_RENDERER_URL || (isDev ? 'http://127.0.0.1:5173' : null)) : null;
+  const indexPath = path.join(__dirname, '..', 'app-dist', 'index.html');
+
+  if (rendererUrl) {
+    overlayWindow.loadURL(`${rendererUrl}#overlay`);
+  } else {
+    overlayWindow.loadFile(indexPath, { hash: 'overlay' });
+  }
+
+  overlayWindow.on('blur', () => {
+    overlayWindow.hide();
+  });
+}
+
+function toggleOverlay() {
+  if (!overlayWindow || overlayWindow.isDestroyed()) {
+    createOverlayWindow();
+  }
+  if (overlayWindow.isVisible()) {
+    overlayWindow.hide();
+  } else {
+    overlayWindow.center();
+    overlayWindow.show();
+    overlayWindow.focus();
+    try {
+      overlayWindow.webContents.send('overlay:shown');
+    } catch {}
+  }
+}
+
 function createWindow() {
   const windowState = windowStateKeeper({
     defaultWidth: 1280,
@@ -348,7 +707,38 @@ function createWindow() {
   })
 
   windowState.manage(mainWindow)
-  mainWindow.once('ready-to-show', () => mainWindow.show())
+
+  mainWindow.on('close', (event) => {
+    if (app.isQuitting) return
+    const settings = db ? (getLibrarySettings(db) || {}) : {}
+    if (settings.minimizeToTray) {
+      event.preventDefault()
+      mainWindow.hide()
+      return false
+    }
+  })
+
+  mainWindow.on('minimize', (event) => {
+    const settings = db ? (getLibrarySettings(db) || {}) : {}
+    if (settings.minimizeToTray) {
+      event.preventDefault()
+      mainWindow.hide()
+      return false
+    }
+  })
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show()
+    try {
+      startSteamFamilyWatcher((locks) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('steam:family-locks-updated', locks)
+        }
+      })
+    } catch (err) {
+      console.warn('[SteamFamily] Failed starting watcher:', err)
+    }
+  })
+  setupTray(mainWindow, db)
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('https://')) shell.openExternal(url)
     return { action: 'deny' }
@@ -377,23 +767,8 @@ function createWindow() {
   })
 
   const isDev = !app.isPackaged && (process.argv.includes('--dev') || process.env.NODE_ENV === 'development')
-  const rendererUrl = !app.isPackaged ? (process.env.ELECTRON_RENDERER_URL || (isDev ? 'http://127.0.0.1:5555' : null)) : null
+  const rendererUrl = !app.isPackaged ? (process.env.ELECTRON_RENDERER_URL || (isDev ? 'http://127.0.0.1:5173' : null)) : null
   const indexPath = path.join(__dirname, '..', 'app-dist', 'index.html')
-
-  const isAllowedAppUrl = (targetUrl) => {
-    try {
-      const parsed = new URL(targetUrl)
-      if (rendererUrl) {
-        const expected = new URL(rendererUrl)
-        return parsed.origin === expected.origin && (parsed.pathname === expected.pathname || parsed.pathname === '/' || parsed.pathname === '')
-      }
-      const expectedFileUrl = pathToFileURL(indexPath).href
-      const parsedExpected = new URL(expectedFileUrl)
-      return parsed.protocol === 'file:' && parsed.pathname.toLowerCase() === parsedExpected.pathname.toLowerCase()
-    } catch {
-      return false
-    }
-  }
 
   mainWindow.webContents.on('will-navigate', (event, navigationUrl) => {
     if (!isAllowedAppUrl(navigationUrl)) {
@@ -445,7 +820,96 @@ function registerIpc() {
     return false
   })
 
+  ipcMain.handle('window:saveBragCollage', async (_event, dataUrl, filenamePrefix = 'Logpile-Showcase') => {
+    try {
+      if (!dataUrl || typeof dataUrl !== 'string') {
+        throw new Error('Invalid image data URL.')
+      }
+      const capturesDir = path.join(app.getPath('userData'), 'captures')
+      if (!fs.existsSync(capturesDir)) {
+        fs.mkdirSync(capturesDir, { recursive: true })
+      }
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+      const filename = `${filenamePrefix || 'Logpile-Showcase'}-${timestamp}.png`
+      const filePath = path.join(capturesDir, filename)
+
+      const base64Data = dataUrl.replace(/^data:image\/\w+;base64,/, '')
+      const buffer = Buffer.from(base64Data, 'base64')
+      fs.writeFileSync(filePath, buffer)
+
+      try {
+        const img = nativeImage.createFromBuffer(buffer)
+        clipboard.writeImage(img)
+      } catch (clipErr) {
+        console.warn('[BragCollage] Failed to write image to clipboard:', clipErr?.message)
+      }
+
+      return { success: true, filePath }
+    } catch (err) {
+      console.error('[BragCollage] Save failed:', err)
+      return { success: false, error: err.message || 'Failed to save showcase image.' }
+    }
+  })
+
+  ipcMain.handle('window:openCapturesFolder', async () => {
+    const capturesDir = path.join(app.getPath('userData'), 'captures')
+    if (!fs.existsSync(capturesDir)) {
+      fs.mkdirSync(capturesDir, { recursive: true })
+    }
+    await shell.openPath(capturesDir)
+    return true
+  })
+
+  ipcMain.handle('window:captureScreen', async (_event, prefix = 'Logpile-Screenshot') => {
+    try {
+      if (!mainWindow) return { success: false, error: 'No main window' }
+      const image = await mainWindow.webContents.capturePage()
+      const capturesDir = path.join(app.getPath('userData'), 'captures')
+      if (!fs.existsSync(capturesDir)) {
+        fs.mkdirSync(capturesDir, { recursive: true })
+      }
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+      const filename = `${prefix}-${timestamp}.png`
+      const filePath = path.join(capturesDir, filename)
+      fs.writeFileSync(filePath, image.toPNG())
+      try {
+        clipboard.writeImage(image)
+      } catch {}
+      return { success: true, filePath }
+    } catch (err) {
+      return { success: false, error: err.message }
+    }
+  })
+
+  ipcMain.handle('window:captureRect', async (_event, rect) => {
+    try {
+      if (!mainWindow) return { success: false, error: 'No main window' }
+      let captureBounds
+      if (rect && typeof rect.x === 'number') {
+        const bounds = mainWindow.getContentBounds()
+        const x = Math.max(0, Math.min(Math.round(rect.x), Math.max(0, bounds.width - 1)))
+        const y = Math.max(0, Math.min(Math.round(rect.y), Math.max(0, bounds.height - 1)))
+        const width = Math.max(1, Math.min(Math.round(rect.width), bounds.width - x))
+        const height = Math.max(1, Math.min(Math.round(rect.height), bounds.height - y))
+        captureBounds = { x, y, width, height }
+      }
+      const image = captureBounds
+        ? await mainWindow.webContents.capturePage(captureBounds)
+        : await mainWindow.webContents.capturePage()
+      return {
+        success: true,
+        dataUrl: image.toDataURL(),
+        capturedWidth: captureBounds ? captureBounds.width : mainWindow.getContentBounds().width,
+        capturedHeight: captureBounds ? captureBounds.height : mainWindow.getContentBounds().height,
+      }
+    } catch (err) {
+      console.warn('[Main] captureRect failed:', err.message)
+      return { success: false, error: err.message }
+    }
+  })
+
   ipcMain.handle('db:seedCheck', () => seedIfEmpty(db))
+  ipcMain.handle('db:resolveGameByQuery', (_event, queryStr) => resolveGameByQuery(db, queryStr))
   ipcMain.handle('db:getGames', (_event, filters, sort) => {
     if (!isSafeFilters(filters) || !isSafeSort(sort)) throw new Error('Invalid query arguments')
     return getGames(db, filters || {}, sort || {})
@@ -458,6 +922,101 @@ function registerIpc() {
     return stats
   })
   ipcMain.handle('system:getSpecs', () => getSystemSpecs())
+  ipcMain.handle('system:openExternal', async (_event, url) => {
+    if (typeof url === 'string' && /^https?:\/\//i.test(url.trim())) {
+      try {
+        await shell.openExternal(url.trim())
+        return { success: true }
+      } catch (err) {
+        return { success: false, error: err.message }
+      }
+    }
+    return { success: false, error: 'Invalid URL' }
+  })
+  ipcMain.handle('system:checkPreLaunch', async () => {
+    const freeBytes = os.freemem()
+    const totalBytes = os.totalmem()
+    const freeMemGb = Number((freeBytes / (1024 ** 3)).toFixed(2))
+    const totalMemGb = Number((totalBytes / (1024 ** 3)).toFixed(2))
+    const isLowMemory = freeMemGb < 2.5
+
+    const HEAVY_PROCESS_DEFS = [
+      { name: 'chrome.exe', label: 'Google Chrome' },
+      { name: 'msedge.exe', label: 'Microsoft Edge' },
+      { name: 'discord.exe', label: 'Discord' },
+      { name: 'python.exe', label: 'Python / ComfyUI' },
+    ]
+
+    const heavyProcesses = []
+    try {
+      const stdout = await new Promise((resolve) => {
+        execFile('tasklist', ['/NH', '/FO', 'CSV'], { windowsHide: true }, (err, out) => {
+          resolve(err ? '' : (out || ''))
+        })
+      })
+      const lower = stdout.toLowerCase()
+      for (const item of HEAVY_PROCESS_DEFS) {
+        if (lower.includes(`"${item.name.toLowerCase()}"`)) {
+          heavyProcesses.push(item)
+        }
+      }
+    } catch {}
+
+    return {
+      isLowMemory,
+      freeMemGb,
+      totalMemGb,
+      heavyProcesses,
+      shouldWarn: isLowMemory || heavyProcesses.length > 0,
+    }
+  })
+  ipcMain.handle('system:closeHeavyProcesses', async (_event, processNames = []) => {
+    if (!Array.isArray(processNames) || processNames.length === 0) return { success: true }
+    const allowed = new Set(['chrome.exe', 'msedge.exe', 'discord.exe', 'python.exe'])
+    const valid = processNames.filter((name) => allowed.has(String(name).toLowerCase()))
+    for (const proc of valid) {
+      await new Promise((resolve) => {
+        execFile('taskkill', ['/IM', proc, '/T'], { windowsHide: true }, () => resolve())
+      })
+    }
+    return { success: true }
+  })
+  ipcMain.handle('steam:getFamilyLocks', () => getFamilyLocks())
+  ipcMain.handle('pcgw:fetch:manual', async (_event, gameId) => {
+    if (!gameId || !db) return { success: false, error: 'Invalid gameId or database offline.' }
+    const game = db.prepare('SELECT canonical_title FROM games WHERE id = ?').get(String(gameId))
+    if (!game) return { success: false, error: 'Game not found in library.' }
+    return fetchPcgwTechDataManual(db, gameId, game.canonical_title)
+  })
+  ipcMain.handle('saves:list', async (_event, gameId) => {
+    if (!gameId || !db) return []
+    return listSaveBackupsForGame(db, gameId)
+  })
+  ipcMain.handle('saves:backupNow', async (_event, gameId) => {
+    if (!gameId || !db) return { success: false, error: 'Invalid gameId or database offline.' }
+    return createSaveBackup(db, gameId, app.getPath('userData'), { isManual: true })
+  })
+  ipcMain.handle('saves:restore', async (_event, gameId, backupId) => {
+    if (!gameId || !db) return { success: false, error: 'Invalid gameId or database offline.' }
+    const game = db.prepare('SELECT save_dir_path FROM games WHERE id = ?').get(String(gameId))
+    if (!game || !game.save_dir_path) return { success: false, error: 'No save directory configured for this game.' }
+
+    let archivePath = null
+    if (backupId) {
+      const backup = db.prepare('SELECT archive_path FROM save_backups WHERE id = ?').get(Number(backupId))
+      archivePath = backup?.archive_path
+    } else {
+      const backups = getSaveBackups(db, gameId)
+      archivePath = backups[0]?.archive_path
+    }
+
+    if (!archivePath) return { success: false, error: 'Backup archive not found.' }
+    return restoreSaveBackup(archivePath, game.save_dir_path)
+  })
+  ipcMain.handle('saves:checkConflict', async (_event, gameId) => {
+    if (!gameId || !db) return { hasConflict: false }
+    return checkSaveConflict(db, gameId)
+  })
   ipcMain.handle('db:getLibrarySettings', () => {
     const settings = getLibrarySettings(db) || {}
     return {
@@ -466,6 +1025,7 @@ function registerIpc() {
       igdbClientId: typeof settings.igdbClientId === 'string' ? settings.igdbClientId : '',
       igdbClientSecret: typeof settings.igdbClientSecret === 'string' ? settings.igdbClientSecret : '',
       heroResolution: typeof settings.heroResolution === 'string' && settings.heroResolution ? settings.heroResolution : '2.5k',
+      minimizeToTray: Boolean(settings.minimizeToTray),
     }
   })
   ipcMain.handle('db:setLibrarySettings', (_event, settings) => {
@@ -476,11 +1036,23 @@ function registerIpc() {
       igdbClientId: typeof next.igdbClientId === 'string' ? next.igdbClientId : '',
       igdbClientSecret: typeof next.igdbClientSecret === 'string' ? next.igdbClientSecret : '',
       heroResolution: typeof next.heroResolution === 'string' && next.heroResolution ? next.heroResolution : '2.5k',
+      minimizeToTray: Boolean(next.minimizeToTray),
     }
   })
   ipcMain.handle('db:getActivityLog', (_event, limit) => {
     const entries = getActivityLog(db, limit)
     return Array.isArray(entries) ? entries : []
+  })
+  ipcMain.handle('network:getActivityLog', (_event, options) => {
+    const entries = getNetworkActivityLog(db, options)
+    return Array.isArray(entries) ? entries : []
+  })
+  ipcMain.handle('network:getStats', () => {
+    return getNetworkActivityStats(db) || { totalRequests: 0, totalBytesTransferred: 0, formattedTransfer: '0 KB', byService: {} }
+  })
+  ipcMain.handle('network:clearLog', () => {
+    clearNetworkActivityLog(db)
+    return true
   })
   ipcMain.handle('db:getLibraryHealth', () => {
     const health = getLibraryHealth(db)
@@ -807,6 +1379,26 @@ function registerIpc() {
     })
     return summary
   })
+  ipcMain.handle('scanner:downloadTemplate', async (_event, format = 'xlsx') => {
+    const ext = format === 'csv' ? 'csv' : 'xlsx'
+    const defaultPath = path.join(app.getPath('downloads'), `Logpile_Game_Catalog_Template.${ext}`)
+    const result = await dialog.showSaveDialog(mainWindow, {
+      title: 'Save Blank Game Catalog Template',
+      defaultPath,
+      filters: [
+        format === 'csv'
+          ? { name: 'CSV File (*.csv)', extensions: ['csv'] }
+          : { name: 'Excel Spreadsheet (*.xlsx)', extensions: ['xlsx'] },
+        { name: 'All Files', extensions: ['*'] },
+      ],
+    })
+    if (result.canceled || !result.filePath) return { success: false, canceled: true }
+
+    const { generateBlankTemplateBuffer } = require('../src/main/services/excelImporter.cjs')
+    const buffer = generateBlankTemplateBuffer(format)
+    fs.writeFileSync(result.filePath, buffer)
+    return { success: true, filePath: result.filePath }
+  })
 
   const sendArtworkProgress = (payload) => mainWindow?.webContents.send('scraper:progress', payload)
   const resolveArtworkKey = (apiKey) => {
@@ -822,11 +1414,21 @@ function registerIpc() {
   ipcMain.handle('scraper:fetchMissingArt', (_event, apiKey) =>
     fetchMissingArtwork(db, app.getPath('userData'), requireArtworkKey(apiKey), sendArtworkProgress)
   )
-  ipcMain.handle('scraper:runBulkArtworkSync', async (_event, apiKey) => {
+  ipcMain.handle('scraper:restoreStaticCoversLocal', async () => {
+    const result = restoreStaticCoversLocal(db, app.getPath('userData'))
+    logActivity(db, 'artwork_update', null, {
+      message: `Restored static covers for 120+ FPS scrolling (${result.updated || 0} updated)`,
+      updated: result.updated,
+    })
+    mainWindow?.webContents.send('artwork:updated', result)
+    return result
+  })
+
+  ipcMain.handle('scraper:runBulkArtworkSync', async (_event, apiKey, options = {}) => {
     const key = requireArtworkKey(apiKey)
     if (bulkArtworkSyncPromise || unifiedSyncPromise) throw new Error('An artwork sync is already running.')
     bulkArtworkSyncController = new AbortController()
-    bulkArtworkSyncPromise = runBulkArtworkSync(db, app.getPath('userData'), key, sendArtworkProgress, bulkArtworkSyncController.signal)
+    bulkArtworkSyncPromise = runBulkArtworkSync(db, app.getPath('userData'), key, sendArtworkProgress, bulkArtworkSyncController.signal, options)
     try {
       const result = await bulkArtworkSyncPromise
       logActivity(db, 'artwork_update', null, {
@@ -1011,36 +1613,218 @@ function registerIpc() {
     })
     return result.canceled ? null : result.filePaths[0]
   })
+  ipcMain.handle('game:addCustomGame', async (_event, targetPath) => {
+    if (typeof targetPath !== 'string' || !path.isAbsolute(targetPath)) {
+      throw new Error('Please select a valid executable or game folder.')
+    }
+    let executablePath = targetPath
+    if (!fs.existsSync(executablePath)) {
+      throw new Error('The selected path could not be found.')
+    }
+
+    // Resolve shortcut if .lnk
+    if (path.extname(executablePath).toLowerCase() === '.lnk') {
+      try {
+        const linkTarget = shell.readShortcutLink(executablePath).target
+        if (linkTarget && fs.existsSync(linkTarget)) {
+          executablePath = linkTarget
+        }
+      } catch (err) {
+        console.warn('[CustomGame] Could not resolve shortcut link:', err.message)
+      }
+    }
+
+    // Resolve executable if folder
+    if (fs.statSync(executablePath).isDirectory()) {
+      const findExe = (dir, depth = 0) => {
+        if (depth > 2) return null
+        const entries = fs.readdirSync(dir, { withFileTypes: true })
+        const exes = []
+        for (const entry of entries) {
+          if (entry.isFile() && path.extname(entry.name).toLowerCase() === '.exe') {
+            const lower = entry.name.toLowerCase()
+            if (!lower.includes('unins') && !lower.includes('crash') && !lower.includes('setup') && !lower.includes('update') && !lower.includes('redist')) {
+              exes.push(path.join(dir, entry.name))
+            }
+          }
+        }
+        if (exes.length > 0) return exes[0]
+        for (const entry of entries) {
+          if (entry.isDirectory() && !['temp', 'redist', '_redist', 'directx'].includes(entry.name.toLowerCase())) {
+            const found = findExe(path.join(dir, entry.name), depth + 1)
+            if (found) return found
+          }
+        }
+        return null
+      }
+      const foundExe = findExe(executablePath)
+      if (foundExe) {
+        executablePath = foundExe
+      } else {
+        throw new Error('No game executable (.exe) found inside the dropped folder.')
+      }
+    }
+
+    if (path.extname(executablePath).toLowerCase() !== '.exe') {
+      throw new Error('Please select a valid .exe game file or shortcut.')
+    }
+
+    let fileName = path.basename(executablePath, '.exe')
+    if (['game', 'launcher', 'launch', 'start', 'play', 'main', 'shipping'].some(g => fileName.toLowerCase().includes(g))) {
+      fileName = path.basename(path.dirname(executablePath))
+    }
+    const cleanTitle = fileName
+      .replace(/[._-]/g, ' ')
+      .replace(/\s*v\d+(\.\d+)*\s*/gi, '')
+      .replace(/\s*build\s*\d+\s*/gi, '')
+      .replace(/\s*(repack|setup|patch|update|crack|fitgirl|dodi|portable)\s*/gi, '')
+      .trim() || fileName
+
+    const installPath = path.dirname(executablePath)
+    const record = {
+      canonicalTitle: cleanTitle,
+      normalizedTitle: cleanTitle.toLowerCase(),
+      storeName: 'Custom',
+      executablePath,
+      installPath,
+      isInstalled: 1,
+      platform: 'custom',
+      driveLetter: path.parse(executablePath).root.replace(/[:\\/]/g, '').toUpperCase() || 'C',
+    }
+    const { mergeRecord } = require('../src/main/services/deduplicationService.cjs')
+    const game = mergeRecord(db, record)
+    logActivity(db, 'custom_game_added', game.id, {
+      title: game.canonical_title,
+      executablePath,
+    })
+    mainWindow?.webContents.send('library:updated', { type: 'custom-game-added', gameId: game.id })
+
+    // Kick off background HLTB
+    try {
+      const { fetchAndSaveHltb } = require('../src/main/services/hltbService.cjs')
+      fetchAndSaveHltb(db, game.id, game.canonical_title).then((updated) => {
+        if (updated) {
+          mainWindow?.webContents.send('library:updated', { type: 'hltb-updated', gameId: game.id })
+        }
+      }).catch(() => {})
+    } catch {}
+
+    return game
+  })
+
+  ipcMain.handle('game:fetchHltb', async (_event, gameId, title) => {
+    if (!gameId || !title) return null
+    try {
+      const { fetchAndSaveHltb } = require('../src/main/services/hltbService.cjs')
+      return await fetchAndSaveHltb(db, gameId, title)
+    } catch (err) {
+      console.warn('[Main] game:fetchHltb failed:', err.message)
+      return null
+    }
+  })
+
+  let hltbSyncCancelled = false
+
+  ipcMain.handle('library:cancelHltbSync', () => {
+    hltbSyncCancelled = true
+    return { success: true }
+  })
+
+  ipcMain.handle('library:syncHltb', async (_event, options = {}) => {
+    try {
+      const { fetchAndSaveHltb } = require('../src/main/services/hltbService.cjs')
+      hltbSyncCancelled = false
+      const forceAll = Boolean(options?.forceAll)
+
+      // Query non-utility, non-DLC games: all games if forceAll, or unhydrated/failed (hltb_id IS NULL or <= 0)
+      const query = forceAll
+        ? 'SELECT id, canonical_title FROM games WHERE is_utility = 0 AND is_dlc = 0 ORDER BY canonical_title ASC'
+        : 'SELECT id, canonical_title FROM games WHERE (hltb_id IS NULL OR hltb_id <= 0) AND is_utility = 0 AND is_dlc = 0 ORDER BY canonical_title ASC'
+
+      const targets = db.prepare(query).all()
+      const total = targets.length
+      let count = 0
+      let processed = 0
+
+      for (const g of targets) {
+        if (hltbSyncCancelled) break
+        processed++
+        try {
+          mainWindow?.webContents.send('hltb:progress', {
+            current: processed,
+            total,
+            synced: count,
+            gameTitle: g.canonical_title,
+          })
+        } catch {}
+
+        try {
+          const res = await fetchAndSaveHltb(db, g.id, g.canonical_title)
+          if (res && res.hltb_main_hours > 0) count++
+          // polite rate-limiting between HLTB calls
+          await new Promise(r => setTimeout(r, 450))
+        } catch {}
+      }
+
+      mainWindow?.webContents.send('library:updated', { type: 'hltb-batch-synced', count })
+      return { success: true, synced: count, total, processed, cancelled: hltbSyncCancelled }
+    } catch (err) {
+      console.warn('[Main] library:syncHltb failed:', err.message)
+      return { success: false, error: err.message }
+    }
+  })
   ipcMain.handle('game:launchExecutable', async (_event, executablePath, launchArguments = '', launchMeta = {}) => {
-    if (typeof executablePath !== 'string' || !path.isAbsolute(executablePath) || path.extname(executablePath).toLowerCase() !== '.exe') {
+    const targetExe = resolvePortablePath(executablePath)
+    if (typeof targetExe !== 'string' || !path.isAbsolute(targetExe) || path.extname(targetExe).toLowerCase() !== '.exe') {
       throw new Error('Invalid executable path.')
     }
-    if (!fs.existsSync(executablePath) || !fs.statSync(executablePath).isFile()) {
+    if (!fs.existsSync(targetExe) || !fs.statSync(targetExe).isFile()) {
       throw new Error('The mapped executable could not be found.')
     }
     if (typeof launchArguments !== 'string' || launchArguments.length > 4000) {
       throw new Error('Invalid launch arguments.')
     }
-    const args = [...launchArguments.matchAll(/"([^"\\]*(?:\\.[^"\\]*)*)"|'([^']*)'|([^\s]+)/g)].map((match) => match[1] ?? match[2] ?? match[3]).filter(Boolean)
+
+    let finalLaunchArguments = launchArguments || ''
+    const gameId = launchMeta?.gameId || (Number.isInteger(launchMeta?.id) ? launchMeta.id : null)
+    if (gameId && db) {
+      try {
+        const gameRow = db.prepare('SELECT active_mod_profile FROM games WHERE id = ?').get(String(gameId))
+        if (gameRow?.active_mod_profile && typeof gameRow.active_mod_profile === 'string' && gameRow.active_mod_profile.trim()) {
+          const modArgs = gameRow.active_mod_profile.trim()
+          finalLaunchArguments = finalLaunchArguments ? `${finalLaunchArguments} ${modArgs}` : modArgs
+        }
+      } catch {}
+    }
+
+    const args = [...finalLaunchArguments.matchAll(/"([^"\\]*(?:\\.[^"\\]*)*)"|'([^']*)'|([^\s]+)/g)].map((match) => match[1] ?? match[2] ?? match[3]).filter(Boolean)
     return new Promise((resolve, reject) => {
-      const child = spawn(executablePath, args, { cwd: path.dirname(executablePath), detached: true, stdio: 'ignore', windowsHide: false })
+      const child = spawn(targetExe, args, { cwd: path.dirname(targetExe), detached: true, stdio: 'ignore', windowsHide: false })
       child.once('error', (error) => reject(new Error(error.message || 'The mapped executable could not be launched.')))
       child.once('spawn', () => {
         child.unref()
+        try { unloadEngine() } catch {}
         try {
           const gameId = launchMeta?.gameId || (Number.isInteger(launchMeta?.id) ? launchMeta.id : null)
-          const title = launchMeta?.title || path.basename(executablePath, '.exe')
+          const title = launchMeta?.title || path.basename(targetExe, '.exe')
           logActivity(db, 'game_launch', gameId, {
             title,
-            executablePath,
+            executablePath: targetExe,
             method: 'executable'
           })
+          startTrackingGameSession(gameId, title, targetExe, null)
         } catch (logErr) {
           console.error('[ActivityLog] Failed to log executable launch:', logErr)
         }
         resolve(true)
       })
     })
+  })
+  ipcMain.handle('game:updateModProfile', async (_event, gameId, activeModProfile) => {
+    return updateGameModProfile(db, gameId, activeModProfile)
+  })
+  ipcMain.handle('game:updateCheckpointNote', async (_event, gameId, note) => {
+    return updateCheckpointNote(db, gameId, note)
   })
   ipcMain.handle('game:logAttempt', (_event, launchMeta = {}) => {
     const meta = launchMeta && typeof launchMeta === 'object' && !Array.isArray(launchMeta) ? launchMeta : {}
@@ -1062,6 +1846,7 @@ function registerIpc() {
     }
     try {
       await shell.openExternal(uri)
+      try { unloadEngine() } catch {}
       logLaunchAttempt({ ...details, result: 'resolved' })
       try {
         const gameId = meta.gameId || (Number.isInteger(meta.id) ? meta.id : null)
@@ -1072,6 +1857,7 @@ function registerIpc() {
           storefront: meta.storefront || null,
           method: 'protocol'
         })
+        startTrackingGameSession(gameId, title, null, null)
       } catch (logErr) {
         console.error('[ActivityLog] Failed to log URI launch:', logErr)
       }
@@ -1126,9 +1912,281 @@ function registerIpc() {
     deleteUserCapture(db, captureId)
     return true
   })
+  ipcMain.handle('overlay:setSelectedGame', (_event, game) => {
+    if (game?.id && game?.title) {
+      lastFocusedGame = { id: game.id, title: game.title };
+    } else {
+      lastFocusedGame = { id: null, title: '' };
+    }
+    return true;
+  });
+
+  ipcMain.handle('overlay:getActiveGame', async () => {
+    const isUtilityApp = (t) => /wallpaper engine|soundpad|steam|epic games|ea app|ubisoft connect|discord|obs|lossless scaling|occt/i.test(t || '');
+
+    // 1. Check currently active game sessions (even before 4-second confirmation poll)
+    for (const [_id, session] of activeGameSessions.entries()) {
+      if (!isUtilityApp(session.title)) {
+        return { title: session.title, gameId: session.gameId, isPlaying: true };
+      }
+    }
+
+    // 2. Check running Windows processes against installed games in database
+    if (db) {
+      try {
+        const running = await getRunningProcessNames();
+        if (running && running.size > 0) {
+          const installedGames = db.prepare('SELECT id, canonical_title, executable_path, install_path FROM games WHERE is_installed = 1 AND is_utility = 0').all();
+          for (const g of installedGames) {
+            if (g.executable_path) {
+              const exeName = path.basename(g.executable_path).toLowerCase();
+              if (running.has(exeName)) {
+                return { title: g.canonical_title, gameId: g.id, isPlaying: true };
+              }
+            }
+            if (g.install_path) {
+              const candidateExes = findGameExecutables(g.install_path);
+              for (const exe of candidateExes) {
+                if (running.has(exe)) {
+                  return { title: g.canonical_title, gameId: g.id, isPlaying: true };
+                }
+              }
+            }
+          }
+        }
+      } catch {
+      }
+    }
+
+    // 3. Fall back to the game currently open in Logpile game details view
+    if (lastFocusedGame?.title) {
+      return { title: lastFocusedGame.title, gameId: lastFocusedGame.id, isPlaying: false };
+    }
+
+    return { title: '', gameId: null, isPlaying: false };
+  });
+
+  ipcMain.handle('overlay:hide', () => {
+    if (overlayWindow && !overlayWindow.isDestroyed()) {
+      overlayWindow.hide();
+    }
+  });
+
+  ipcMain.handle('overlay:openUrl', (_event, url) => {
+    if (typeof url === 'string' && (url.startsWith('https://') || url.startsWith('http://'))) {
+      shell.openExternal(url);
+      if (overlayWindow && !overlayWindow.isDestroyed()) overlayWindow.hide();
+    }
+  });
+
+  ipcMain.handle('ai:getStatus', () => getModelStatus(app));
+  ipcMain.handle('ai:askQuestion', async (_event, userPrompt, activeGameTitle, options = {}) => {
+    let libraryContext = null;
+    const isUtility = (t) => !t || /wallpaper engine|soundpad|steam|epic games|ea app|ubisoft connect|discord|obs|lossless scaling|occt/i.test(t);
+    const cleanActiveTitle = isUtility(activeGameTitle) ? '' : activeGameTitle;
+    let targetTitle = cleanActiveTitle;
+
+    if (db) {
+      try {
+        const stats = getLibraryStats(db);
+
+        // Detect if user mentions a specific game entity in prompt (prioritize mentioned game over UI-focused game)
+        const mentionedGame = findGameEntityInText(db, userPrompt);
+        if (mentionedGame?.canonical_title) {
+          targetTitle = mentionedGame.canonical_title;
+        }
+
+        // Check if prompt explicitly mentions a game title even if not in DB
+        if (!targetTitle) {
+          const mentionMatch = (userPrompt || '').match(/\b(?:play|playing|planing to play|planning to play|in|for|on|about)\s+([a-zA-Z0-9\s:''-]+?)(?:\s+(?:and|how|where|what|why|who|stuck|i|can|to|dont|don't|do|guide|walkthrough)|\?|$)/i);
+          if (mentionMatch && mentionMatch[1]?.trim()) {
+            targetTitle = mentionMatch[1].trim();
+          }
+        }
+
+        // Fall back to active playing session or last selected game if not specified
+        if (!targetTitle) {
+          for (const [_id, session] of activeGameSessions.entries()) {
+            if (!isUtility(session.title)) {
+              targetTitle = session.title;
+              break;
+            }
+          }
+        }
+        if (!targetTitle && lastFocusedGame?.title) {
+          targetTitle = lastFocusedGame.title;
+        }
+        // Never silently fall back to a random recent game if user is asking a question
+        const isQuestion = /\?/.test(userPrompt) || /\b(?:how|where|what|why|who|when|which|stuck|guide|help|walkthrough|solve|beat|defeat|kill|find|locate|get out|gwet out|pass|progress|puzzle|boss|mission|quest|tip|tips|advice|fuck|do here|need to do)\b/i.test(userPrompt);
+        if (!targetTitle && !isQuestion) {
+          try {
+            const recent = db.prepare('SELECT canonical_title FROM games WHERE is_utility = 0 AND last_played_time IS NOT NULL ORDER BY last_played_time DESC LIMIT 1').get();
+            if (recent?.canonical_title) targetTitle = recent.canonical_title;
+          } catch {}
+        }
+
+        // Fetch target game metadata if available (ignore utilities)
+        let activeGameDetails = null;
+        let guideNotes = '';
+        if (targetTitle) {
+          activeGameDetails = db.prepare(`
+            SELECT id, canonical_title, genre, developer, publisher, release_date, description, play_time_seconds
+            FROM games
+            WHERE (canonical_title = ? OR normalized_title = ?) AND is_utility = 0
+            LIMIT 1
+          `).get(targetTitle, targetTitle.toLowerCase().replace(/[^a-z0-9]/g, ''));
+
+          if (activeGameDetails?.id) {
+            try {
+              const chunks = searchGameKnowledge(db, activeGameDetails.id, userPrompt, 3, activeGameDetails.canonical_title);
+              if (chunks && chunks.length > 0) {
+                const formattedChunks = chunks.map((c) => `[${c.section_title}]:\n${c.content}`).join('\n\n');
+                guideNotes = `Game Guide Context for ${activeGameDetails.canonical_title}:\n${formattedChunks}\n\nUser Question: ${userPrompt.trim()}\n\nInstructions: Answer using the specific mechanics, items, and tactics described in the guide context above. Avoid generic filler advice. Ensure your response is concise (under 120 words) but always completes its final sentence cleanly. Do not leave thoughts unfinished.`;
+              }
+            } catch (ragErr) {
+              console.warn('[Main] RAG guide search error:', ragErr.message);
+            }
+          }
+        }
+
+        libraryContext = {
+          totalGames: stats?.visibleGames || 0,
+          visibleGames: stats?.visibleGames || 0,
+          readyToInstall: stats?.readyToInstallCount || 0,
+          installedGamesCount: stats?.visibleInstalledGames || 0,
+          dlcCount: stats?.dlcGames || 0,
+          utilityCount: stats?.utilityTools || 0,
+          totalDatabaseRecords: stats?.totalGames || 0,
+          activeGame: activeGameDetails ? {
+            id: activeGameDetails.id,
+            title: activeGameDetails.canonical_title,
+            genre: activeGameDetails.genre || '',
+            developer: activeGameDetails.developer || '',
+            publisher: activeGameDetails.publisher || '',
+            releaseDate: activeGameDetails.release_date || '',
+            hoursPlayed: Math.round(((activeGameDetails.play_time_seconds || 0) / 3600) * 10) / 10,
+            summary: activeGameDetails.description ? activeGameDetails.description.slice(0, 220) : '',
+          } : null,
+          guideNotes,
+        };
+      } catch (err) {
+        console.warn('[AI] Error preparing library context:', err?.message);
+      }
+    }
+    return askGamingAssistant(app, userPrompt, targetTitle, libraryContext, { ...options, db });
+  });
+  ipcMain.handle('ai:getRecommendation', async (_event, userPreferencePrompt, options = {}) => {
+    const installed = db ? db.prepare("SELECT id, canonical_title, genre FROM games WHERE is_installed = 1 AND is_utility = 0 LIMIT 150").all() : [];
+    return recommendFromLibrary(app, userPreferencePrompt, installed, options);
+  });
+  ipcMain.handle('ai:unload', () => {
+    unloadEngine();
+    return true;
+  });
+  ipcMain.handle('ai:openFolder', async () => {
+    const modelsDir = getModelsDirectory(app);
+    try {
+      if (!fs.existsSync(modelsDir)) {
+        fs.mkdirSync(modelsDir, { recursive: true });
+      }
+      await shell.openPath(modelsDir);
+      return true;
+    } catch (err) {
+      console.warn('[AI] Failed to open models folder:', err?.message);
+      return false;
+    }
+  });
+  ipcMain.handle('ai:parseFilter', async (_event, text) => {
+    return await parseLibraryFilterIntent(text, { app });
+  });
+
+  ipcMain.handle('guides:scan', () => {
+    return scanAndImportGuides(db, app);
+  });
+  ipcMain.handle('guides:hasGuide', (_event, gameId) => {
+    return hasGuide(db, gameId);
+  });
+  ipcMain.handle('guides:search', (_event, gameId, query) => {
+    return searchGameKnowledge(db, gameId, query, 3);
+  });
+  ipcMain.handle('guides:downloadForGame', async (_event, gameId, title) => {
+    try {
+      const { downloadGuideForGame } = require('../src/main/services/guideDownloaderService.cjs');
+      return await downloadGuideForGame(app, db, gameId, title);
+    } catch (err) {
+      console.error('[GuideDownloader] downloadForGame error:', err);
+      return { success: false, error: err.message };
+    }
+  });
+  let activeGuideSync = {
+    running: false,
+    progress: null,
+  };
+
+  function broadcastGuideProgress(payload) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      try {
+        mainWindow.webContents.send('guides:batch-progress', payload);
+      } catch {}
+    }
+  }
+
+  ipcMain.handle('guides:getStatus', () => activeGuideSync);
+
+  ipcMain.handle('guides:downloadBatch', async (_event, options = {}) => {
+    if (activeGuideSync.running) {
+      return { success: false, error: 'Guide sync is already in progress' };
+    }
+    activeGuideSync.running = true;
+    activeGuideSync.progress = null;
+    broadcastGuideProgress({ running: true, progress: null });
+
+    try {
+      const { downloadGuidesBatch } = require('../src/main/services/guideDownloaderService.cjs');
+      const res = await downloadGuidesBatch(app, db, options, (progress) => {
+        activeGuideSync.progress = progress;
+        broadcastGuideProgress({ running: true, progress });
+      });
+      return res;
+    } catch (err) {
+      console.error('[GuideDownloader] downloadBatch error:', err);
+      return { success: false, error: err.message };
+    } finally {
+      activeGuideSync.running = false;
+      activeGuideSync.progress = null;
+      broadcastGuideProgress({ running: false, progress: null });
+    }
+  });
+
+  ipcMain.handle('guides:cancelBatch', () => {
+    const { cancelGuideBatch } = require('../src/main/services/guideDownloaderService.cjs');
+    const res = cancelGuideBatch();
+    activeGuideSync.running = false;
+    activeGuideSync.progress = null;
+    broadcastGuideProgress({ running: false, progress: null });
+    return res;
+  });
+
+  voiceService.on('recognized', (data) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      try { mainWindow.webContents.send('voice:recognized', data); } catch {}
+    }
+  });
+
+  voiceService.on('stateChange', (data) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      try { mainWindow.webContents.send('voice:stateChange', data); } catch {}
+    }
+  });
+
+  ipcMain.handle('voice:start', (_event, options) => voiceService.start(options));
+  ipcMain.handle('voice:stop', () => voiceService.stop());
+  ipcMain.handle('voice:setWakeWord', (_event, enabled) => voiceService.setWakeWord(enabled));
+  ipcMain.handle('voice:getStatus', () => voiceService.getStatus());
 }
 
-const ALLOWED_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.ico'])
+
+const ALLOWED_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.ico', '.webm', '.mp4'])
 
 let cachedAllowedRoots = []
 let lastRootsComputedAt = 0
@@ -1148,6 +2206,12 @@ function getAllowedArtworkRoots(userDataPath, appPath, database) {
     roots.add(path.join(userDataPath, 'art_cache'))
     roots.add(path.join(userDataPath, 'artwork_cache'))
     roots.add(path.join(userDataPath, 'captures'))
+  }
+
+  const legacyAppData = path.join(process.env.APPDATA || '', 'logpile')
+  if (legacyAppData) {
+    roots.add(path.join(legacyAppData, 'artwork_database'))
+    roots.add(path.join(legacyAppData, 'art_cache'))
   }
 
   if (appPath) {
@@ -1278,17 +2342,39 @@ app.whenReady().then(() => {
     console.warn('[App] Artwork relink notice:', migErr?.message)
   }
   repairBrokenArtworkLinks(db, app.getPath('userData'))
+  try {
+    scanAndImportGuides(db, app)
+    startGuideWatcher(db, app)
+  } catch (gErr) {
+    console.warn('[Guides] Initial scan notice:', gErr?.message)
+  }
   registerIpc()
   createWindow()
+  createOverlayWindow()
+  try {
+    globalShortcut.register('CommandOrControl+Space', () => {
+      toggleOverlay()
+    })
+  } catch {}
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
 
 app.on('window-all-closed', () => {
+  const settings = db ? (getLibrarySettings(db) || {}) : {}
+  if (settings.minimizeToTray && !app.isQuitting) {
+    return
+  }
   if (process.platform !== 'darwin') app.quit()
 })
 
 app.on('before-quit', () => {
+  app.isQuitting = true
+  try { globalShortcut.unregisterAll() } catch {}
+  try { stopSteamFamilyWatcher() } catch {}
+  try { voiceService.stop() } catch {}
+  flushAllActiveSessions()
+  unloadEngine()
   if (db) db.close()
 })
