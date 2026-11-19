@@ -5,6 +5,9 @@
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue?style=for-the-badge&logo=windows)](../../releases/latest)
 [![License](https://img.shields.io/badge/License-MIT-purple?style=for-the-badge)](LICENSE)
 [![Zero Cloud](https://img.shields.io/badge/Telemetry-0%25%20Offline-emerald?style=for-the-badge)](#)
+[![Website](https://img.shields.io/badge/Website-Live%20Site-00ad9f?style=for-the-badge&logo=netlify)](https://logpilegamelauncher.netlify.app)
+[![itch.io](https://img.shields.io/badge/itch.io-Play%20Store-fa5c5c?style=for-the-badge&logo=itchdotio)](https://logpile.itch.io/logpile)
+[![AlternativeTo](https://img.shields.io/badge/AlternativeTo-Listed-267ecb?style=for-the-badge)](https://alternativeto.net/software/logpile-desktop/about/)
 
 <p align="center">
   <a href="https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.5/Logpile.Setup.1.3.5.exe">
