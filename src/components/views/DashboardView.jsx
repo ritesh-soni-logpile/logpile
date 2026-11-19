@@ -135,6 +135,36 @@ export function DashboardView({
 
   const isSyncingGuides = Boolean(guideSyncStatus?.running || syncingGuides)
   const currentGuideProgress = guideSyncStatus?.progress || guideProgress
+  const [isRescanningGuides, setIsRescanningGuides] = useState(false)
+
+  const handleRescanGuidesFromDisk = async () => {
+    if (isRescanningGuides || isSyncingGuides) return
+    setIsRescanningGuides(true)
+    setGuideNotice({
+      type: 'info',
+      message: 'Scanning local guides folder and reconciling database...',
+    })
+    try {
+      const res = await window.api?.guides?.scan?.()
+      if (onRefreshLibrary) {
+        await onRefreshLibrary()
+      }
+      setGuideNotice({
+        type: 'success',
+        message: res?.purged > 0
+          ? `Disk scan complete: Removed ${res.purged} deleted guides from database (${res.imported || 0} valid on disk).`
+          : `Disk scan complete: ${res?.imported || 0} valid guides indexed from disk.`
+      })
+    } catch (err) {
+      console.warn('[Dashboard] Guide rescan error:', err)
+      setGuideNotice({
+        type: 'error',
+        message: 'Failed to scan guides on disk.',
+      })
+    } finally {
+      setIsRescanningGuides(false)
+    }
+  }
 
   const handleSyncGuides = async (installedOnly = true) => {
     if (isSyncingGuides) return
@@ -233,14 +263,28 @@ export function DashboardView({
     try {
       const res = await window.api?.guides?.downloadForGame?.(game.id, game.canonical_title)
       if (res?.success) {
+        setGuideNotice({
+          type: 'success',
+          message: `Indexed deep walkthrough for ${game.canonical_title} (${res.sectionsCount || 0} chapters)!`
+        })
         if (onRefreshLibrary) {
           await onRefreshLibrary()
         }
+      } else {
+        setGuideNotice({
+          type: 'info',
+          message: res?.error || `No community walkthrough found on StrategyWiki for "${game.canonical_title}".`
+        })
       }
     } catch (err) {
       console.warn('[Dashboard] Single guide download error:', err)
+      setGuideNotice({
+        type: 'error',
+        message: err?.message || 'Failed to download guide.'
+      })
     } finally {
       setDownloadingGameId(null)
+      setTimeout(() => setGuideNotice(null), 6000)
     }
   }
 
@@ -787,6 +831,16 @@ export function DashboardView({
                       ? `Sync Missing (All: ${guideStats.missingGuides})`
                       : 'All Library Ready ✓'}
                   </span>
+                </button>
+                <button
+                  type="button"
+                  className="dashboard-sync-btn dashboard-sync-secondary"
+                  onClick={handleRescanGuidesFromDisk}
+                  disabled={isRescanningGuides || isSyncingGuides}
+                  title="Rescan guides folder on disk: remove deleted guides from database and index newly added files"
+                >
+                  <RotateCw size={12} className={isRescanningGuides ? 'spin' : ''} />
+                  <span>{isRescanningGuides ? 'Scanning...' : 'Rescan Disk'}</span>
                 </button>
               </>
             )}

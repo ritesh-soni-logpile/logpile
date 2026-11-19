@@ -1,0 +1,24 @@
+{
+  "id": "oled-noir",
+  "name": "Pure OLED Stealth",
+  "author": "Ritesh Soni",
+  "tagline": "True #000000 Pitch Black & Razor White Accent",
+  "version": "1.0.0",
+  "category": "Minimalist & Stealth",
+  "palette": {
+    "base": "#000000",
+    "surface": "#050505",
+    "surfaceHover": "#0d0d0d",
+    "card": "#030303",
+    "textPrimary": "#ffffff",
+    "textSecondary": "#a1a1aa",
+    "textMuted": "#52525b",
+    "accent": "#ffffff",
+    "accentGlow": "rgba(255, 255, 255, 0.18)",
+    "accentContrast": "#000000",
+    "borderColor": "rgba(255, 255, 255, 0.10)",
+    "borderHover": "rgba(255, 255, 255, 0.38)",
+    "badgeBg": "rgba(255, 255, 255, 0.10)",
+    "badgeText": "#f4f4f5"
+  }
+}

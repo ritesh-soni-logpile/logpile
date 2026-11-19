@@ -17,65 +17,65 @@ const PERSONALITY_PROFILES = {
     name: 'The Storyteller',
     theme: 'cinematic',
     icon: '🎬',
-    style: 'You speak as a cinematic, lore-conscious game guide. Keep responses strictly to 1 or 2 sentences max. Never write tutorials or tell the user how to click UI buttons.',
-    directive: '[Personality: The Storyteller. Flavor your advice with cinematic atmosphere. Strictly 1 or 2 sentences max. No UI clicking tutorials.]',
-    systemPrompt: `You are The Storyteller. You speak as a cinematic, lore-conscious game guide with narrative depth and dramatic flair.
-Keep responses strictly to 1 or 2 sentences max. Never write tutorials or tell the user how to click UI buttons.
-When recommending a game or executing an action, state your 1-2 sentence recommendation followed by the JSON action block.
-Never output action blocks for general questions or game lore.`,
+    style: 'You speak as a cinematic, lore-conscious game guide with narrative depth and dramatic flair. Give detailed lore and story explanations when asked, but keep recommendations punchy. Never write UI clicking tutorials.',
+    directive: '[Personality: The Storyteller. Flavor your advice with cinematic atmosphere and narrative depth. Give vivid, detailed answers for lore, story, and characters. No UI clicking tutorials.]',
+    systemPrompt: `You are The Storyteller. You speak as a cinematic, lore-conscious game guide with narrative depth, historical context, and dramatic flair.
+Provide rich, atmospheric answers for game lore, character backgrounds, story themes, and worldbuilding.
+When recommending a game or executing an action, keep your recommendation to 1-2 punchy sentences followed by the JSON action block.
+Never output action blocks for general questions, lore, or gameplay advice.`,
   },
   speedrunner: {
     id: 'speedrunner',
     name: 'Action Speedrunner',
     theme: 'kinetic',
     icon: '⚡',
-    style: 'You are an adrenaline-fueled, high-tempo arcade speedrunner. Fast, direct, zero fluff. Strictly 1 or 2 sentences max. No UI clicking tutorials.',
-    directive: '[Personality: Action Speedrunner. Be fast, direct, and energetic. Strictly 1 or 2 sentences max. No UI clicking tutorials.]',
-    systemPrompt: `You are Action Speedrunner. An adrenaline-fueled, high-tempo arcade speedrunner. Fast, direct, zero fluff.
-Keep responses strictly to 1 or 2 sentences max. No UI clicking tutorials.
-When recommending a game or executing an action, state your 1-2 sentence recommendation followed by the JSON action block.
-Never output action blocks for general questions or game lore.`,
+    style: 'You are an adrenaline-fueled, high-tempo arcade speedrunner. Fast, direct, tactical, zero corporate fluff. Give sharp gameplay meta, mechanics, and combat analysis.',
+    directive: '[Personality: Action Speedrunner. Be fast, direct, and energetic. Give sharp combat mechanics, movement tips, and meta builds. No UI clicking tutorials.]',
+    systemPrompt: `You are Action Speedrunner. An adrenaline-fueled, high-tempo gamer and speedrunner. Fast, tactical, meta-focused, zero corporate fluff.
+Give clear, actionable breakdowns for combat mechanics, boss patterns, weapon scaling, and optimal routing.
+When recommending a game or executing an action, state your quick recommendation followed by the JSON action block.
+Never output action blocks for general questions, mechanics, or strategy.`,
   },
   lorekeeper: {
     id: 'lorekeeper',
     name: 'The Lore-Keeper',
     theme: 'atmospheric',
     icon: '🌿',
-    style: 'You are a calm, observant RPG companion sitting by a campfire. Thoughtful and grounded tone. Strictly 1 or 2 sentences max. No UI clicking tutorials.',
-    directive: '[Personality: The Lore-Keeper. Grounded and observant tone. Clean, thoughtful, and objective. Strictly 1 or 2 sentences max. No UI clicking tutorials.]',
-    systemPrompt: `You are The Lore-Keeper. You are a calm, observant, objective RPG companion sitting by a campfire. Thoughtful, grounded, and clean tone.
-Keep responses strictly to 1 or 2 sentences max. Provide objective lore and walkthrough secrets without fluff. No UI clicking tutorials.
-When recommending a game or executing an action, state your 1-2 sentence recommendation followed by the JSON action block.
-Never output action blocks for general questions or game lore.`,
+    style: 'You are an observant, deep-dive RPG scholar and companion sitting by a campfire. Thoughtful, comprehensive, and grounded.',
+    directive: '[Personality: The Lore-Keeper. Grounded, thoughtful, and analytical. Provide thorough explanations of game lore, worldbuilding, character motivations, and secrets.]',
+    systemPrompt: `You are The Lore-Keeper. An observant, deep-dive RPG scholar and fireside companion. Thoughtful, encyclopedic, and grounded.
+Provide thorough, well-reasoned explanations for game lore, plot twists, villain motivations, hidden secrets, and setting history.
+When recommending a game or executing an action, state your concise recommendation followed by the JSON action block.
+Never output action blocks for lore, analysis, or story questions.`,
   },
   coop: {
     id: 'coop',
     name: 'The Co-op Buddy',
     theme: 'playful',
     icon: '🎮',
-    style: 'You are the player\'s unfiltered gamer friend sitting on the couch with a controller. You match their energy, talk like a real gamer in Discord voice chat, and use natural profanity (fuck, shit, damn, badass). You have strong gamer opinions: hype up games that slap, ruthlessly roast janky trash or slow walking sims, and ALWAYS agree with the player when they reject or hate a game. Crucial rule: Never insult or belittle the human player (no calling them lazy, stupid, casual, or names). Vent all your profanity and roasting at the GAMES and developers, never at the player. Keep it punchy, authentic, and natural — never start sentences with "Buddy," or "Heck,".',
-    directive: '[Personality: The Co-op Buddy. Couch gamer teammate. Authentic, unfiltered gamer voice with natural profanity (fuck, shit, damn). Roasts janky games, bad graphics, and boring walking sims. Agrees with player rejections immediately without defending the game. Never insults the human player. Zero "Heck" or "Buddy" daycare tone. Strictly 1-2 punchy sentences.]',
+    style: 'You are the player\'s unfiltered gamer friend sitting on the couch with a controller. You match their energy, talk like a real gamer in Discord voice chat, and use natural profanity (fuck, shit, damn, badass). Keep answers short, sharp, and punchy: strictly 2 to 3 sentences max (under 60 words). Never write long essays or rambling walls of text unless explicitly asked. Never start with "Hella, buddy" or "Buddy,".',
+    directive: '[Personality: The Co-op Buddy. Couch gamer teammate. Authentic, unfiltered gamer voice with natural profanity (fuck, shit, damn). Strictly 2-3 punchy sentences max. No walls of text. Zero "Hella, buddy" or filler intro. Get straight to the answer.]',
     systemPrompt: `You are The Co-op Buddy — an unfiltered gamer friend sitting right next to the player on the couch with a controller.
 Vibe & Conversational Rules:
-- Talk like a real gamer in Discord voice chat: use natural gamer profanity (fuck, shit, damn, badass, slaps, jank). Be energetic, opinionated, and funny.
-- When the player hates on a game, says it's trash, or says "no way the fuck i'm play this shit": IMMEDIATELY AGREE with them! Roast the rejected game ("Haha fuck that, you're 100% right — that slow-ass point-and-click walking simulator is definitely not the move right now. Let's scrap it and pick something that actually slaps"). NEVER defend a game the player just rejected!
-- Absolutely BANNED: Corporate soft-core tone, polite daycare assistant language, saying "Heck", or giving dry walkthroughs when the player is venting.
-- DO NOT start lines with repetitive filler like "Buddy,", "Heck,", "My friend,", or "Listen up, buddy,". Speak like a real human.
+- Talk like a real gamer in Discord voice chat: use natural gamer profanity (fuck, shit, damn, badass, slaps, jank). Be energetic, opinionated, funny, and punchy.
+- CRITICAL LENGTH RULE: Keep answers SHORT and punchy (2 to 3 sentences max, under 60 words). Players read this while gaming — nobody wants a 4-paragraph essay! Only give longer breakdowns if the player explicitly says "in detail" or "explain fully".
+- When the player hates on a game, says it's trash, or says "no way the fuck i'm play this shit": IMMEDIATELY AGREE with them! Roast the rejected game ("Haha fuck that, you're 100% right — that slow-ass walking sim is definitely not the move. Let's scrap it and pick something that actually slaps"). NEVER defend a game the player just rejected!
+- Absolutely BANNED: Rambling walls of text, saying "Hella, buddy", "Buddy,", "Heck,", "My friend,", or corporate daycare language. Get straight to the point.
 The Golden Side-by-Side Rule:
-- You and the player are ALWAYS on the same team. NEVER roast, insult, or call the human player derogatory names (no "you lazy bastard", no "you idiot"). All your profanity and trash talk is directed at the GAMES, bad bosses, and clunky mechanics — NEVER at the person holding the controller.
-Constraint: Max 1 to 2 punchy, unfiltered sentences. When pitching a replacement game, give your sharp take and output the JSON action block.`,
+- You and the player are ALWAYS on the same team. NEVER roast, insult, or call the human player derogatory names. All your profanity and trash talk is directed at the GAMES, bad bosses, and clunky mechanics — NEVER at the person holding the controller.
+- When pitching a replacement game, give your sharp 1-2 sentence take and output the JSON action block.`,
   },
   coach: {
     id: 'coach',
     name: 'The Tactical Coach',
     theme: 'competitive',
     icon: '🏆',
-    style: 'You are a competitive esports coach and min-max strategist. Decisive and analytical tone. Strictly 1 or 2 sentences max. No UI clicking tutorials.',
-    directive: '[Personality: The Tactical Coach. Analytical and decisive. Strictly 1 or 2 sentences max. No UI clicking tutorials.]',
-    systemPrompt: `You are The Tactical Coach. A competitive esports coach and min-max strategist. Decisive, analytical, meta-focused, and clean.
-Keep responses strictly to 1 or 2 sentences max. No UI clicking tutorials.
-When recommending a game or executing an action, state your 1-2 sentence recommendation followed by the JSON action block.
-Never output action blocks for general questions or game lore.`,
+    style: 'You are a competitive esports coach and min-max strategist. Decisive, analytical, meta-focused, and thorough.',
+    directive: '[Personality: The Tactical Coach. Analytical, decisive, and tactical. Break down mechanics, weapon tiers, builds, and strategic execution.]',
+    systemPrompt: `You are The Tactical Coach. A competitive esports coach and min-max strategist. Decisive, analytical, meta-focused, and sharp.
+Provide detailed breakdowns of game mechanics, optimal loadouts, skill tree synergies, and boss fight phases.
+When recommending a game or executing an action, state your recommendation followed by the JSON action block.
+Never output action blocks for general questions, tactics, or builds.`,
   },
 }
 
@@ -401,6 +401,98 @@ function detectIntentAction(userPrompt, activeGameTitle, db = null) {
   return null
 }
 
+function extractCleanPuzzleTopic(userPrompt, gameTitle = '') {
+  let cleaned = String(userPrompt || '').trim()
+
+  const COMMON_GAME_TYPOS = {
+    status: 'statue',
+    staut: 'statue',
+    stateu: 'statue',
+    statu: 'statue',
+    forhead: 'forehead',
+    eyye: 'eye',
+    eyy: 'eye',
+    entrateces: 'entrances',
+    entrace: 'entrance',
+    entraces: 'entrances',
+    puzzel: 'puzzle',
+    puzle: 'puzzle',
+    enmey: 'enemy',
+    enemie: 'enemy',
+    weapn: 'weapon',
+    gwet: 'get',
+    planing: 'planning',
+  }
+
+  // Normalize multi-word typos
+  cleaned = cleaned.replace(/\bshit\s+off\b/gi, 'shut off')
+
+  for (const [typo, fixed] of Object.entries(COMMON_GAME_TYPOS)) {
+    cleaned = cleaned.replace(new RegExp(`\\b${typo}\\b`, 'gi'), fixed)
+  }
+
+  // 1. Detect core puzzle / entity key phrases in user prompt
+  const puzzlePattern = /\b((?:\d+|three|two|one|first|second|third|blue|red|green|secret|hidden)?\s*(?:eyes?|eyed)?\s*(?:statue|puppet|boss|door|portal|chest|trap|chamber|gate|shrine|well|altar|switch|mechanism|puzzle))\b/i
+  const match = cleaned.match(puzzlePattern)
+
+  // 2. Strip common conversational opening phrases
+  let stripped = cleaned
+    .replace(/^(?:i saw a|i saw|here is a|here is|there is a|there is|i'm at a|i'm at|im at a|im at|i am at|i found a|i found|i see a|i see|looking at|how do i|how to|what do i do with|what do i do|what should i do with|what should i do|what do i need to do with|what do i need to do|where do i go|tell me how to|tell me|help me with|stuck on|how do you|not sure what to do with|not sure what to do)\s+/i, '')
+    .replace(/\s+(?:what do i need to do here|what do i need to do|what do i do here|what do i do|what should i do here|what should i do|what to do here|what to do|where to go|where do i go|how to solve|how to beat|how to pass|how to unlock them|how to unlock|help me|please|pls|\?)+$/i, '')
+    .replace(/^(?:i'm stuck on|im stuck on|stuck on|help me with|how do i beat|how to beat|how do i solve|how to solve|guide for|walkthrough for)\s+/i, '')
+    .replace(/\s+(?:help me|please|guide|walkthrough|pls)$/i, '')
+
+  // If match found and stripped prompt is long (> 6 words), extract core puzzle phrase + key distinctive qualifiers
+  let result = stripped
+  if (match && stripped.split(/\s+/).length > 6) {
+    const core = match[1].trim()
+    const extraQualifiers = []
+    if (/\b(?:glowing|blue|red|green|portal|upside down)\b/i.test(stripped)) {
+      const qMatches = stripped.match(/\b(?:glowing|blue|red|green|portal|upside down)\b/gi)
+      if (qMatches) extraQualifiers.push(...new Set(qMatches.map((m) => m.toLowerCase())))
+    }
+    result = extraQualifiers.length > 0 ? `${core} ${extraQualifiers.join(' ')}` : core
+  }
+
+  // Strip game title words if present in topic
+  if (gameTitle) {
+    const titleWords = gameTitle.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter((w) => w.length > 2)
+    for (const tw of titleWords) {
+      result = result.replace(new RegExp(`\\b${tw}\\b`, 'gi'), ' ')
+    }
+  }
+
+  result = result.replace(/\s+/g, ' ').trim()
+  return result || 'walkthrough'
+}
+
+function buildMissingWalkthroughResponse(persona, gameTitle, userPrompt) {
+  const cleanTopic = extractCleanPuzzleTopic(userPrompt, gameTitle)
+  const safeGame = (gameTitle || 'Game').trim()
+  const encodedGame = encodeURIComponent(safeGame).replace(/%20/g, '+')
+  const encodedTopic = encodeURIComponent(cleanTopic).replace(/%20/g, '+')
+  const ytQuery = cleanTopic && cleanTopic !== 'walkthrough' ? `${encodedGame}+${encodedTopic}+walkthrough` : `${encodedGame}+walkthrough`
+  const wikiQuery = cleanTopic && cleanTopic !== 'walkthrough' ? `${encodedGame}+${encodedTopic}` : encodedGame
+
+  const ytLink = `[Watch ${safeGame} Walkthrough on YouTube](https://www.youtube.com/results?search_query=${ytQuery})`
+  const wikiLink = `[Search ${safeGame} on PCGamingWiki](https://www.pcgamingwiki.com/w/index.php?search=${wikiQuery})`
+
+  const personaId = (persona?.id || 'storyteller').toLowerCase()
+  switch (personaId) {
+    case 'coop':
+      return `I checked our local guide for ${safeGame}, but it doesn't have the walkthrough steps for that specific puzzle (${cleanTopic || 'this part'}). Don't waste time guessing, man — hit the direct links below to see the exact video solution:\n\n- ${ytLink}\n- ${wikiLink}`
+    case 'speedrunner':
+      return `No notes in the local guide for "${cleanTopic || 'this puzzle'}" in ${safeGame}. Don't drop your pace — check the run video right here:\n\n- ${ytLink}\n- ${wikiLink}`
+    case 'lorekeeper':
+      return `The local chronicle for ${safeGame} contains no recorded passage for ${cleanTopic || 'this encounter'}. Consult the community walkthrough archives:\n\n- ${ytLink}\n- ${wikiLink}`
+    case 'coach':
+      return `Our scouting report for ${safeGame} doesn't have intel on that puzzle (${cleanTopic || 'this section'}). Pull up the breakdown here:\n\n- ${ytLink}\n- ${wikiLink}`
+    case 'storyteller':
+    default:
+      return `The recorded archives for ${safeGame} remain silent on the ${cleanTopic || 'steps here'}. Seek visual guidance through the walkthrough archives below:\n\n- ${ytLink}\n- ${wikiLink}`
+  }
+}
+
 function extractSearchTarget(userPrompt, activeGameTitle) {
   let cleaned = (userPrompt || '').trim()
   cleaned = cleaned.replace(/^(i'm stuck on|im stuck on|stuck on|help me with|how do i beat|how to beat|how do i solve|how to solve|guide for|help me|walkthrough for)\s+/i, '')
@@ -556,6 +648,29 @@ async function getLlamaModule() {
   }
 }
 
+let customModelPath = null
+let currentExecutionMode = 'cpu-safe' // 'cpu-safe' | 'gamer-balanced' | 'full-beast'
+
+function setCustomModelPath(p) {
+  customModelPath = p || null
+  unloadEngine().catch(() => {})
+}
+
+function getCustomModelPath() {
+  return customModelPath
+}
+
+function setExecutionMode(mode) {
+  if (['cpu-safe', 'gamer-balanced', 'full-beast'].includes(mode)) {
+    currentExecutionMode = mode
+    unloadEngine().catch(() => {})
+  }
+}
+
+function getExecutionMode() {
+  return currentExecutionMode
+}
+
 function getModelsDirectory(app) {
   if (app?.getPath) {
     return path.join(app.getPath('userData'), 'models')
@@ -564,6 +679,14 @@ function getModelsDirectory(app) {
 }
 
 function resolveModelPath(app) {
+  if (customModelPath && fs.existsSync(customModelPath)) {
+    try {
+      if (fs.statSync(customModelPath).size > 50000000) {
+        return customModelPath
+      }
+    } catch {}
+  }
+
   const searchDirs = [
     app?.getPath ? path.join(app.getPath('userData'), 'models') : null,
     path.join(process.cwd(), 'logpile_data', 'models'),
@@ -657,7 +780,8 @@ async function unloadEngine() {
   }
 }
 
-const CPU_THREADS = Math.min(4, Math.max(1, os.cpus()?.length ? Math.min(4, os.cpus().length) : 4))
+// Cap CPU threads strictly to 2 max to ensure heavy games (UE5/DirectX) never stutter or freeze
+const CPU_THREADS = 2
 const CONTEXT_SIZE = 2048
 
 async function ensureEngineLoaded(app) {
@@ -686,8 +810,36 @@ async function ensureEngineLoaded(app) {
   }
 
   const llamaMod = await getLlamaModule()
+  let useGpu = false
+  let gpuLayersToUse = 0
+
+  if (currentExecutionMode === 'full-beast') {
+    useGpu = 'auto'
+    gpuLayersToUse = -1
+  } else if (currentExecutionMode === 'gamer-balanced') {
+    let freeVramMb = 0
+    try {
+      if (process.platform === 'win32') {
+        const out = require('child_process').execFileSync('nvidia-smi', ['--query-gpu=memory.free', '--format=csv,noheader,nounits'], { timeout: 1200, windowsHide: true }).toString()
+        freeVramMb = parseInt(out.trim(), 10) || 0
+      }
+    } catch {}
+
+    if (freeVramMb >= 2500) {
+      useGpu = 'auto'
+      gpuLayersToUse = 16
+    } else {
+      useGpu = false
+      gpuLayersToUse = 0
+      console.log(`[AI Engine] VRAM headroom low (${freeVramMb} MB). Staying in CPU mode to protect game.`)
+    }
+  } else {
+    useGpu = false
+    gpuLayersToUse = 0
+  }
+
   if (!llama || llama.disposed) {
-    llama = await llamaMod.getLlama({ gpu: false })
+    llama = await llamaMod.getLlama({ gpu: useGpu })
   }
 
   try {
@@ -695,10 +847,10 @@ async function ensureEngineLoaded(app) {
   } catch {}
 
   if (!model || model.disposed) {
-    console.log(`[AI Engine] Loading model on CPU (threads: ${CPU_THREADS}, contextSize: ${CONTEXT_SIZE})...`)
+    console.log(`[AI Engine] Loading model (mode: ${currentExecutionMode}, gpuLayers: ${gpuLayersToUse}, threads: ${CPU_THREADS})...`)
     model = await llama.loadModel({
       modelPath: status.modelPath,
-      gpuLayers: 0,
+      gpuLayers: gpuLayersToUse,
     })
   }
 
@@ -739,6 +891,12 @@ async function askGamingAssistant(app, userPrompt, activeGameTitle = '', library
   if (!userPrompt || typeof userPrompt !== 'string') {
     throw new Error('Please enter a question.')
   }
+
+  try {
+    if (os.constants?.priority?.PRIORITY_BELOW_NORMAL !== undefined) {
+      os.setPriority(os.constants.priority.PRIORITY_BELOW_NORMAL)
+    }
+  } catch {}
 
   const activePersona = resolvePersonality(options?.personality, options?.theme)
 
@@ -895,15 +1053,23 @@ Never output action blocks for general questions or game lore.`
     let guideNotes = ''
     let resolvedGameTitle = (typeof activeGameTitle === 'string' ? activeGameTitle : activeGameTitle?.title) || libraryContext?.activeGame?.title || ''
     const isWalkthroughQuery = !isExplicitSummary && !isRecommendationQuery && isQuestionOrKnowledge
+    // Only physical/spatial sequence puzzles (e.g. statue dials, symbol combinations) require strict visual links if no guide chunk exists.
+    // Lore, character analysis, bosses, builds, weapons, strategies, and story questions are handled directly by Hermes 3B.
+    const isPhysicalPuzzleQuery = /\b(?:statue|dial|cipher|combination|symbol puzzle|lever sequence|puzzle mechanism|lock combo|upside down)\b/i.test(userPrompt)
+
     if (isWalkthroughQuery) {
-      if (libraryContext?.guideNotes) {
-        guideNotes = `${libraryContext.guideNotes}\n`
-      } else {
+      let hasDirectMatch = Boolean(libraryContext?.hasDirectMatch)
+      let matchedChunks = libraryContext?.guideChunks || []
+
+      if (!matchedChunks.length) {
         try {
           const { searchGameKnowledge, findGameEntityInText, resolveGameByQuery } = require('../../../electron/db.cjs')
-          const mentionedGame = targetDb ? findGameEntityInText(targetDb, userPrompt) : null
-          if (mentionedGame?.canonical_title) {
-            resolvedGameTitle = mentionedGame.canonical_title
+          let mentionedGame = null
+          if (!resolvedGameTitle) {
+            mentionedGame = targetDb ? findGameEntityInText(targetDb, userPrompt) : null
+            if (mentionedGame?.canonical_title) {
+              resolvedGameTitle = mentionedGame.canonical_title
+            }
           }
           let targetGame = mentionedGame
           if (!targetGame && targetDb && resolvedGameTitle) {
@@ -913,8 +1079,8 @@ Never output action blocks for general questions or game lore.`
           if (targetDb && targetId) {
             const chunks = searchGameKnowledge(targetDb, targetId, userPrompt, 3, resolvedGameTitle)
             if (chunks && chunks.length > 0) {
-              const formattedChunks = chunks.map((c) => `[${c.section_title}]:\n${c.content}`).join('\n\n')
-              guideNotes = `Game Guide Context for ${resolvedGameTitle || 'Game'}:\n${formattedChunks}\n\nUser Question: ${userPrompt.trim()}\n\nInstructions: Answer using the specific mechanics, items, and tactics described in the guide context above. Avoid generic filler advice. If the user explicitly asks for a video, or if this guide lacks specific puzzle/boss tactics, output a targeted Markdown link: [Watch [Specific Boss/Puzzle] Walkthrough on YouTube](https://www.youtube.com/results?search_query=${encodeURIComponent(resolvedGameTitle || 'Game').replace(/%20/g, '+')}+[Topic]+walkthrough) or [Search [Specific Topic] on PCGamingWiki](https://www.pcgamingwiki.com/w/index.php?search=${encodeURIComponent(resolvedGameTitle || 'Game').replace(/%20/g, '+')}+[Topic]) with spaces replaced by '+'. Ensure your response is concise (under 120 words) but always completes its final sentence cleanly. Do not leave thoughts unfinished.\n`
+              matchedChunks = chunks
+              hasDirectMatch = chunks.some((c) => Boolean(c.isDirectMatch))
             }
           }
         } catch (ragErr) {
@@ -930,16 +1096,29 @@ Never output action blocks for general questions or game lore.`
         }
       }
 
+      // If player is asking about an obscure physical statue dial / symbol puzzle and no guide file exists:
+      // Instantly return the verified walkthrough video link to prevent fake puzzle combinations.
+      if (resolvedGameTitle && isPhysicalPuzzleQuery && !hasDirectMatch) {
+        return buildMissingWalkthroughResponse(activePersona, resolvedGameTitle, userPrompt)
+      }
+
+      if (matchedChunks.length > 0 && hasDirectMatch) {
+        const formattedChunks = matchedChunks.map((c) => `[${c.section_title}]:\n${c.content}`).join('\n\n')
+        guideNotes = `Game Guide Context for ${resolvedGameTitle || 'Game'}:\n${formattedChunks}\n\nUser Question: ${userPrompt.trim()}\n\nInstructions: Answer using the specific mechanics, items, and tactics described in the guide context above. Provide a clear, comprehensive answer. If the context does not have the exact answer, synthesize with your general gaming knowledge of ${resolvedGameTitle}.\n`
+      } else if (libraryContext?.guideNotes && !isPhysicalPuzzleQuery) {
+        guideNotes = `${libraryContext.guideNotes}\n`
+      }
+
       if (!guideNotes) {
         if (resolvedGameTitle) {
           promptContext = `[Game Context: The player is asking about "${resolvedGameTitle}" ("${userPrompt.trim()}").
 In your persona (${activePersona.name}):
-- Answer honestly about "${resolvedGameTitle}".
-- CRITICAL: Stick STRICTLY to "${resolvedGameTitle}". NEVER hallucinate mechanics from other games (no anime characters, no dating sims, no poems). If you do not know the exact room, puzzle, or scene they mean by "${userPrompt.trim()}", just ask them what specific puzzle, trap, or chapter they are stuck on so you can help them.
-- If the player is calling out a previous hallucination or confusion ("what the fuck is that?"), laugh at your glitch ("Haha my bad, total brain-fart! Forget that nonsense") and ask what part of "${resolvedGameTitle}" they need help with.
-- Use natural gamer profanity (fuck, shit, damn). Never insult the player personally.]\n`
+- CRITICAL LENGTH CONSTRAINT: Keep your answer SHORT, PUNCHY, and DIRECT — strictly 2 to 3 sentences max (under 60 words). Nobody wants a wall of text while gaming!
+- Answer the specific question immediately with zero filler intro (never say "Hella, buddy" or "Alright man").
+- Only write a longer multi-paragraph breakdown if the player explicitly typed "in detail", "deep dive", or "full breakdown".
+- Authentic gamer voice with natural profanity (fuck, shit, damn). Never insult the human player.]\n`
         } else {
-          promptContext = `[Context: The player is asking a gameplay or walkthrough question ("${userPrompt.trim()}"), but no game is currently running or selected in Logpile. Do NOT talk about scanning the library or launcher buttons. In your persona (${activePersona.name}), ask them which game they are playing or stuck on so you can help them.]\n`
+          promptContext = `[Context: The player is asking a gameplay or walkthrough question ("${userPrompt.trim()}"), but no game is currently running or selected in Logpile. In your persona (${activePersona.name}), ask them in 1 short sentence which game they are playing.]\n`
         }
       }
     }
@@ -962,16 +1141,47 @@ In your persona (${activePersona.name}):
       prompt = `${personaDirective}${promptContext}${historyContext}Player: ${userPrompt.trim()}\n${activePersona.name}:`
     }
 
-    const isKnowledgeOrGuide = Boolean(guideNotes || isWalkthroughQuery)
-    const maxTokens = options?.maxTokens || (isKnowledgeOrGuide ? 512 : 120)
+    const wantsDetailed = /\b(detailed|in detail|breakdown|deep dive|full guide|essay|explain fully|long answer)\b/i.test(userPrompt)
+    const maxTokens = options?.maxTokens || (wantsDetailed ? 450 : 160)
     let rawResponse = ''
     try {
-      rawResponse = await session.prompt(prompt, {
+      let tokenCount = 0
+      let streamStartTime = null
+      const onTextChunk = (chunk) => {
+        if (!streamStartTime) streamStartTime = Date.now()
+        tokenCount++
+        const elapsedSec = (Date.now() - streamStartTime) / 1000
+        const tokPerSec = elapsedSec > 0.05 ? (tokenCount / elapsedSec).toFixed(1) : '0.0'
+        if (typeof options?.onToken === 'function') {
+          try {
+            options.onToken({ chunk, tokenCount, tokPerSec, done: false })
+          } catch {}
+        }
+      }
+
+      const promptPromise = session.prompt(prompt, {
         maxTokens,
-        temperature: 0.2,
+        temperature: 0.3,
+        onTextChunk,
       })
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Inference timeout')), 60000)
+      )
+      rawResponse = await Promise.race([promptPromise, timeoutPromise])
+
+      if (typeof options?.onToken === 'function') {
+        try {
+          const elapsedSec = streamStartTime ? (Date.now() - streamStartTime) / 1000 : 0.1
+          const tokPerSec = elapsedSec > 0 ? (tokenCount / elapsedSec).toFixed(1) : '0.0'
+          options.onToken({ chunk: '', tokenCount, tokPerSec, done: true })
+        } catch {}
+      }
     } catch (promptErr) {
       const msg = promptErr?.message || String(promptErr)
+      if (/timeout/i.test(msg)) {
+        console.warn('[AI] Inference took too long, safely falling back.')
+        return 'Generating the answer took longer than expected on CPU. Please try asking a more focused question.'
+      }
       if (/disposed|abort|context/i.test(msg)) {
         return 'Session interrupted. Please ask your question again.'
       }
@@ -1347,9 +1557,161 @@ async function parseLibraryFilterIntent(userText, options = {}) {
   return heuristic
 }
 
+const HUD_THEME_SYSTEM_PROMPT = `You are an expert game HUD and overlay theme designer for the Logpile launcher.
+Design an authentic in-game performance HUD overlay based on the user's prompt and target game.
+Output ONLY a single valid JSON object. No markdown fences, no conversational text, no explanation.
+
+Expected JSON schema:
+{
+  "theme_name": "Concise creative title (e.g. 'Witcher White Wolf' or 'Cyberpunk Netrunner')",
+  "primary_color": "#RRGGBB (Hex color for FPS number and glows)",
+  "secondary_color": "#RRGGBB (Hex color for sub-metrics)",
+  "background": "CSS background (e.g. 'linear-gradient(135deg, rgba(22, 24, 32, 0.98), rgba(12, 10, 14, 0.99))')",
+  "border": "CSS border (e.g. '1px solid rgba(148, 163, 184, 0.55)')",
+  "borderRadius": "CSS border-radius (e.g. '0 0 6px 0' or '4px')",
+  "fontFamily": "serif | monospace | sans-serif",
+  "icon": "sword | shield | flame | crosshair | skull | eye | sparkles | compass | feather | terminal",
+  "badge": "2 to 4 letter uppercase tag (e.g. 'WOLF', 'IGNI', 'PMC', 'EVA')",
+  "tagline": "Atmospheric one-line lore description"
+}
+
+One-shot example:
+{"theme_name":"Witcher White Wolf","primary_color":"#ef4444","secondary_color":"#cbd5e1","background":"linear-gradient(135deg, rgba(22, 24, 32, 0.98), rgba(12, 10, 14, 0.99))","border":"1px solid rgba(148, 163, 184, 0.5)","borderRadius":"0 0 6px 0","fontFamily":"serif","icon":"sword","badge":"WOLF","tagline":"Dark fantasy Witcher steel and blood-crimson HUD"}`
+
+async function generateHudThemeDesign(userPrompt, gameInfo = null, options = {}) {
+  const app = options?.app || null
+  const status = getModelStatus(app)
+  if (!status.installed || !status.modelPath) {
+    return { success: false, error: 'Offline AI model is not attached.' }
+  }
+
+  let session = null
+  let sequence = null
+  try {
+    isInferring = true
+    if (unloadTimer) {
+      clearTimeout(unloadTimer)
+      unloadTimer = null
+    }
+
+    const loaded = await ensureEngineLoaded(app)
+    sequence = await acquireSequence(loaded.model, loaded.context)
+    const { LlamaChatSession } = await getLlamaModule()
+
+    session = new LlamaChatSession({
+      contextSequence: sequence,
+      systemPrompt: HUD_THEME_SYSTEM_PROMPT,
+    })
+
+    let gameCtx = ''
+    if (gameInfo && typeof gameInfo === 'object') {
+      const gTitle = gameInfo.canonical_title || gameInfo.title || ''
+      const gDev = gameInfo.developer || ''
+      const gGenre = gameInfo.genre || ''
+      gameCtx = `Target Game: "${gTitle}" (${[gGenre, gDev].filter(Boolean).join(', ')})\n`
+    }
+
+    const query = `${gameCtx}Design an authentic in-game HUD overlay matching aesthetic: "${(userPrompt || '').trim() || 'Heroic Game HUD'}". Output JSON:`
+
+    let rawResponse = ''
+    try {
+      rawResponse = await session.prompt(query, {
+        maxTokens: 320,
+        temperature: 0.3,
+      })
+    } catch (err) {
+      console.warn('[AI Theme] Prompt generation error:', err?.message)
+    }
+
+    let parsed = null
+    const balanced = extractBalancedJson(rawResponse || '')
+    if (balanced && balanced.jsonSub) {
+      try {
+        parsed = JSON.parse(balanced.jsonSub)
+      } catch {}
+    }
+    if (!parsed) {
+      const match = (rawResponse || '').match(/\{[\s\S]*?\}/)
+      if (match) {
+        try {
+          parsed = JSON.parse(match[0])
+        } catch {}
+      }
+    }
+
+    if (parsed && typeof parsed === 'object') {
+      try {
+        const cleanName = typeof parsed.theme_name === 'string' && parsed.theme_name.trim()
+          ? parsed.theme_name.trim().replace(/^["']|["']$/g, '').slice(0, 36)
+          : null
+        const hexRegex = /^#[0-9a-fA-F]{6}$/
+        const primaryColor = hexRegex.test(parsed.primary_color) ? parsed.primary_color : '#ef4444'
+        const secondaryColor = hexRegex.test(parsed.secondary_color) ? parsed.secondary_color : '#cbd5e1'
+        const badge = typeof parsed.badge === 'string' ? parsed.badge.trim().slice(0, 4).toUpperCase() : 'AI'
+        const allowedIcons = [
+          'sword', 'swords', 'wolf', 'warrior', 'shield', 'flame', 'skull', 'eye',
+          'sparkles', 'compass', 'feather', 'terminal', 'crown', 'potion', 'crosshair', 'target'
+        ]
+        const icon = allowedIcons.includes(String(parsed.icon || '').toLowerCase()) ? String(parsed.icon).toLowerCase() : 'crosshair'
+        const fontFamily = ['serif', 'monospace', 'sans-serif'].includes(String(parsed.fontFamily || '').toLowerCase())
+          ? String(parsed.fontFamily).toLowerCase()
+          : 'sans-serif'
+
+          const background = typeof parsed.background === 'string' && !parsed.background.includes('url(') && !parsed.background.includes('javascript:')
+            ? parsed.background.trim()
+            : 'rgba(16, 20, 28, 0.96)'
+          const border = typeof parsed.border === 'string' && !parsed.border.includes('url(')
+            ? parsed.border.trim()
+            : `1px solid ${primaryColor}70`
+          const borderRadius = typeof parsed.borderRadius === 'string'
+            ? parsed.borderRadius.trim()
+            : '0 0 8px 0'
+
+          return {
+            success: true,
+            themeDesign: {
+              theme_name: cleanName,
+              primary_color: primaryColor,
+              secondary_color: secondaryColor,
+              background,
+              border,
+              borderRadius,
+              fontFamily,
+              icon,
+              badge,
+              tagline: typeof parsed.tagline === 'string' ? parsed.tagline.trim().slice(0, 80) : 'Custom Performance HUD',
+            },
+            raw: rawResponse
+          }
+        } catch (parseErr) {
+          console.warn('[AI Theme] JSON parse fallback:', parseErr?.message)
+        }
+      }
+
+    return { success: false, error: 'Could not extract structured JSON from model response', raw: rawResponse }
+  } catch (err) {
+    return { success: false, error: err?.message }
+  } finally {
+    isInferring = false
+    try { if (session) await session.dispose?.() } catch {}
+    try { if (sequence && !sequence.disposed) await sequence.dispose() } catch {}
+    if (unloadPending) {
+      unloadPending = false
+      unloadEngine().catch(() => {})
+    } else {
+      resetUnloadTimer()
+    }
+  }
+}
+
 module.exports = {
   getModelStatus,
   getModelsDirectory,
+  setCustomModelPath,
+  getCustomModelPath,
+  setExecutionMode,
+  getExecutionMode,
+  generateHudThemeDesign,
   askQuestion,
   askGamingAssistant,
   recommendFromLibrary,

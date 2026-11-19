@@ -121,6 +121,22 @@ function searchGameKnowledge(arg1, arg2, arg3, arg4, arg5) {
     }
   }
 
+  const COMMON_GAME_TYPOS = {
+    staut: 'statue',
+    stateu: 'statue',
+    statu: 'statue',
+    puzzel: 'puzzle',
+    puzle: 'puzzle',
+    enmey: 'enemy',
+    enemie: 'enemy',
+    weapn: 'weapon',
+    gwet: 'get',
+    planing: 'planning',
+  }
+  for (const [typo, fixed] of Object.entries(COMMON_GAME_TYPOS)) {
+    cleanQuery = cleanQuery.replace(new RegExp(`\\b${typo}\\b`, 'gi'), fixed)
+  }
+
   // 3. Extract core nouns/verbs (min length >= 3, excluding stop words)
   const tokens = cleanQuery
     .replace(/[^a-z0-9\s]/gi, ' ')
@@ -129,18 +145,23 @@ function searchGameKnowledge(arg1, arg2, arg3, arg4, arg5) {
     .filter((w) => w.length >= 3 && !KNOWLEDGE_STOP_WORDS.has(w))
 
   let results = []
+  let isDirectMatch = false
 
   // Run FTS MATCH only if clean keywords remain (never run blank MATCH)
   if (tokens.length > 0) {
     const matchExpr = tokens.map((token) => `"${token}"*`).join(' OR ')
     try {
-      results = db.prepare(`
+      const ftsRows = db.prepare(`
         SELECT section_title, content
         FROM game_knowledge_fts
         WHERE game_knowledge_fts MATCH ? AND game_id = ?
         ORDER BY rank
         LIMIT ?
       `).all(matchExpr, resolvedId, safeLimit) || []
+      if (ftsRows && ftsRows.length > 0) {
+        results = ftsRows.map((r) => ({ ...r, isDirectMatch: true }))
+        isDirectMatch = true
+      }
     } catch (err) {
       console.warn('[Indexer] searchGameKnowledge FTS error:', err.message)
     }
@@ -149,25 +170,15 @@ function searchGameKnowledge(arg1, arg2, arg3, arg4, arg5) {
   // Fallback to foundational guide chunks if 0 matches or query was general overview/tips
   if (!results || results.length === 0) {
     try {
-      results = db.prepare(`
+      results = (db.prepare(`
         SELECT section_title, content
         FROM game_knowledge_fts
-        WHERE game_knowledge_fts MATCH ? AND game_id = ?
+        WHERE game_id = ?
         ORDER BY rowid ASC
         LIMIT ?
-      `).all(resolvedId, safeLimit) || []
-    } catch (fallbackErr) {
-      try {
-        results = db.prepare(`
-          SELECT section_title, content
-          FROM game_knowledge_fts
-          WHERE game_id = ?
-          ORDER BY rowid ASC
-          LIMIT ?
-        `).all(resolvedId, safeLimit) || []
-      } catch (err2) {
-        console.warn('[Indexer] searchGameKnowledge fallback error:', err2.message)
-      }
+      `).all(resolvedId, safeLimit) || []).map((r) => ({ ...r, isDirectMatch: false }))
+    } catch (err2) {
+      console.warn('[Indexer] searchGameKnowledge fallback error:', err2.message)
     }
   }
 
@@ -193,10 +204,17 @@ function hasGuide(arg1, arg2) {
 
   if (!db || !gameId) return false
   try {
-    const row = db.prepare('SELECT 1 FROM game_knowledge WHERE game_id = ? OR canonical_title = ? LIMIT 1').get(String(gameId), String(gameId))
-    if (row) return true
-    const gRow = db.prepare('SELECT has_guide FROM games WHERE id = ? LIMIT 1').get(String(gameId))
-    return Boolean(gRow?.has_guide)
+    // Quality Gate: Only consider a guide ready if it has at least 2 substantive sections and >= 800 chars of real content
+    const stats = db.prepare(`
+      SELECT COUNT(*) as count, SUM(LENGTH(content)) as totalLen
+      FROM game_knowledge
+      WHERE game_id = ? OR canonical_title = ?
+    `).get(String(gameId), String(gameId))
+
+    if (stats && stats.count >= 2 && (stats.totalLen || 0) >= 800) {
+      return true
+    }
+    return false
   } catch (err) {
     console.warn('[Indexer] hasGuide error:', err.message)
     return false
@@ -472,38 +490,26 @@ function findGameEntityInText(arg1, arg2) {
       if (row) return { id: row.id, canonical_title: row.canonical_title, title: row.canonical_title, is_installed: Boolean(row.is_installed) }
     }
 
-    // 2. Token n-grams (3-grams, 2-grams)
+    // 2. Multi-word phrase matching (at least 2 words)
     const tokens = p.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(t => t.length > 0)
     for (let len = Math.min(tokens.length, 4); len >= 2; len--) {
       for (let i = 0; i <= tokens.length - len; i++) {
         const slice = tokens.slice(i, i + len)
         if (slice.every(t => QUESTION_STOP_WORDS.has(t))) continue
         const phrase = slice.join(' ')
-        if (phrase.length < 4) continue
+        if (phrase.length < 5) continue
 
+        // Must match either exact title or title prefix, NEVER a single substring suffix
         const candidate = db.prepare(`
           SELECT id, canonical_title, is_installed
           FROM games
-          WHERE is_utility = 0 AND canonical_title LIKE ?
+          WHERE is_utility = 0 AND (
+            LOWER(canonical_title) = ? OR 
+            LOWER(canonical_title) LIKE (? || '%')
+          )
           ORDER BY is_installed DESC, length(canonical_title) ASC
           LIMIT 1
-        `).get(`%${phrase}%`)
-        if (candidate) {
-          return { id: candidate.id, canonical_title: candidate.canonical_title, title: candidate.canonical_title, is_installed: Boolean(candidate.is_installed) }
-        }
-      }
-    }
-
-    // 3. Single distinct significant token (length >= 5, not a stop word)
-    for (const token of tokens) {
-      if (token.length >= 5 && !QUESTION_STOP_WORDS.has(token)) {
-        const candidate = db.prepare(`
-          SELECT id, canonical_title, is_installed
-          FROM games
-          WHERE is_utility = 0 AND canonical_title LIKE ?
-          ORDER BY is_installed DESC, length(canonical_title) ASC
-          LIMIT 1
-        `).get(`%${token}%`)
+        `).get(phrase, phrase)
         if (candidate) {
           return { id: candidate.id, canonical_title: candidate.canonical_title, title: candidate.canonical_title, is_installed: Boolean(candidate.is_installed) }
         }

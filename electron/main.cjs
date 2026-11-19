@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, dialog, protocol, net, clipboard, nativeImage, Tray, Menu, globalShortcut } = require('electron')
+const { app, BrowserWindow, ipcMain, shell, dialog, protocol, net, clipboard, nativeImage, Tray, Menu, MenuItem, globalShortcut, screen } = require('electron')
 const path = require('node:path')
 const fs = require('node:fs')
 const os = require('node:os')
@@ -23,6 +23,13 @@ app.setPath('sessionData', path.join(APP_DATA_DIR, 'session'));
 app.setPath('temp', path.join(APP_DATA_DIR, 'temp'));
 process.env.HF_HOME = path.join(APP_DATA_DIR, 'cache');
 process.env.XDG_CACHE_HOME = path.join(APP_DATA_DIR, 'cache');
+
+// Prevent background throttling so transparent HUD animations remain smooth at 60/144 FPS when games have focus
+app.commandLine.appendSwitch('disable-background-timer-throttling');
+app.commandLine.appendSwitch('disable-renderer-backgrounding');
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+// Cap compositor frame rate to 60 FPS to eliminate redundant DWM composition wakeups on 144Hz/200Hz+ panels (under 1% GPU overhead)
+app.commandLine.appendSwitch('limit-fps', '60');
 
 // Enforce single instance lock
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
@@ -111,6 +118,11 @@ const { getSystemSpecs } = require('../src/main/services/systemSpecsService.cjs'
 const {
   getModelStatus,
   getModelsDirectory,
+  setCustomModelPath,
+  getCustomModelPath,
+  setExecutionMode,
+  getExecutionMode,
+  generateHudThemeDesign,
   askGamingAssistant,
   recommendFromLibrary,
   unloadEngine,
@@ -124,6 +136,7 @@ const {
 const { createSaveBackup, restoreSaveBackup, checkSaveConflict, listSaveBackupsForGame } = require('./saveWatcher.cjs')
 const { fetchPcgwTechDataManual } = require('../src/main/services/pcgwService.cjs')
 const voiceService = require('./voiceService.cjs')
+const { getConnectedGamepads } = require('../src/main/services/gamepadService.cjs')
 const { toPortablePath, resolvePortablePath } = require('./pathUtils.cjs')
 
 let mainWindow
@@ -447,44 +460,67 @@ function setupTray(win, database) {
   });
 }
 
+const IGNORED_EXE_SUBSTRINGS = ['crash', 'unins', 'setup', 'redist', 'unitycrash', 'installer', 'autorun', '7za', 'directx', 'vcredist', 'dxwebsetup'];
+const IGNORED_EXE_NAMES = new Set([
+  'steam.exe', 'steamwebhelper.exe', 'steamservice.exe', 'gameoverlayui.exe',
+  'epicgameslauncher.exe', 'epicwebhelper.exe',
+  'galaxyclient.exe', 'galaxyclientservice.exe',
+  'origin.exe', 'originwebhelperservice.exe', 'eaconnect_interop.exe', 'eadp.exe', 'ealauncher.exe', 'eadesktop.exe',
+  'ubisoftconnect.exe', 'upc.exe', 'uplay.exe', 'uplaywebcore.exe',
+  'battle.net.exe', 'agent.exe',
+  'riotclientservices.exe', 'riotclientux.exe',
+  'gog.com.galaxy.client.exe',
+  'electron.exe', 'logpile.exe', 'node.exe', 'cmd.exe', 'powershell.exe', 'tasklist.exe',
+  'explorer.exe', 'svchost.exe', 'dwm.exe', 'runtimebroker.exe'
+]);
+const BINARY_SUBDIRS = new Set(['bin', 'binaries', 'win64', 'x64', 'win32', 'x86', 'retail', 'shipping', 'game', 'engine', 'content']);
+
+function isCleanGameExe(name) {
+  const lower = name.toLowerCase();
+  if (!lower.endsWith('.exe')) return false;
+  if (IGNORED_EXE_NAMES.has(lower)) return false;
+  for (const ign of IGNORED_EXE_SUBSTRINGS) {
+    if (lower.includes(ign)) return false;
+  }
+  return true;
+}
+
 function findGameExecutables(installPath) {
   const exeNames = new Set();
   if (!installPath || typeof installPath !== 'string' || !fs.existsSync(installPath)) return exeNames;
   try {
     const entries = fs.readdirSync(installPath, { withFileTypes: true });
+    const subdirsToCheck = [];
+
     for (const entry of entries) {
-      if (entry.isFile() && entry.name.toLowerCase().endsWith('.exe')) {
-        const lower = entry.name.toLowerCase();
-        if (!lower.includes('crash') && !lower.includes('unins') && !lower.includes('setup') && !lower.includes('redist') && !lower.includes('unitycrash')) {
-          exeNames.add(lower);
-        }
+      if (entry.isFile()) {
+        if (isCleanGameExe(entry.name)) exeNames.add(entry.name.toLowerCase());
       } else if (entry.isDirectory()) {
-        const sub = path.join(installPath, entry.name);
-        try {
-          const subEntries = fs.readdirSync(sub, { withFileTypes: true });
-          for (const s of subEntries) {
-            if (s.isFile() && s.name.toLowerCase().endsWith('.exe')) {
-              const lower = s.name.toLowerCase();
-              if (!lower.includes('crash') && !lower.includes('unins') && !lower.includes('setup') && !lower.includes('redist') && !lower.includes('unitycrash')) {
-                exeNames.add(lower);
-              }
-            } else if (s.isDirectory()) {
-              const sub2 = path.join(sub, s.name);
-              try {
-                const sub2Entries = fs.readdirSync(sub2, { withFileTypes: true });
-                for (const s2 of sub2Entries) {
-                  if (s2.isFile() && s2.name.toLowerCase().endsWith('.exe')) {
-                    const lower = s2.name.toLowerCase();
-                    if (!lower.includes('crash') && !lower.includes('unins') && !lower.includes('setup') && !lower.includes('redist') && !lower.includes('unitycrash')) {
-                      exeNames.add(lower);
-                    }
-                  }
-                }
-              } catch {}
-            }
-          }
-        } catch {}
+        const subName = entry.name.toLowerCase();
+        if (BINARY_SUBDIRS.has(subName)) {
+          subdirsToCheck.push(path.join(installPath, entry.name));
+        }
       }
+    }
+
+    for (const sdir of subdirsToCheck) {
+      try {
+        const subEntries = fs.readdirSync(sdir, { withFileTypes: true });
+        for (const s of subEntries) {
+          if (s.isFile()) {
+            if (isCleanGameExe(s.name)) exeNames.add(s.name.toLowerCase());
+          } else if (s.isDirectory() && ['win64', 'x64', 'win32', 'x86', 'retail', 'shipping'].includes(s.name.toLowerCase())) {
+            try {
+              const sub2 = fs.readdirSync(path.join(sdir, s.name), { withFileTypes: true });
+              for (const s2 of sub2) {
+                if (s2.isFile() && isCleanGameExe(s2.name)) {
+                  exeNames.add(s2.name.toLowerCase());
+                }
+              }
+            } catch {}
+          }
+        }
+      } catch {}
     }
   } catch {}
   return exeNames;
@@ -547,6 +583,10 @@ function startTrackingGameSession(gameId, title, executablePath = null, installP
   if (mainWindow && !mainWindow.isDestroyed()) {
     try { mainWindow.webContents.send('game:sessionStarted', { gameId, title: session.title }) } catch {}
   }
+  isGameCurrentlyRunning = true;
+  try {
+    updateHudDisplayState();
+  } catch {}
 
   session.timer = setInterval(async () => {
     const running = await getRunningProcessNames();
@@ -571,6 +611,10 @@ function startTrackingGameSession(gameId, title, executablePath = null, installP
           if (mainWindow && !mainWindow.isDestroyed()) {
             try { mainWindow.webContents.send('game:sessionEnded', { gameId, title: session.title }) } catch {}
           }
+          checkIsAnyGameRunning().then((stillRunning) => {
+            isGameCurrentlyRunning = stillRunning;
+            updateHudDisplayState();
+          }).catch(() => {});
         }
       } else {
         session.consecutiveMisses++;
@@ -617,6 +661,10 @@ function endGameSession(session) {
       console.error('[SessionTracker] Failed to record play session:', err);
     }
   }
+  checkIsAnyGameRunning().then((stillRunning) => {
+    isGameCurrentlyRunning = stillRunning;
+    updateHudDisplayState();
+  }).catch(() => {});
 }
 
 function flushAllActiveSessions() {
@@ -631,6 +679,7 @@ function flushAllActiveSessions() {
 
 
 let overlayWindow = null;
+let hudWindow = null;
 let lastFocusedGame = { id: null, title: '' };
 
 const isAllowedAppUrl = (targetUrl) => {
@@ -651,6 +700,57 @@ const isAllowedAppUrl = (targetUrl) => {
   }
 }
 
+function attachSpellcheckContextMenu(targetWindow) {
+  if (!targetWindow || targetWindow.isDestroyed()) return
+  targetWindow.webContents.on('context-menu', (event, params) => {
+    if (!params.isEditable && !params.misspelledWord) return
+
+    const menu = new Menu()
+
+    // 1. Spellcheck suggestions & dictionary
+    if (params.misspelledWord) {
+      if (params.dictionarySuggestions && params.dictionarySuggestions.length > 0) {
+        for (const suggestion of params.dictionarySuggestions) {
+          menu.append(
+            new MenuItem({
+              label: suggestion,
+              click: () => targetWindow.webContents.replaceMisspelling(suggestion)
+            })
+          )
+        }
+      } else {
+        menu.append(
+          new MenuItem({
+            label: 'No spelling suggestions',
+            enabled: false
+          })
+        )
+      }
+
+      menu.append(
+        new MenuItem({
+          label: `Add "${params.misspelledWord}" to dictionary`,
+          click: () => targetWindow.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord)
+        })
+      )
+      menu.append(new MenuItem({ type: 'separator' }))
+    }
+
+    // 2. Standard editing options (Undo/Redo, Cut/Copy/Paste)
+    if (params.isEditable) {
+      menu.append(new MenuItem({ role: 'undo', label: 'Undo' }))
+      menu.append(new MenuItem({ role: 'redo', label: 'Redo' }))
+      menu.append(new MenuItem({ type: 'separator' }))
+      menu.append(new MenuItem({ role: 'cut', label: 'Cut' }))
+      menu.append(new MenuItem({ role: 'copy', label: 'Copy' }))
+      menu.append(new MenuItem({ role: 'paste', label: 'Paste' }))
+      menu.append(new MenuItem({ role: 'selectAll', label: 'Select All' }))
+    }
+
+    menu.popup({ window: targetWindow })
+  })
+}
+
 function createOverlayWindow() {
   if (overlayWindow && !overlayWindow.isDestroyed()) return;
   overlayWindow = new BrowserWindow({
@@ -669,8 +769,11 @@ function createOverlayWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      spellcheck: true,
     },
   });
+
+  attachSpellcheckContextMenu(overlayWindow);
 
   overlayWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('https://')) shell.openExternal(url);
@@ -720,6 +823,414 @@ function toggleOverlay() {
   }
 }
 
+let isGameCurrentlyRunning = false;
+let hudMonitorTimer = null;
+let cachedGameExeNames = null;
+let lastGameExeCacheTime = 0;
+
+function getKnownGameExeSet() {
+  const now = Date.now();
+  if (cachedGameExeNames && (now - lastGameExeCacheTime < 300000)) {
+    return cachedGameExeNames;
+  }
+  const set = new Set();
+  if (db) {
+    try {
+      const installed = db.prepare('SELECT executable_path, install_path FROM games WHERE is_installed = 1 AND is_utility = 0').all();
+      for (const g of installed) {
+        if (g.executable_path) {
+          const bName = path.basename(g.executable_path).toLowerCase();
+          if (isCleanGameExe(bName)) set.add(bName);
+        } else if (g.install_path) {
+          try {
+            const folderExes = findGameExecutables(g.install_path);
+            for (const e of folderExes) {
+              if (isCleanGameExe(e)) set.add(e.toLowerCase());
+            }
+          } catch {}
+        }
+      }
+    } catch {}
+  }
+  cachedGameExeNames = set;
+  lastGameExeCacheTime = now;
+  return set;
+}
+
+async function checkIsAnyGameRunning() {
+  // 1. Any active session launched through Logpile
+  for (const [_id, session] of activeGameSessions.entries()) {
+    if (session && !session.isEnded) return true;
+  }
+
+  // 2. Any installed game running anywhere in Windows (Steam, Epic, GOG, desktop, etc.)
+  const knownExes = getKnownGameExeSet();
+  if (knownExes.size > 0) {
+    const running = await getRunningProcessNames();
+    for (const exe of knownExes) {
+      if (running.has(exe)) return true;
+    }
+  }
+
+  return false;
+}
+
+function getHudWindowBounds(position, orientation = 'horizontal') {
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { x, y, width: screenWidth, height: screenHeight } = primaryDisplay.bounds;
+
+  const isVertical = orientation === 'vertical';
+  const hudWidth = isVertical ? 160 : 850;
+  const hudHeight = isVertical ? 260 : 28;
+
+  let posX = x;
+  let posY = y;
+
+  switch (position) {
+    case 'top-left':
+      posX = x;
+      posY = y;
+      break;
+    case 'top-center':
+      posX = x + Math.round((screenWidth - hudWidth) / 2);
+      posY = y;
+      break;
+    case 'top-right':
+      posX = x + screenWidth - hudWidth;
+      posY = y;
+      break;
+    case 'left-center':
+      posX = x;
+      posY = y + Math.round((screenHeight - hudHeight) / 2);
+      break;
+    case 'right-center':
+      posX = x + screenWidth - hudWidth;
+      posY = y + Math.round((screenHeight - hudHeight) / 2);
+      break;
+    case 'bottom-left':
+      posX = x;
+      posY = y + screenHeight - hudHeight;
+      break;
+    case 'bottom-center':
+      posX = x + Math.round((screenWidth - hudWidth) / 2);
+      posY = y + screenHeight - hudHeight;
+      break;
+    case 'bottom-right':
+    default:
+      posX = x + screenWidth - hudWidth;
+      posY = y + screenHeight - hudHeight;
+      break;
+  }
+
+  return { x: posX, y: posY, width: hudWidth, height: hudHeight };
+}
+
+function createHudWindow() {
+  if (hudWindow && !hudWindow.isDestroyed()) return;
+  try {
+    const settings = db ? (getLibrarySettings(db) || {}) : {};
+    const bounds = getHudWindowBounds(settings.fpsPosition || 'top-left', settings.fpsOrientation || 'horizontal');
+
+    hudWindow = new BrowserWindow({
+      x: bounds.x,
+      y: bounds.y,
+      width: bounds.width,
+      height: bounds.height,
+      frame: false,
+      transparent: true,
+      alwaysOnTop: true,
+      skipTaskbar: true,
+      show: false,
+      resizable: false,
+      focusable: false,
+      backgroundColor: '#00000000',
+      hasShadow: false,
+      thickFrame: false,
+      roundedCorners: false,
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.cjs'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: false,
+        backgroundThrottling: false,
+      },
+    });
+
+    hudWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    hudWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+    hudWindow.setIgnoreMouseEvents(true);
+
+    const isDev = !app.isPackaged && (process.argv.includes('--dev') || process.env.NODE_ENV === 'development');
+    const rendererUrl = !app.isPackaged ? (process.env.ELECTRON_RENDERER_URL || (isDev ? 'http://127.0.0.1:5173' : null)) : null;
+    const indexPath = path.join(__dirname, '..', 'app-dist', 'index.html');
+
+    if (rendererUrl) {
+      hudWindow.loadURL(`${rendererUrl}#hud`);
+    } else {
+      hudWindow.loadFile(indexPath, { hash: 'hud' });
+    }
+  } catch (err) {
+    console.warn('[HUD] Failed to create hudWindow:', err?.message);
+  }
+}
+
+function updateHudDisplayState(forceShow = false) {
+  if (!hudWindow || hudWindow.isDestroyed()) {
+    createHudWindow();
+  }
+  if (!hudWindow || hudWindow.isDestroyed()) return;
+
+  const settings = db ? (getLibrarySettings(db) || {}) : {};
+  const fpsEnabled = !!settings.fpsEnabled;
+  const fpsTestMode = settings.fpsTestMode !== undefined ? !!settings.fpsTestMode : false;
+
+  // HUD Visibility Rules:
+  // - If fpsTestMode is true (Testing Mode): HUD stays on continuously across desktop and apps,
+  //   completely independent of whether Logpile is focused, minimized, or in the background.
+  // - If fpsTestMode is false (In-Game Only): HUD strictly displays ONLY when a game is running
+  //   (isGameCurrentlyRunning) and automatically hides when the game closes.
+  const shouldShow = fpsEnabled && (isGameCurrentlyRunning || fpsTestMode || forceShow);
+
+  try {
+    if (shouldShow) {
+      const bounds = getHudWindowBounds(settings.fpsPosition || 'top-left', settings.fpsOrientation || 'horizontal');
+      hudWindow.setBounds(bounds);
+      hudWindow.setPosition(bounds.x, bounds.y);
+      hudWindow.setSize(bounds.width, bounds.height);
+
+      hudWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+      hudWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+      hudWindow.setIgnoreMouseEvents(true);
+
+      if (!hudWindow.isVisible()) {
+        hudWindow.showInactive();
+      }
+    } else {
+      if (hudWindow.isVisible()) {
+        hudWindow.hide();
+      }
+    }
+  } catch (err) {
+    console.warn('[HUD] updateHudDisplayState error:', err?.message);
+  }
+}
+
+function syncHudVisibility(_enabled) {
+  updateHudDisplayState();
+}
+
+function startHudGameMonitor() {
+  if (hudMonitorTimer) clearInterval(hudMonitorTimer);
+  createHudWindow();
+
+  hudMonitorTimer = setInterval(async () => {
+    try {
+      const settings = db ? (getLibrarySettings(db) || {}) : {};
+      if (!settings.fpsEnabled) {
+        if (hudWindow && !hudWindow.isDestroyed() && hudWindow.isVisible()) {
+          hudWindow.hide();
+        }
+        return;
+      }
+
+      const running = await checkIsAnyGameRunning();
+      if (running !== isGameCurrentlyRunning) {
+        isGameCurrentlyRunning = running;
+        updateHudDisplayState();
+      } else if (isGameCurrentlyRunning && hudWindow && !hudWindow.isDestroyed()) {
+        if (!hudWindow.isVisible()) {
+          updateHudDisplayState();
+        } else {
+          hudWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+        }
+      }
+    } catch {}
+  }, 2000);
+}
+
+let systemIs24Hour = false;
+let lastTimeRegCheck = 0;
+
+function checkSystemTimeFormat() {
+  const now = Date.now();
+  if (now - lastTimeRegCheck < 10000) return;
+  lastTimeRegCheck = now;
+
+  if (process.platform === 'win32') {
+    execFile('reg', ['query', 'HKCU\\Control Panel\\International', '/v', 'iTime'], { windowsHide: true, timeout: 800 }, (err, stdout) => {
+      if (!err && stdout) {
+        const match = stdout.match(/iTime\s+REG_SZ\s+([01])/i);
+        if (match) {
+          systemIs24Hour = match[1] === '1';
+        }
+      }
+    });
+  } else {
+    try {
+      systemIs24Hour = !new Intl.DateTimeFormat().resolvedOptions().hour12;
+    } catch {}
+  }
+}
+
+function formatSystemClock(date, is24Hour) {
+  const d = date instanceof Date ? date : new Date(date || Date.now());
+  const mins = String(d.getMinutes()).padStart(2, '0');
+  if (is24Hour) {
+    const hours = String(d.getHours()).padStart(2, '0');
+    return `${hours}:${mins}`;
+  }
+  let hours = d.getHours();
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12 || 12;
+  return `${hours}:${mins} ${ampm}`;
+}
+
+checkSystemTimeFormat();
+
+let hardwareTelemetry = {
+  cpuUsage: 12,
+  ramUsage: 44,
+  ramUsedGb: 14.1,
+  ramTotalGb: 31.8,
+  hasGpu: true,
+  gpuUsage: 1,
+  gpuTemp: 51,
+  hasBattery: false,
+  batteryPercent: null,
+  batteryCharging: false,
+  is24Hour: false,
+  clock: formatSystemClock(new Date(), false),
+};
+let prevCpuTimes = null;
+let hardwareMonitorTimer = null;
+let hasPhysicalBatteryChecked = false;
+
+function checkPhysicalBatteryHardware() {
+  if (hasPhysicalBatteryChecked || process.platform !== 'win32') return;
+  hasPhysicalBatteryChecked = true;
+  execFile('powershell', ['-NoProfile', '-Command', '(Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue | Measure-Object).Count'], { windowsHide: true, timeout: 3000 }, (err, stdout) => {
+    if (!err && stdout) {
+      const count = parseInt(stdout.trim(), 10);
+      hardwareTelemetry.hasBattery = !isNaN(count) && count > 0;
+    }
+  });
+}
+checkPhysicalBatteryHardware();
+
+function sampleHardwareStats() {
+  try {
+    const cpus = os.cpus();
+    if (cpus && cpus.length > 0) {
+      let idle = 0;
+      let total = 0;
+      for (const cpu of cpus) {
+        for (const t in cpu.times) total += cpu.times[t];
+        idle += cpu.times.idle;
+      }
+      if (prevCpuTimes) {
+        const idleDiff = idle - prevCpuTimes.idle;
+        const totalDiff = total - prevCpuTimes.total;
+        if (totalDiff > 0) {
+          hardwareTelemetry.cpuUsage = Math.max(1, Math.min(100, Math.round(100 - (100 * idleDiff / totalDiff))));
+        }
+      }
+      prevCpuTimes = { idle, total };
+    }
+
+    const totalMem = os.totalmem();
+    const freeMem = os.freemem();
+    const usedMem = totalMem - freeMem;
+    hardwareTelemetry.ramUsage = Math.round((usedMem / totalMem) * 100);
+    hardwareTelemetry.ramUsedGb = Number((usedMem / (1024 ** 3)).toFixed(1));
+    hardwareTelemetry.ramTotalGb = Number((totalMem / (1024 ** 3)).toFixed(1));
+
+    checkSystemTimeFormat();
+    const now = new Date();
+    hardwareTelemetry.is24Hour = systemIs24Hour;
+    hardwareTelemetry.clock = formatSystemClock(now, systemIs24Hour);
+
+    if (process.platform === 'win32') {
+      execFile('nvidia-smi', ['--query-gpu=utilization.gpu,temperature.gpu', '--format=csv,noheader,nounits'], { windowsHide: true, timeout: 1500 }, (err, stdout) => {
+        if (!err && stdout) {
+          const parts = stdout.trim().split(',');
+          if (parts.length >= 2) {
+            const u = parseInt(parts[0].trim(), 10);
+            const t = parseFloat(parts[1].trim());
+            if (!isNaN(u)) hardwareTelemetry.gpuUsage = u;
+            if (!isNaN(t)) hardwareTelemetry.gpuTemp = Math.round(t);
+
+            if (hudWindow && !hudWindow.isDestroyed() && hudWindow.isVisible()) {
+              hudWindow.webContents.send('hardware:telemetry-update', hardwareTelemetry);
+            }
+            if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
+              mainWindow.webContents.send('hardware:telemetry-update', hardwareTelemetry);
+            }
+          }
+        }
+      });
+    }
+
+    if (hudWindow && !hudWindow.isDestroyed() && hudWindow.isVisible()) {
+      hudWindow.webContents.send('hardware:telemetry-update', hardwareTelemetry);
+    }
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
+      mainWindow.webContents.send('hardware:telemetry-update', hardwareTelemetry);
+    }
+  } catch {}
+}
+
+function startHardwareMonitor() {
+  if (hardwareMonitorTimer) clearInterval(hardwareMonitorTimer);
+  sampleHardwareStats();
+  hardwareMonitorTimer = setInterval(sampleHardwareStats, 2000);
+}
+
+function registerGlobalShortcuts() {
+  try {
+    globalShortcut.unregisterAll()
+  } catch {}
+
+  const settings = db ? (getLibrarySettings(db) || {}) : {}
+  const overlayKey = settings.overlayShortcut || 'CommandOrControl+Shift+Space'
+  const fpsKey = settings.fpsShortcut || 'CommandOrControl+Shift+F'
+
+  if (overlayKey) {
+    try {
+      globalShortcut.register(overlayKey, () => {
+        toggleOverlay()
+      })
+    } catch (err) {
+      console.warn('[Shortcuts] Failed to register overlay shortcut:', overlayKey, err?.message)
+    }
+  }
+
+  if (fpsKey) {
+    try {
+      globalShortcut.register(fpsKey, () => {
+        try {
+          const current = getLibrarySettings(db) || {}
+          const nextEnabled = !current.fpsEnabled
+          setLibrarySettings(db, { fpsEnabled: nextEnabled })
+          syncHudVisibility(nextEnabled)
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('fps:status-changed', { fpsEnabled: nextEnabled })
+          }
+          if (overlayWindow && !overlayWindow.isDestroyed()) {
+            overlayWindow.webContents.send('fps:status-changed', { fpsEnabled: nextEnabled })
+          }
+          if (hudWindow && !hudWindow.isDestroyed()) {
+            hudWindow.webContents.send('fps:status-changed', { fpsEnabled: nextEnabled })
+          }
+        } catch (fErr) {
+          console.warn('[Shortcuts] Error toggling FPS status:', fErr?.message)
+        }
+      })
+    } catch (err) {
+      console.warn('[Shortcuts] Failed to register FPS shortcut:', fpsKey, err?.message)
+    }
+  }
+}
+
 function createWindow() {
   const windowState = windowStateKeeper({
     defaultWidth: 1280,
@@ -746,8 +1257,11 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      spellcheck: true,
     },
   })
+
+  attachSpellcheckContextMenu(mainWindow)
 
   windowState.manage(mainWindow)
 
@@ -769,6 +1283,7 @@ function createWindow() {
       return false
     }
   })
+
   mainWindow.once('ready-to-show', () => {
     mainWindow.show()
     try {
@@ -965,6 +1480,7 @@ function registerIpc() {
     return stats
   })
   ipcMain.handle('system:getSpecs', () => getSystemSpecs())
+  ipcMain.handle('system:getConnectedGamepads', () => getConnectedGamepads())
   ipcMain.handle('system:openExternal', async (_event, url) => {
     if (typeof url === 'string' && /^https?:\/\//i.test(url.trim())) {
       try {
@@ -1068,18 +1584,75 @@ function registerIpc() {
       igdbClientId: typeof settings.igdbClientId === 'string' ? settings.igdbClientId : '',
       igdbClientSecret: typeof settings.igdbClientSecret === 'string' ? settings.igdbClientSecret : '',
       heroResolution: typeof settings.heroResolution === 'string' && settings.heroResolution ? settings.heroResolution : '2.5k',
+      preferAnimatedArtwork: Boolean(settings.preferAnimatedArtwork),
+      preferAnimatedCovers: Boolean(settings.preferAnimatedCovers),
       minimizeToTray: Boolean(settings.minimizeToTray),
+      overlayShortcut: settings.overlayShortcut || 'CommandOrControl+Shift+Space',
+      fpsShortcut: settings.fpsShortcut || 'CommandOrControl+Shift+F',
+      searchShortcut: settings.searchShortcut || 'CommandOrControl+F',
+      fpsEnabled: Boolean(settings.fpsEnabled),
+      fpsPosition: settings.fpsPosition || 'top-right',
+      fpsOrientation: settings.fpsOrientation || 'horizontal',
+      fpsOpacity: Number(settings.fpsOpacity) || 80,
+      fpsStyle: settings.fpsStyle || 'minimalist-pill',
+      fpsMetrics: settings.fpsMetrics || {
+        fps: true,
+        onePercentLow: true,
+        frametime: true,
+        gpu: true,
+        cpu: true,
+        ram: true,
+        battery: true,
+        clock: true,
+      },
     }
   })
+  ipcMain.handle('hardware:getMetrics', () => hardwareTelemetry)
   ipcMain.handle('db:setLibrarySettings', (_event, settings) => {
     const next = setLibrarySettings(db, settings) || {}
+    if (settings && (settings.overlayShortcut !== undefined || settings.fpsShortcut !== undefined)) {
+      registerGlobalShortcuts()
+    }
+    if (settings && (settings.fpsEnabled !== undefined || settings.fpsPosition !== undefined || settings.fpsOrientation !== undefined || settings.fpsStyle !== undefined || settings.fpsOpacity !== undefined || settings.fpsMetrics !== undefined || settings.fpsTestMode !== undefined)) {
+      updateHudDisplayState()
+    }
+    if (hudWindow && !hudWindow.isDestroyed()) {
+      try {
+        hudWindow.webContents.send('fps:settings-updated', next)
+      } catch {}
+    }
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      try {
+        mainWindow.webContents.send('fps:settings-updated', next)
+      } catch {}
+    }
     return {
       autoHideSupportEntries: Boolean(next.autoHideSupportEntries),
       steamGridDbApiKey: typeof next.steamGridDbApiKey === 'string' ? next.steamGridDbApiKey : '',
       igdbClientId: typeof next.igdbClientId === 'string' ? next.igdbClientId : '',
       igdbClientSecret: typeof next.igdbClientSecret === 'string' ? next.igdbClientSecret : '',
       heroResolution: typeof next.heroResolution === 'string' && next.heroResolution ? next.heroResolution : '2.5k',
+      preferAnimatedArtwork: Boolean(next.preferAnimatedArtwork),
+      preferAnimatedCovers: Boolean(next.preferAnimatedCovers),
       minimizeToTray: Boolean(next.minimizeToTray),
+      overlayShortcut: next.overlayShortcut || 'CommandOrControl+Shift+Space',
+      fpsShortcut: next.fpsShortcut || 'CommandOrControl+Shift+F',
+      searchShortcut: next.searchShortcut || 'CommandOrControl+F',
+      fpsEnabled: Boolean(next.fpsEnabled),
+      fpsPosition: next.fpsPosition || 'top-right',
+      fpsOrientation: next.fpsOrientation || 'horizontal',
+      fpsOpacity: Number(next.fpsOpacity) || 80,
+      fpsStyle: next.fpsStyle || 'minimalist-pill',
+      fpsMetrics: next.fpsMetrics || {
+        fps: true,
+        onePercentLow: true,
+        frametime: true,
+        gpu: true,
+        cpu: true,
+        ram: true,
+        battery: true,
+        clock: true,
+      },
     }
   })
   ipcMain.handle('db:getActivityLog', (_event, limit) => {
@@ -1816,6 +2389,17 @@ function registerIpc() {
       return { success: false, error: err.message }
     }
   })
+  function maybeAutoUnloadEngine() {
+    try {
+      if (!db) return;
+      const row = db.prepare("SELECT value FROM app_settings WHERE key = 'ai_auto_unload_on_game'").get();
+      const shouldUnload = row ? (row.value === '1' || row.value === 'true') : true;
+      if (shouldUnload) {
+        unloadEngine();
+      }
+    } catch {}
+  }
+
   ipcMain.handle('game:launchExecutable', async (_event, executablePath, launchArguments = '', launchMeta = {}) => {
     const targetExe = resolvePortablePath(executablePath)
     if (typeof targetExe !== 'string' || !path.isAbsolute(targetExe) || path.extname(targetExe).toLowerCase() !== '.exe') {
@@ -1846,7 +2430,7 @@ function registerIpc() {
       child.once('error', (error) => reject(new Error(error.message || 'The mapped executable could not be launched.')))
       child.once('spawn', () => {
         child.unref()
-        try { unloadEngine() } catch {}
+        maybeAutoUnloadEngine()
         try {
           const gameId = launchMeta?.gameId || (Number.isInteger(launchMeta?.id) ? launchMeta.id : null)
           const title = launchMeta?.title || path.basename(targetExe, '.exe')
@@ -1889,7 +2473,7 @@ function registerIpc() {
     }
     try {
       await shell.openExternal(uri)
-      try { unloadEngine() } catch {}
+      maybeAutoUnloadEngine()
       logLaunchAttempt({ ...details, result: 'resolved' })
       try {
         const gameId = meta.gameId || (Number.isInteger(meta.id) ? meta.id : null)
@@ -2033,10 +2617,22 @@ function registerIpc() {
       try {
         const stats = getLibraryStats(db);
 
-        // Detect if user mentions a specific game entity in prompt (prioritize mentioned game over UI-focused game)
-        const mentionedGame = findGameEntityInText(db, userPrompt);
-        if (mentionedGame?.canonical_title) {
-          targetTitle = mentionedGame.canonical_title;
+        // When a game is active or dossier is open, STRICTLY prioritize that game.
+        // Never switch away unless the user explicitly asks about another game (e.g. "switch to [game]" or "how about [game]")
+        if (!targetTitle) {
+          const mentionedGame = findGameEntityInText(db, userPrompt);
+          if (mentionedGame?.canonical_title) {
+            targetTitle = mentionedGame.canonical_title;
+          }
+        } else {
+          // If a game is already active, only switch if user explicitly types "switch to <game>" or "how about <game>"
+          const explicitSwitchMatch = (userPrompt || '').match(/\b(?:switch to|how about|what about)\s+([a-zA-Z0-9\s:''-]+?)(?:\s+(?:how|where|what|why|who|stuck|guide|walkthrough)|\?|$)/i);
+          if (explicitSwitchMatch && explicitSwitchMatch[1]?.trim()) {
+            const explicitGame = findGameEntityInText(db, explicitSwitchMatch[1]);
+            if (explicitGame?.canonical_title) {
+              targetTitle = explicitGame.canonical_title;
+            }
+          }
         }
 
         // Check if prompt explicitly mentions a game title even if not in DB
@@ -2071,6 +2667,8 @@ function registerIpc() {
         // Fetch target game metadata if available (ignore utilities)
         let activeGameDetails = null;
         let guideNotes = '';
+        let hasDirectMatch = false;
+        let guideChunks = [];
         if (targetTitle) {
           activeGameDetails = db.prepare(`
             SELECT id, canonical_title, genre, developer, publisher, release_date, description, play_time_seconds
@@ -2083,6 +2681,8 @@ function registerIpc() {
             try {
               const chunks = searchGameKnowledge(db, activeGameDetails.id, userPrompt, 3, activeGameDetails.canonical_title);
               if (chunks && chunks.length > 0) {
+                guideChunks = chunks;
+                hasDirectMatch = chunks.some((c) => Boolean(c.isDirectMatch));
                 const formattedChunks = chunks.map((c) => `[${c.section_title}]:\n${c.content}`).join('\n\n');
                 guideNotes = `Game Guide Context for ${activeGameDetails.canonical_title}:\n${formattedChunks}\n\nUser Question: ${userPrompt.trim()}\n\nInstructions: Answer using the specific mechanics, items, and tactics described in the guide context above. Avoid generic filler advice. Ensure your response is concise (under 120 words) but always completes its final sentence cleanly. Do not leave thoughts unfinished.`;
               }
@@ -2111,12 +2711,24 @@ function registerIpc() {
             summary: activeGameDetails.description ? activeGameDetails.description.slice(0, 220) : '',
           } : null,
           guideNotes,
+          hasDirectMatch,
+          guideChunks,
         };
       } catch (err) {
         console.warn('[AI] Error preparing library context:', err?.message);
       }
     }
-    return askGamingAssistant(app, userPrompt, targetTitle, libraryContext, { ...options, db });
+    return askGamingAssistant(app, userPrompt, targetTitle, libraryContext, {
+      ...options,
+      db,
+      onToken: (payload) => {
+        try {
+          if (_event?.sender && !_event.sender.isDestroyed()) {
+            _event.sender.send('ai:token', payload);
+          }
+        } catch {}
+      },
+    });
   });
   ipcMain.handle('ai:getRecommendation', async (_event, userPreferencePrompt, options = {}) => {
     const installed = db ? db.prepare("SELECT id, canonical_title, genre FROM games WHERE is_installed = 1 AND is_utility = 0 LIMIT 150").all() : [];
@@ -2141,6 +2753,107 @@ function registerIpc() {
   });
   ipcMain.handle('ai:parseFilter', async (_event, text) => {
     return await parseLibraryFilterIntent(text, { app });
+  });
+
+  ipcMain.handle('ai:generateHudTheme', async (_event, userPrompt, gameInfo = null, options = {}) => {
+    return await generateHudThemeDesign(userPrompt, gameInfo, { ...options, app });
+  });
+
+  ipcMain.handle('ai:selectModelFile', async () => {
+    try {
+      const result = await dialog.showOpenDialog(mainWindow, {
+        title: 'Select Local GGUF Model',
+        filters: [{ name: 'GGUF Models (*.gguf)', extensions: ['gguf'] }],
+        properties: ['openFile']
+      });
+      if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+        return { canceled: true };
+      }
+      const filePath = result.filePaths[0];
+      const stats = fs.statSync(filePath);
+      return {
+        canceled: false,
+        filePath,
+        fileName: path.basename(filePath),
+        sizeMb: Math.round(stats.size / (1024 * 1024)),
+      };
+    } catch (err) {
+      return { canceled: true, error: err?.message };
+    }
+  });
+
+  ipcMain.handle('ai:attachModelFile', async (_event, filePath, action = 'link') => {
+    try {
+      if (!filePath || !fs.existsSync(filePath)) {
+        throw new Error('File does not exist: ' + filePath);
+      }
+      const modelsDir = getModelsDirectory(app);
+      if (!fs.existsSync(modelsDir)) {
+        fs.mkdirSync(modelsDir, { recursive: true });
+      }
+
+      let activePath = filePath;
+      const fileName = path.basename(filePath);
+      const destPath = path.join(modelsDir, fileName);
+
+      if (action === 'move') {
+        if (filePath.toLowerCase() !== destPath.toLowerCase()) {
+          fs.renameSync(filePath, destPath);
+          activePath = destPath;
+        }
+      } else if (action === 'copy') {
+        if (filePath.toLowerCase() !== destPath.toLowerCase()) {
+          fs.copyFileSync(filePath, destPath);
+          activePath = destPath;
+        }
+      }
+
+      if (db) {
+        db.prepare("INSERT INTO app_settings (key, value) VALUES ('ai_custom_model_path', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(activePath);
+      }
+      setCustomModelPath(activePath);
+      unloadEngine().catch(() => {});
+      return { success: true, status: getModelStatus(app) };
+    } catch (err) {
+      return { success: false, error: err?.message };
+    }
+  });
+
+  ipcMain.handle('ai:setExecutionMode', (_event, mode) => {
+    if (['cpu-safe', 'gamer-balanced', 'full-beast'].includes(mode)) {
+      setExecutionMode(mode);
+      if (db) {
+        try {
+          db.prepare("INSERT INTO app_settings (key, value) VALUES ('ai_execution_mode', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(mode);
+        } catch {}
+      }
+      return { success: true, mode };
+    }
+    return { success: false, error: 'Invalid execution mode' };
+  });
+
+  ipcMain.handle('ai:getExecutionMode', () => {
+    return getExecutionMode();
+  });
+
+  ipcMain.handle('ai:setAutoUnload', (_event, enabled) => {
+    const val = enabled ? '1' : '0';
+    if (db) {
+      try {
+        db.prepare("INSERT INTO app_settings (key, value) VALUES ('ai_auto_unload_on_game', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(val);
+      } catch {}
+    }
+    return { success: true, enabled: Boolean(enabled) };
+  });
+
+  ipcMain.handle('ai:getAutoUnload', () => {
+    if (db) {
+      try {
+        const row = db.prepare("SELECT value FROM app_settings WHERE key = 'ai_auto_unload_on_game'").get();
+        return row ? (row.value === '1' || row.value === 'true') : true;
+      } catch {}
+    }
+    return true;
   });
 
   ipcMain.handle('guides:scan', () => {
@@ -2214,11 +2927,17 @@ function registerIpc() {
     if (mainWindow && !mainWindow.isDestroyed()) {
       try { mainWindow.webContents.send('voice:recognized', data); } catch {}
     }
+    if (overlayWindow && !overlayWindow.isDestroyed()) {
+      try { overlayWindow.webContents.send('voice:recognized', data); } catch {}
+    }
   });
 
   voiceService.on('stateChange', (data) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       try { mainWindow.webContents.send('voice:stateChange', data); } catch {}
+    }
+    if (overlayWindow && !overlayWindow.isDestroyed()) {
+      try { overlayWindow.webContents.send('voice:stateChange', data); } catch {}
     }
   });
 
@@ -2379,6 +3098,12 @@ app.whenReady().then(() => {
   if (process.platform === 'win32') app.setAppUserModelId('com.logpile.library')
   db = createDatabase(path.join(app.getPath('userData'), 'logpile.db'))
   try {
+    const savedCustomModel = db.prepare("SELECT value FROM app_settings WHERE key = 'ai_custom_model_path'").get()
+    if (savedCustomModel?.value) setCustomModelPath(savedCustomModel.value)
+    const savedExecMode = db.prepare("SELECT value FROM app_settings WHERE key = 'ai_execution_mode'").get()
+    if (savedExecMode?.value) setExecutionMode(savedExecMode.value)
+  } catch {}
+  try {
     const { relinkAllLocalArtwork } = require('../src/main/services/artworkService.cjs')
     relinkAllLocalArtwork(db, app.getPath('userData'))
   } catch (migErr) {
@@ -2395,10 +3120,14 @@ app.whenReady().then(() => {
   createWindow()
   createOverlayWindow()
   try {
-    globalShortcut.register('CommandOrControl+Space', () => {
-      toggleOverlay()
-    })
+    startHudGameMonitor()
+    startHardwareMonitor()
   } catch {}
+  try {
+    registerGlobalShortcuts()
+  } catch (sErr) {
+    console.warn('[Shortcuts] Initial shortcut setup error:', sErr?.message)
+  }
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
@@ -2414,6 +3143,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   app.isQuitting = true
+  if (hudMonitorTimer) clearInterval(hudMonitorTimer);
   try { globalShortcut.unregisterAll() } catch {}
   try { stopSteamFamilyWatcher() } catch {}
   try { voiceService.stop() } catch {}

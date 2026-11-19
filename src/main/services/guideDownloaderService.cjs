@@ -3,7 +3,7 @@ const path = require('path')
 const { indexSingleFile } = require('./guideImporter.cjs')
 const { hasGuide } = require('../../../electron/db.cjs')
 
-const USER_AGENT = 'Logpile/1.1 (https://github.com/ritesh-soni-logpile/logpile; contact@logpile.local)'
+const USER_AGENT = 'Logpile/1.3.5 (https://github.com/ritesh-soni-logpile/logpile; contact@logpile.local)'
 
 const HEADERS = {
   'User-Agent': USER_AGENT,
@@ -53,6 +53,9 @@ function cleanTitleForWiki(title) {
     .replace(/\s*\b(?:game of the year edition|goty edition|definitive edition|remastered|enhanced edition|premium edition|legacy edition|director'?s? cut)\b.*$/gi, '')
     .replace(/\s*[-:]\s*(?:prologue|beta|demo|starter pack|starter edition|ultimate edition|redmod)\b.*$/gi, '')
     .replace(/\s+\b(?:enhanced|legacy|remastered|goty)\b$/gi, '')
+
+  // 5. Clean up any trailing punctuation (colons, dashes, extra spaces)
+  cleaned = cleaned.replace(/[:\-–—\s]+$/, '')
 
   return cleaned.replace(/\s+/g, ' ').trim()
 }
@@ -166,18 +169,19 @@ async function fetchPageWikitext(pageTitle) {
 }
 
 /**
- * Extracts subpage links from StrategyWiki main hub page.
+ * Extracts subpage links from StrategyWiki main hub page, Table of Contents, or Walkthrough.
  */
 function extractSubpageLinks(wikitext, hubTitle) {
   if (!wikitext) return []
   const escapedHub = hubTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const regex = new RegExp(`\\[\\[(${escapedHub}\\/[^\\|\\]]+)(?:\\|([^\\]]+))?\\]\\]`, 'gi')
+  const pattern = new RegExp(`\\[\\[(?:(${escapedHub}\\/[^\\|\\]#]+)|\\/([^\\|\\]#]+))(?:#[^\\|\\]]*)?(?:\\|([^\\]]+))?\\]\\]`, 'gi')
   const links = []
   let match
-  while ((match = regex.exec(wikitext)) !== null) {
-    const page = match[1].trim()
-    const label = match[2] ? match[2].trim() : page.replace(`${hubTitle}/`, '')
-    if (!links.some((l) => l.page === page)) {
+  while ((match = pattern.exec(wikitext)) !== null) {
+    const rawPage = match[1] || `${hubTitle}/${match[2]}`
+    const page = rawPage.trim()
+    const label = (match[3] ? match[3].trim() : page.replace(`${hubTitle}/`, '')).trim()
+    if (!links.some((l) => l.page.toLowerCase() === page.toLowerCase())) {
       links.push({ page, label })
     }
   }
@@ -185,7 +189,8 @@ function extractSubpageLinks(wikitext, hubTitle) {
 }
 
 /**
- * Tier 1: Attempts to download a walkthrough from StrategyWiki.
+ * Deep StrategyWiki Extractor: Recursively fetches the hub page, Table of Contents,
+ * and up to 45 individual chapter/walkthrough/boss subpages without truncation.
  */
 async function fetchStrategyWikiGuide(cleanTitle, canonicalTitle) {
   let wikiTitle = await searchStrategyWikiDirect(cleanTitle)
@@ -202,35 +207,55 @@ async function fetchStrategyWikiGuide(cleanTitle, canonicalTitle) {
   if (!mainWikitext) return null
 
   const cleanedMain = cleanWikitextToMarkdown(mainWikitext, canonicalTitle)
-  // Check if content is substantive (> 200 chars and not just wiki category tags)
   const isMeaningful = cleanedMain.length > 200 && !/^(\[\[Category:[^\]]+\]\]\s*)+$/i.test(cleanedMain)
   if (!isMeaningful) return null
 
   let fullMarkdown = `# ${canonicalTitle} Guide\n\n## Overview\n\n${cleanedMain}\n\n`
 
-  let subpages = extractSubpageLinks(mainWikitext, wikiTitle)
-  if (subpages.length === 0) {
-    const tocWikitext = await fetchPageWikitext(`${wikiTitle}/Table of Contents`)
-    if (tocWikitext) {
-      subpages = extractSubpageLinks(tocWikitext, wikiTitle)
+  // Gather subpages across main hub, Table of Contents, and Walkthrough page
+  const subpagesMap = new Map()
+  const addLinks = (links) => {
+    for (const link of links) {
+      const key = link.page.toLowerCase()
+      if (!subpagesMap.has(key)) {
+        subpagesMap.set(key, link)
+      }
     }
   }
 
-  if (subpages.length > 0) {
-    const targetSubpages = subpages
-      .filter((s) => !/table of contents|staff|version/i.test(s.label))
-      .slice(0, 10)
+  addLinks(extractSubpageLinks(mainWikitext, wikiTitle))
 
-    for (const sub of targetSubpages) {
-      await new Promise((r) => setTimeout(r, 200))
+  try {
+    const [tocWikitext, walkWikitext] = await Promise.all([
+      fetchPageWikitext(`${wikiTitle}/Table of Contents`),
+      fetchPageWikitext(`${wikiTitle}/Walkthrough`),
+    ])
+    if (tocWikitext) addLinks(extractSubpageLinks(tocWikitext, wikiTitle))
+    if (walkWikitext) addLinks(extractSubpageLinks(walkWikitext, wikiTitle))
+  } catch {}
+
+  const EXCLUDE_PAGES_REGEX = /\b(table of contents|staff|version|history|box art|releases?|credits|trophies|achievements|categories)\b/i
+  const validSubpages = Array.from(subpagesMap.values())
+    .filter((s) => !EXCLUDE_PAGES_REGEX.test(s.label) && !EXCLUDE_PAGES_REGEX.test(s.page))
+    .slice(0, 45) // Deep walkthrough: pull up to 45 substantive chapters/areas/bosses
+
+  if (validSubpages.length > 0) {
+    for (const sub of validSubpages) {
+      if (batchCancelled) break
+      await new Promise((r) => setTimeout(r, 120))
       const subWiki = await fetchPageWikitext(sub.page)
       if (subWiki) {
         const cleanedSub = cleanWikitextToMarkdown(subWiki, canonicalTitle)
-        if (cleanedSub && cleanedSub.length > 60) {
+        if (cleanedSub && cleanedSub.length > 150 && !/^(\[\[Category:[^\]]+\]\]\s*)+$/i.test(cleanedSub)) {
           fullMarkdown += `## ${sub.label}\n\n${cleanedSub}\n\n`
         }
       }
     }
+  }
+
+  // Quality check: Guide must have at least 2 substantive sections and at least 1500 chars total
+  if (fullMarkdown.length < 1500) {
+    return null
   }
 
   return fullMarkdown
@@ -371,7 +396,8 @@ async function fetchWikipediaGuide(cleanTitle, canonicalTitle) {
 }
 
 /**
- * Downloads guide content using a 2-Tier pipeline (StrategyWiki -> Wikipedia fallback).
+ * Downloads guide content from StrategyWiki (deep walkthroughs with chapters and bosses).
+ * Wikipedia is intentionally excluded: Wikipedia only provides plot synopses and controls, not walkthroughs.
  */
 async function downloadGuideForGame(app, db, gameId, canonicalTitle) {
   if (!canonicalTitle) {
@@ -382,40 +408,20 @@ async function downloadGuideForGame(app, db, gameId, canonicalTitle) {
   let markdown = null
   let source = null
 
-  // --- Tier 1: StrategyWiki ---
+  // --- StrategyWiki: Deep Walkthrough Extractor ---
   try {
     markdown = await fetchStrategyWikiGuide(cleanTitle, canonicalTitle)
     if (markdown) {
       source = 'StrategyWiki'
-      console.log(`[GuideDownloader] StrategyWiki hit: ${canonicalTitle}`)
+      console.log(`[GuideDownloader] StrategyWiki hit: ${canonicalTitle} (${markdown.length} chars)`)
     }
   } catch (err) {
-    // Silently fall through to Wikipedia
+    console.warn(`[GuideDownloader] StrategyWiki error for ${canonicalTitle}:`, err?.message)
   }
 
-  // --- Tier 2: Wikipedia Fallback ---
   if (!markdown) {
-    try {
-      markdown = await fetchWikipediaGuide(cleanTitle, canonicalTitle)
-      if (!markdown && /[:\-–—]/.test(canonicalTitle)) {
-        const prefix = stripSubtitles(cleanTitle)
-        if (prefix && prefix !== cleanTitle) {
-          markdown = await fetchWikipediaGuide(prefix, canonicalTitle)
-        }
-      }
-      if (markdown) {
-        source = 'Wikipedia'
-        console.log(`[GuideDownloader] Wikipedia fallback: ${canonicalTitle}`)
-      }
-    } catch (err) {
-      // Fall through to skipped notice
-    }
-  }
-
-  // --- Tier 3: No public wiki entry ---
-  if (!markdown) {
-    console.log(`[GuideDownloader] Skipped (No public wiki entry): ${canonicalTitle}`)
-    return { success: false, error: 'No public wiki entry found.' }
+    console.log(`[GuideDownloader] No community walkthrough on StrategyWiki: ${canonicalTitle}`)
+    return { success: false, error: 'No community walkthrough found on StrategyWiki.' }
   }
 
   // Save to disk in logpile_data/guides/
@@ -429,19 +435,29 @@ async function downloadGuideForGame(app, db, gameId, canonicalTitle) {
   const filePath = path.join(guidesDir, `${safeBasename}.md`)
   fs.writeFileSync(filePath, markdown, 'utf8')
 
-  // Auto-FTS5 Ingestion immediately
-  let sectionsCount = 1
+  // Auto-FTS5 Ingestion immediately with strict quality gate check (Points 1, 2 & 3)
+  let sectionsCount = 0
   try {
     const importRes = indexSingleFile(filePath, gameId, db)
-    if (importRes && importRes.sectionsCount) {
+    if (importRes && importRes.success && (importRes.sectionsCount || 0) >= 2) {
       sectionsCount = importRes.sectionsCount
+    } else {
+      // Guide failed quality gate (was a stub, had empty headings, or lacked substantive walkthrough sections)
+      try {
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
+      } catch {}
+      if (db && gameId) {
+        try { db.prepare('UPDATE games SET has_guide = 0 WHERE id = ?').run(gameId) } catch {}
+      }
+      console.log(`[GuideDownloader] Rejected stub guide for "${canonicalTitle}": lacks detailed walkthrough sections.`)
+      return { success: false, error: 'Downloaded content lacks detailed walkthrough sections (stub rejected).' }
     }
   } catch (idxErr) {
     console.warn(`[GuideDownloader] FTS5 index notice for "${canonicalTitle}":`, idxErr?.message)
   }
 
-  // Update has_guide = 1 in database
-  if (db && gameId) {
+  // Update has_guide = 1 in database ONLY if quality gate passed
+  if (db && gameId && sectionsCount >= 2) {
     try {
       db.prepare('UPDATE games SET has_guide = 1 WHERE id = ?').run(gameId)
     } catch {}
@@ -528,7 +544,7 @@ module.exports = {
   cleanTitleForWiki,
   stripSubtitles,
   cleanWikitextToMarkdown,
-  fetchWikipediaGuide,
+  fetchStrategyWikiGuide,
   downloadGuideForGame,
   downloadGuidesBatch,
   cancelGuideBatch,

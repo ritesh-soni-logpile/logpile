@@ -364,6 +364,8 @@ export function AiAssistantDrawer({
   const [confirmClear, setConfirmClear] = useState(false)
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
+  const [streamingText, setStreamingText] = useState('')
+  const [streamSpeed, setStreamSpeed] = useState(null)
   const [modelStatus, setModelStatus] = useState(null)
   const [copiedIdx, setCopiedIdx] = useState(null)
   const [selectedPersona, setSelectedPersona] = useState(() => {
@@ -374,6 +376,20 @@ export function AiAssistantDrawer({
     }
   })
   const [activeGuideAvailable, setActiveGuideAvailable] = useState(false)
+
+  // Listen to live streaming tokens from local model
+  useEffect(() => {
+    if (!window.api?.ai?.onToken) return
+    const unsub = window.api.ai.onToken((payload) => {
+      if (payload?.chunk) {
+        setStreamingText((prev) => prev + payload.chunk)
+      }
+      if (payload?.tokPerSec) {
+        setStreamSpeed(payload.tokPerSec)
+      }
+    })
+    return () => unsub?.()
+  }, [])
 
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
@@ -426,12 +442,12 @@ export function AiAssistantDrawer({
     }
   }, [open, fetchStatus])
 
-  // Scroll to bottom when new messages arrive
+  // Scroll to bottom when new messages arrive or tokens stream in
   useEffect(() => {
-    if (open && messages.length > 0 && !showHistory) {
+    if (open && (messages.length > 0 || streamingText) && !showHistory) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
-  }, [messages, open, showHistory])
+  }, [messages, streamingText, open, showHistory])
 
   // Handle escape key
   useEffect(() => {
@@ -567,6 +583,8 @@ export function AiAssistantDrawer({
 
     setQuery('')
     setLoading(true)
+    setStreamingText('')
+    setStreamSpeed(null)
 
     if (modelStatus && !modelStatus.installed) {
       const botMsg = {
@@ -670,6 +688,8 @@ export function AiAssistantDrawer({
         localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(updatedSessionsWithError))
       } catch {}
     } finally {
+      setStreamingText('')
+      setStreamSpeed(null)
       setLoading(false)
       setTimeout(() => inputRef.current?.focus(), 50)
     }
@@ -1044,10 +1064,26 @@ export function AiAssistantDrawer({
               ))}
               {loading && (
                 <div className="ai-msg ai-msg-bot ai-msg-loading">
-                  <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-                    <RefreshCw size={13} className="spin-icon text-[var(--accent)]" />
-                    <span>Consulting library...</span>
+                  <div className="ai-msg-header flex items-center justify-between mb-1">
+                    <span className="ai-msg-author">{activePersonaObj.name}</span>
+                    {streamSpeed && (
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--surface-sunken)] text-[var(--accent)] border border-[var(--border-subtle)] flex items-center gap-1 shadow-sm">
+                        <Zap size={10} className="animate-pulse" />
+                        <span>{streamSpeed} tok/s</span>
+                      </span>
+                    )}
                   </div>
+                  {streamingText ? (
+                    <div className="ai-msg-content text-sm text-[var(--text-primary)] whitespace-pre-wrap leading-relaxed">
+                      {streamingText}
+                      <span className="inline-block w-1.5 h-3.5 ml-0.5 bg-[var(--accent)] animate-pulse align-middle" />
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)] py-1">
+                      <RefreshCw size={13} className="spin-icon text-[var(--accent)]" />
+                      <span>Consulting {activeGame?.canonical_title || 'library'}...</span>
+                    </div>
+                  )}
                 </div>
               )}
               <div ref={messagesEndRef} />
@@ -1080,7 +1116,7 @@ export function AiAssistantDrawer({
                 className="ai-drawer-input"
                 disabled={loading || (modelStatus && !modelStatus.installed)}
                 autoComplete="off"
-                spellCheck="false"
+                spellCheck="true"
               />
               {onToggleVoice && (
                 <button
@@ -1089,7 +1125,7 @@ export function AiAssistantDrawer({
                   className={`ai-drawer-mic-btn ${isVoiceListening ? 'active-listening' : ''}`}
                   title={isVoiceListening ? 'Listening for voice command... click to stop' : 'Push-to-Talk (Voice Command / Gamepad R3)'}
                 >
-                  {isVoiceListening ? <Mic size={14} style={{ color: '#22c55e' }} /> : <MicOff size={14} />}
+                  {isVoiceListening ? <Mic size={14} style={{ color: 'var(--accent, #d6ff4b)' }} /> : <MicOff size={14} />}
                 </button>
               )}
               <button

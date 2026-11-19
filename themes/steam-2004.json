@@ -1,0 +1,24 @@
+{
+  "id": "steam-2004",
+  "name": "Steam 2004 Nostalgia",
+  "author": "Ritesh Soni",
+  "tagline": "Half-Life 2 Launch Valve Olive Khaki & Steel",
+  "version": "1.0.0",
+  "category": "Retro & Handheld",
+  "palette": {
+    "base": "#383f36",
+    "surface": "#434b41",
+    "surfaceHover": "#4f584d",
+    "card": "#3e463c",
+    "textPrimary": "#e1e6db",
+    "textSecondary": "#c0c9b7",
+    "textMuted": "#8e9985",
+    "accent": "#9ab87a",
+    "accentGlow": "rgba(154, 184, 122, 0.28)",
+    "accentContrast": "#21271e",
+    "borderColor": "rgba(154, 184, 122, 0.25)",
+    "borderHover": "rgba(195, 222, 163, 0.60)",
+    "badgeBg": "rgba(154, 184, 122, 0.18)",
+    "badgeText": "#f0fdf4"
+  }
+}

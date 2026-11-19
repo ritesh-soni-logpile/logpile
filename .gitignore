@@ -49,3 +49,9 @@ temp_*
 *.gguf
 resources/
 models/
+
+# Planning & temporary video media
+.planning/
+*.mp4
+*.mkv
+

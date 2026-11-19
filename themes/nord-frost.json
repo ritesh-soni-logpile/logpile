@@ -1,0 +1,24 @@
+{
+  "id": "nord-frost",
+  "name": "Nord Arctic Frost",
+  "author": "Ritesh Soni",
+  "tagline": "Arctic Deep Slate & Frosted Polar Blue",
+  "version": "1.0.0",
+  "category": "Minimalist & Stealth",
+  "palette": {
+    "base": "#242933",
+    "surface": "#2e3440",
+    "surfaceHover": "#3b4252",
+    "card": "#2b303c",
+    "textPrimary": "#eceff4",
+    "textSecondary": "#d8dee9",
+    "textMuted": "#88c0d0",
+    "accent": "#88c0d0",
+    "accentGlow": "rgba(136, 192, 208, 0.30)",
+    "accentContrast": "#2e3440",
+    "borderColor": "rgba(136, 192, 208, 0.22)",
+    "borderHover": "rgba(129, 161, 193, 0.55)",
+    "badgeBg": "rgba(136, 192, 208, 0.15)",
+    "badgeText": "#e5e9f0"
+  }
+}

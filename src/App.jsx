@@ -9,7 +9,7 @@ import {
   Dices, KeyRound, RefreshCw, RotateCw, ImagePlus, Trophy, WandSparkles, EyeOff, Eye, FileDown, Trash2, AlertTriangle, ArrowRightLeft,
   Bookmark, MoreHorizontal, PlugZap, Info, Film, Camera, ChevronRight, ZoomIn,
   PanelLeftClose, PanelLeft, Shuffle, Layers, Users, LayoutDashboard, BookOpen,
-  Mic, MicOff,
+  Mic, MicOff, Keyboard, Gauge, Zap, Flame, Waves, Compass,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
@@ -22,6 +22,7 @@ import { normalizeArtworkUrl } from './utils/artworkUrl'
 import { SourceIcon } from './components/SourceIcons'
 import { CustomDropdown } from './components/CustomDropdown'
 import { AboutView } from './components/views/AboutView'
+import { SettingsModal, renderHudPreview } from './components/SettingsModal'
 import { DashboardView } from './components/views/DashboardView'
 import { InGameOverlayView } from './components/views/InGameOverlayView'
 import { LAYOUT_PALETTES, themeVars } from './utils/themePalettes'
@@ -30,6 +31,8 @@ import { AiAssistantDrawer, parseAiResponse } from './components/AiAssistantDraw
 import { speakConfirmation, getVoiceSettings, saveVoiceSettings } from './utils/voiceService'
 import { useGamepad } from './utils/useGamepad'
 import { generateBragCollage } from './utils/generateBragCollage'
+import { IntroSplash, THEME_LOGOS } from './components/IntroSplash'
+import { getCustomThemes, getEnabledAddonIds } from './utils/themeAddons'
 import logoDark from './assets/logo.png'
 import logoLight from './assets/logo-light.png'
 const logo = logoDark
@@ -42,7 +45,7 @@ const fallbackApi = {
   async updateGameStatus() { return null },
   async openExternal(url) { window.open(url, '_blank'); return { success: true } },
   window: { minimize() {}, maximize() {}, close() {}, async captureScreen() { return { success: true } }, async captureRect() { return { success: true, dataUrl: '' } }, async saveBragCollage() { return { success: true } }, async openCapturesFolder() { return { success: true } }, async openPicturesFolder() { return { success: true } } },
-  database: { async seedCheck() { return { seeded: false, count: 0 } }, async getGames() { return [] }, async getLibraryStats() { return { totalGames: 0, installedGames: 0, utilityTools: 0, installedUtilities: 0, visibleGames: 0, visibleInstalledGames: 0, dlcGames: 0, installedDlc: 0, hiddenGames: 0, hiddenInstalledGames: 0, hiddenDlc: 0, hiddenInstalledDlc: 0, readyToInstallCount: 0, artworkCovered: 0, missingArtwork: 0, totalStorageGb: 0, platformBreakdown: [] } }, async getLibrarySettings() { return { autoHideSupportEntries: true, steamGridDbApiKey: '', preferAnimatedArtwork: false, preferAnimatedCovers: false } }, async getActivityLog() { return [] }, async getLibraryHealth() { return { totalGames: 0, installedGames: 0, lastBackupTimestamp: null, lastBackupPath: null, lastScanTimestamp: null, backupsDirectory: null } }, async backupNow() { return { ok: true, backupPath: '' } }, async listBackups() { return { directory: 'UserData/backups', backups: [] } }, async openBackupsFolder() { return { success: true } }, async chooseBackupFile() { return null }, async restoreBackup() { return { success: true } }, async setLibrarySettings() { return { autoHideSupportEntries: true, steamGridDbApiKey: '', preferAnimatedArtwork: false, preferAnimatedCovers: false } }, async setGameHidden() { return null }, async updateGameStatus() { return null }, async updateGameMetadata() { return null }, async deleteGames() { return null }, async bulkUpdateGames() { return null }, async bulkMoveGameCategory() { return null }, async bulkSetGameHidden() { return null }, async moveGameCategory() { return null }, async exportCsv() { return null }, async exportSelectedCsv() { return null }, async purgeLibrary() { return { deletedGames: 0 } }, async backupArtworkCache() { return null }, async restoreArtworkCache() { return null }, onUpdated() { return () => {} } },
+  database: { async seedCheck() { return { seeded: false, count: 0 } }, async getGames() { return [] }, async getLibraryStats() { return { totalGames: 0, installedGames: 0, utilityTools: 0, installedUtilities: 0, visibleGames: 0, visibleInstalledGames: 0, dlcGames: 0, installedDlc: 0, hiddenGames: 0, hiddenInstalledGames: 0, hiddenDlc: 0, hiddenInstalledDlc: 0, readyToInstallCount: 0, artworkCovered: 0, missingArtwork: 0, totalStorageGb: 0, platformBreakdown: [] } }, async getLibrarySettings() { return { autoHideSupportEntries: true, steamGridDbApiKey: '', preferAnimatedArtwork: false, preferAnimatedCovers: false, overlayShortcut: 'CommandOrControl+Shift+Space', fpsShortcut: 'CommandOrControl+Shift+F', searchShortcut: 'CommandOrControl+F', fpsEnabled: false, fpsPosition: 'top-right', fpsOpacity: 80, fpsStyle: 'minimalist-pill' } }, async getActivityLog() { return [] }, async getLibraryHealth() { return { totalGames: 0, installedGames: 0, lastBackupTimestamp: null, lastBackupPath: null, lastScanTimestamp: null, backupsDirectory: null } }, async backupNow() { return { ok: true, backupPath: '' } }, async listBackups() { return { directory: 'UserData/backups', backups: [] } }, async openBackupsFolder() { return { success: true } }, async chooseBackupFile() { return null }, async restoreBackup() { return { success: true } }, async setLibrarySettings() { return { autoHideSupportEntries: true, steamGridDbApiKey: '', preferAnimatedArtwork: false, preferAnimatedCovers: false, overlayShortcut: 'CommandOrControl+Shift+Space', fpsShortcut: 'CommandOrControl+Shift+F', searchShortcut: 'CommandOrControl+F', fpsEnabled: false, fpsPosition: 'top-right', fpsOpacity: 80, fpsStyle: 'minimalist-pill' } }, async setGameHidden() { return null }, async updateGameStatus() { return null }, async updateGameMetadata() { return null }, async deleteGames() { return null }, async bulkUpdateGames() { return null }, async bulkMoveGameCategory() { return null }, async bulkSetGameHidden() { return null }, async moveGameCategory() { return null }, async exportCsv() { return null }, async exportSelectedCsv() { return null }, async purgeLibrary() { return { deletedGames: 0 } }, async backupArtworkCache() { return null }, async restoreArtworkCache() { return null }, onUpdated() { return () => {} } },
   scanner: { async scanAll() { return {} }, async chooseImportFile() { return null }, async importFile() { return {} }, async importBuffer() { return {} }, onProgress() { return () => {} } },
   games: { async openUri() {}, async getMedia() { return { success: false, screenshots: [], movies: [] } }, async changeArtwork() { return null }, async refetchArtwork() { return null }, async refetchSelectedArtwork() { return null }, async chooseAndSaveArtwork() { return null }, async chooseExecutable() { return null }, async launchExecutable() { return null }, async addCustomGame() { return null }, async updateModProfile() { return true } },
   roulette: { async pick() { return null } },
@@ -637,6 +640,140 @@ function LibraryHealthSection({
   )
 }
 
+function matchesShortcut(e, accel) {
+  if (!accel || typeof accel !== 'string') return false
+  const parts = accel.split('+')
+  const targetKey = parts[parts.length - 1].toLowerCase()
+  const needsCtrl = parts.includes('CommandOrControl') || parts.includes('Ctrl')
+  const needsShift = parts.includes('Shift')
+  const needsAlt = parts.includes('Alt')
+
+  const hasCtrl = Boolean(e.ctrlKey || e.metaKey)
+  const hasShift = Boolean(e.shiftKey)
+  const hasAlt = Boolean(e.altKey)
+
+  if (hasCtrl !== needsCtrl) return false
+  if (hasShift !== needsShift) return false
+  if (hasAlt !== needsAlt) return false
+
+  const eventKey = e.key.toLowerCase()
+  if (e.code === 'Space' && targetKey === 'space') return true
+  if (e.code.startsWith('Key') && e.code.replace('Key', '').toLowerCase() === targetKey) return true
+  if (e.code.startsWith('Digit') && e.code.replace('Digit', '').toLowerCase() === targetKey) return true
+  return eventKey === targetKey
+}
+
+function ShortcutKeyRecorder({ value, defaultValue, onChange, label, description }) {
+  const [recording, setRecording] = useState(false)
+
+  const handleKeyDown = (e) => {
+    if (!recording) return
+    e.preventDefault()
+    e.stopPropagation()
+
+    if (e.key === 'Escape') {
+      setRecording(false)
+      return
+    }
+
+    const hasCtrl = e.ctrlKey || e.metaKey
+    const hasShift = e.shiftKey
+    const hasAlt = e.altKey
+
+    if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) {
+      return
+    }
+
+    if (!hasCtrl && !hasAlt) {
+      return
+    }
+
+    const parts = []
+    if (hasCtrl) parts.push('CommandOrControl')
+    if (hasAlt) parts.push('Alt')
+    if (hasShift) parts.push('Shift')
+
+    let keyPart = ''
+    if (e.code === 'Space') {
+      keyPart = 'Space'
+    } else if (e.code.startsWith('Key')) {
+      keyPart = e.code.replace('Key', '').toUpperCase()
+    } else if (e.code.startsWith('Digit')) {
+      keyPart = e.code.replace('Digit', '')
+    } else if (/^F\d{1,2}$/i.test(e.key)) {
+      keyPart = e.key.toUpperCase()
+    } else if (e.key.length === 1) {
+      keyPart = e.key.toUpperCase()
+    } else {
+      keyPart = e.key
+    }
+
+    if (keyPart) {
+      parts.push(keyPart)
+      const newShortcut = parts.join('+')
+      onChange(newShortcut)
+      setRecording(false)
+    }
+  }
+
+  const displayString = (value || defaultValue || '')
+    .replace(/CommandOrControl/g, 'Ctrl')
+    .replace(/\+/g, ' + ')
+
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '12px 14px',
+      background: 'rgba(255, 255, 255, 0.02)',
+      border: '1px solid rgba(255, 255, 255, 0.07)',
+      borderRadius: '10px',
+      gap: '12px',
+      flexWrap: 'wrap'
+    }}>
+      <div style={{ flex: '1 1 200px' }}>
+        <strong style={{ fontSize: '13px', color: 'var(--text-primary)', display: 'block' }}>{label}</strong>
+        <small style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{description}</small>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <button
+          type="button"
+          onClick={() => setRecording(!recording)}
+          onKeyDown={handleKeyDown}
+          className="outline-button small-button"
+          style={{
+            fontFamily: 'monospace',
+            fontSize: '12px',
+            minWidth: '130px',
+            justifyContent: 'center',
+            borderColor: recording ? 'var(--accent, #d6ff4b)' : 'rgba(255, 255, 255, 0.15)',
+            background: recording ? 'rgba(214, 255, 75, 0.12)' : 'rgba(0, 0, 0, 0.3)',
+            color: recording ? 'var(--accent, #d6ff4b)' : 'var(--text-primary)',
+            padding: '4px 10px',
+            borderRadius: '6px'
+          }}
+          title={recording ? 'Press your key combination (2 or 3 keys) or Esc to cancel' : 'Click to remap shortcut'}
+        >
+          {recording ? 'Press 2 or 3 keys…' : displayString}
+        </button>
+        {value && value !== defaultValue && (
+          <button
+            type="button"
+            onClick={() => onChange(defaultValue)}
+            className="outline-button small-button"
+            style={{ height: '28px', padding: '0 8px', fontSize: '11px', gap: '4px' }}
+            title="Reset to default shortcut"
+          >
+            <RotateCw size={11} />
+            <span>Reset</span>
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function MetadataProvidersSection({ onRefresh, globalSyncRunning = false, globalSyncProgress = null, onCancelSync }) {
   const [steamGridDbApiKey, setSteamGridDbApiKey] = useState('')
   const [igdbClientId, setIgdbClientId] = useState('')
@@ -645,6 +782,14 @@ function MetadataProvidersSection({ onRefresh, globalSyncRunning = false, global
   const [preferAnimatedArtwork, setPreferAnimatedArtwork] = useState(false)
   const [preferAnimatedCovers, setPreferAnimatedCovers] = useState(false)
   const [minimizeToTray, setMinimizeToTray] = useState(false)
+  const [overlayShortcut, setOverlayShortcut] = useState('CommandOrControl+Shift+Space')
+  const [fpsShortcut, setFpsShortcut] = useState('CommandOrControl+Shift+F')
+  const [searchShortcut, setSearchShortcut] = useState('CommandOrControl+F')
+  const [fpsEnabled, setFpsEnabled] = useState(false)
+  const [fpsPosition, setFpsPosition] = useState('top-right')
+  const [fpsOpacity, setFpsOpacity] = useState(80)
+  const [fpsStyle, setFpsStyle] = useState('minimalist-pill')
+  const [shortcutSavedNotice, setShortcutSavedNotice] = useState(false)
   const [aiStatus, setAiStatus] = useState(null)
   const [aiPersonality, setAiPersonality] = useState(() => {
     try {
@@ -706,12 +851,29 @@ function MetadataProvidersSection({ onRefresh, globalSyncRunning = false, global
       setPreferAnimatedArtwork(Boolean(settings.preferAnimatedArtwork))
       setPreferAnimatedCovers(Boolean(settings.preferAnimatedCovers))
       setMinimizeToTray(Boolean(settings.minimizeToTray))
+      setOverlayShortcut(settings.overlayShortcut || 'CommandOrControl+Shift+Space')
+      setFpsShortcut(settings.fpsShortcut || 'CommandOrControl+Shift+F')
+      setSearchShortcut(settings.searchShortcut || 'CommandOrControl+F')
+      setFpsEnabled(Boolean(settings.fpsEnabled))
+      setFpsPosition(settings.fpsPosition || 'top-right')
+      setFpsOpacity(Number(settings.fpsOpacity) || 80)
+      setFpsStyle(settings.fpsStyle || 'minimalist-pill')
       setLoading(false)
     }).catch(() => {
       if (active) setLoading(false)
     })
     return () => { active = false }
   }, [])
+
+  const handleUpdateShortcutSetting = async (fields) => {
+    try {
+      await api.database.setLibrarySettings?.(fields)
+      setShortcutSavedNotice(true)
+      setTimeout(() => setShortcutSavedNotice(false), 3000)
+    } catch (err) {
+      console.warn('Failed to update shortcut setting:', err)
+    }
+  }
 
   const handleTestIgdb = async () => {
     if (!igdbClientId.trim() || !igdbClientSecret.trim()) {
@@ -1293,7 +1455,212 @@ function MetadataProvidersSection({ onRefresh, globalSyncRunning = false, global
         </div>
       </div>
 
-      {/* CARD 3: Library Enrichment Hub */}
+      {/* CARD 3: Shortcuts & In-Game Performance HUD */}
+      <div className="metadata-providers-card" style={{ margin: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', paddingBottom: '12px', borderBottom: '1px solid rgba(255, 255, 255, 0.07)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(34, 197, 94, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#4ade80' }}>
+              <Keyboard size={16} />
+            </div>
+            <div>
+              <strong style={{ fontSize: '14px', color: 'var(--text-primary)', display: 'block' }}>Shortcuts &amp; In-Game Performance HUD</strong>
+              <small style={{ color: 'var(--text-muted)', fontSize: '11px' }}>Customizable 2 or 3-key global shortcuts, conflict prevention (Excel safe), and FPS counter settings</small>
+            </div>
+          </div>
+          {shortcutSavedNotice && (
+            <span className="provider-saved-badge" style={{ color: 'var(--accent, #d6ff4b)' }}>
+              <Check size={13} /> Saved
+            </span>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {/* Global Shortcut 1: In-Game Overlay / Companion */}
+          <ShortcutKeyRecorder
+            label="In-Game Overlay / AI Companion"
+            description="Global hotkey to toggle the in-game guide and AI companion. Customizable to avoid clashing with Excel (Ctrl+Space) or game controls."
+            value={overlayShortcut}
+            defaultValue="CommandOrControl+Shift+Space"
+            onChange={(next) => {
+              setOverlayShortcut(next)
+              handleUpdateShortcutSetting({ overlayShortcut: next })
+            }}
+          />
+
+          {/* Global Shortcut 2: In-Game FPS Counter Toggle */}
+          <ShortcutKeyRecorder
+            label="Toggle In-Game FPS Display"
+            description="Global hotkey to toggle the themed FPS display while playing games."
+            value={fpsShortcut}
+            defaultValue="CommandOrControl+Shift+F"
+            onChange={(next) => {
+              setFpsShortcut(next)
+              handleUpdateShortcutSetting({ fpsShortcut: next })
+            }}
+          />
+
+          {/* In-App Shortcut: Quick Library Search */}
+          <ShortcutKeyRecorder
+            label="Quick Library Search (In-App Only)"
+            description="Shortcut to instantly focus the search bar while Logpile is open. Customizable to any 2 or 3-key combo (e.g. Ctrl+F, Ctrl+K, Ctrl+Shift+S)."
+            value={searchShortcut}
+            defaultValue="CommandOrControl+F"
+            onChange={(next) => {
+              setSearchShortcut(next)
+              handleUpdateShortcutSetting({ searchShortcut: next })
+            }}
+          />
+
+          {/* FPS Counter Preferences Grid */}
+          <div style={{ marginTop: '6px', paddingTop: '14px', borderTop: '1px solid rgba(255, 255, 255, 0.07)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+              <Gauge size={15} style={{ color: 'var(--accent, #d6ff4b)' }} />
+              <strong style={{ fontSize: '13px', color: 'var(--text-primary)' }}>FPS Counter Options</strong>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px' }}>
+              {/* FPS Toggle Checkbox */}
+              <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.07)', borderRadius: '10px', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <input
+                  id="fps-enabled-toggle"
+                  type="checkbox"
+                  checked={fpsEnabled}
+                  onChange={(e) => {
+                    const val = e.target.checked
+                    setFpsEnabled(val)
+                    handleUpdateShortcutSetting({ fpsEnabled: val })
+                  }}
+                  style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: 'var(--accent, #d6ff4b)', flexShrink: 0 }}
+                />
+                <label htmlFor="fps-enabled-toggle" style={{ cursor: 'pointer', userSelect: 'none' }}>
+                  <strong style={{ fontSize: '13px', color: 'var(--text-primary)', display: 'block' }}>Enable FPS Display</strong>
+                  <small style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                    {fpsEnabled ? 'Active during gameplay' : 'Disabled (Hidden)'}
+                  </small>
+                </label>
+              </div>
+
+              {/* Position Selector */}
+              <div className="provider-field-block" style={{ margin: 0 }}>
+                <label className="provider-label">
+                  <span>Screen Position</span>
+                  <small>Corner location for the in-game widget</small>
+                </label>
+                <select
+                  value={fpsPosition}
+                  onChange={(e) => {
+                    const val = e.target.value
+                    setFpsPosition(val)
+                    handleUpdateShortcutSetting({ fpsPosition: val })
+                  }}
+                  className="provider-select"
+                >
+                  <option value="top-right">Top-Right (Default)</option>
+                  <option value="top-left">Top-Left</option>
+                  <option value="bottom-right">Bottom-Right</option>
+                  <option value="bottom-left">Bottom-Left</option>
+                </select>
+              </div>
+
+              {/* Style Selector */}
+              <div className="provider-field-block" style={{ margin: 0 }}>
+                <label className="provider-label">
+                  <span>Widget Style</span>
+                  <small>Visual aesthetic profile</small>
+                </label>
+                <select
+                  value={fpsStyle}
+                  onChange={(e) => {
+                    const val = e.target.value
+                    setFpsStyle(val)
+                    handleUpdateShortcutSetting({ fpsStyle: val })
+                  }}
+                  className="provider-select"
+                >
+                  <optgroup label="Atmospheric, Horror & Elemental">
+                    <option value="bonfire-ember">Kindled Bonfire (Molten Flame & Embers Telemetry)</option>
+                    <option value="elden-grace">Lost Grace & Embers (Crimson Estus & Golden Souls Counter)</option>
+                    <option value="silent-fog">Silent Fog EKG (Psychological Horror Heartbeat & Static Panic)</option>
+                    <option value="neon-downpour">Neon Downpour (Rain-Slicked Glass & Hydro-Pressure Drops)</option>
+                    <option value="blood-moon">Blood Moon Frenzy (Eldritch Eye & Sanguine Vials)</option>
+                  </optgroup>
+                  <optgroup label="Motorsport & Velocity">
+                    <option value="tachometer-gauge">Apex Redline Tachometer (Arc Dial, Needle & 9000 RPM)</option>
+                    <option value="f1-telemetry">Grand Prix Cockpit (12 LED Shift Lights & Delta Telemetry)</option>
+                    <option value="fighter-jet-hud">Mach 3 Flight Ladder (Vector Jet HUD & Airspeed)</option>
+                    <option value="gran-turismo">Apex Apex Apex (Touring Dual Arc Throttle/Brake & G-Force)</option>
+                    <option value="rally-dash">Mud & Gravel Digital Dash (Rally LED Ladder & Gear)</option>
+                    <option value="nfs-underground">Midnight Drift Purge (Nitrous Flame Bar & Street Glow)</option>
+                  </optgroup>
+                  <optgroup label="Hardware Labs & Overclocking">
+                    <option value="frametime-sparkline">Frametime Oscilloscope (Real-Time Micro-Stutter Sparkline)</option>
+                    <option value="liquid-cooling-rig">Liquid Cooling Rig (Dual Coolant Reservoirs & Flow Rate)</option>
+                    <option value="rtss-classic">Overclocker's OSD (Classic High-Viz Orange Telemetry)</option>
+                    <option value="steam-deck-os">Deckmaster Handheld (Quick-Access Hardware Drawer)</option>
+                    <option value="sensor-panel">Hardware Lab Sensor Rig (Dense Multi-Column Diagnostics)</option>
+                    <option value="evga-precision">Sub-Zero Hexagon Core (Voltage & Clock Rig)</option>
+                  </optgroup>
+                  <optgroup label="Tactical Shooters & Esports">
+                    <option value="cs2-pro">Defusal Clutch Pro (128-Tick Esports & Low-Latency Ping)</option>
+                    <option value="apex-jumpkit">Hot-Drop Jump-Kit (Shield Batteries & Thruster Boost)</option>
+                    <option value="overwatch-ult">Ultimate Ready (100% Ult Charge Pulse Ring)</option>
+                    <option value="halo-spartan">Mjolnir Energy Shield (Super-Soldier Tactical Radar & Shields)</option>
+                    <option value="doom-slayer">Hellwalker Berserk (Demonic Blood Runes & Pure Rage)</option>
+                    <option value="subtle-stealth">Ghost Whisper (Zero-Occlusion Minimalist Crosshair)</option>
+                  </optgroup>
+                  <optgroup label="RPG & Lore-Rich Fantasy">
+                    <option value="skyrim-compass">Dragonborn Compass (Nordic Iron Heading & Waypoint Crest)</option>
+                    <option value="witcher-medallion">Silver Wolf Medallion (Monster Hunter Toxicity & Vigor)</option>
+                    <option value="cyberpunk-neon">Chrome Kiroshi Optics (Canary Yellow & Night City Cyberware)</option>
+                    <option value="pipboy-crt">Vault-Dweller Wrist CRT (Radiation Rads & Pip Phosphor Scanlines)</option>
+                  </optgroup>
+                  <optgroup label="Arcade, Retro & Sci-Fi">
+                    <option value="matrix-cascade">Matrix Digital Stream (Phosphor Green Falling Hex)</option>
+                    <option value="deadspace-rig">Spinal Bio-RIG (Vertebrae Health Segments & Stasis Ring)</option>
+                    <option value="subnautica-depth">Abyssal Crush Depth (Pressure Hull Integrity & Oxygen Ring)</option>
+                    <option value="starfield-chrono">NASA-Punk Chronomark (Orbital Horizon & Gravity Bezel)</option>
+                    <option value="holo-arc-reactor">Holo Arc Reactor (Orbital Plasma Ring & Core Power)</option>
+                    <option value="retro-gameboy">8-Bit Dot-Matrix (1989 Monochrome Green Pocket Screen)</option>
+                    <option value="arcade-1984">Quarter Eater 1984 (Flashing 1UP Scanlines & High Score)</option>
+                    <option value="synthwave-neon">Outrun Wireframe Horizon (Hot Neon Pink & Laser Grid)</option>
+                    <option value="vfd-tape-deck">Hi-Fi Vacuum Fluorescent (80s Stereo VFD & VU Peak)</option>
+                    <option value="fighting-game-health">Versus Fighting Gauge (Health Bars, Combo Hits & Super Meter)</option>
+                  </optgroup>
+                  <optgroup label="Minimalist & Modern">
+                    <option value="minimalist-pill">Minimalist Capsule (Floating Glass Accent)</option>
+                    <option value="minimal-ticker">Micro Statusbar 1-Line Ticker (Ultra-Compact)</option>
+                    <option value="luxury-chronograph">Swiss Luxury Chronograph (Titanium Bezel)</option>
+                  </optgroup>
+                </select>
+              </div>
+
+              {/* Opacity Selector */}
+              <div className="provider-field-block" style={{ margin: 0 }}>
+                <label className="provider-label">
+                  <span>Readability Opacity ({fpsOpacity}%)</span>
+                  <small>Crisp &amp; clear over skies and dark scenes</small>
+                </label>
+                <select
+                  value={fpsOpacity}
+                  onChange={(e) => {
+                    const val = Number(e.target.value) || 80
+                    setFpsOpacity(val)
+                    handleUpdateShortcutSetting({ fpsOpacity: val })
+                  }}
+                  className="provider-select"
+                >
+                  <option value={80}>80% — Optimal Readability (Recommended)</option>
+                  <option value={90}>90% — High Contrast</option>
+                  <option value={100}>100% — Opaque / Solid</option>
+                  <option value={70}>70% — Subtle Translucent</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* CARD 4: Library Enrichment Hub */}
       <div className="metadata-providers-card" style={{ margin: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', paddingBottom: '12px', borderBottom: '1px solid rgba(255, 255, 255, 0.07)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -2979,13 +3346,36 @@ const LAYOUT_THEMES = [
 ]
 
 function SanctuaryControls({ layoutTheme, setLayoutTheme }) {
+  const [enabledAddons, setEnabledAddons] = useState(() => getEnabledAddonIds())
+  const [customThemes, setCustomThemes] = useState(() => getCustomThemes())
+
+  useEffect(() => {
+    const handleAddonsChanged = () => {
+      setEnabledAddons(getEnabledAddonIds())
+      setCustomThemes(getCustomThemes())
+    }
+    window.addEventListener('logpile-theme-addons-changed', handleAddonsChanged)
+    return () => window.removeEventListener('logpile-theme-addons-changed', handleAddonsChanged)
+  }, [])
+
+  const currentOptions = useMemo(() => {
+    const customOptions = customThemes
+      .filter((a) => enabledAddons.includes(a.id))
+      .map((a) => ({
+        value: a.id,
+        label: `🧩 ${a.name}`,
+        icon: Sparkles,
+      }))
+    return [...LAYOUT_THEMES, ...customOptions]
+  }, [enabledAddons, customThemes])
+
   return (
     <div className="sanctuary-controls-group">
       <div className="sanctuary-capsule">
         <CustomDropdown
           value={layoutTheme}
           onChange={setLayoutTheme}
-          options={LAYOUT_THEMES}
+          options={currentOptions}
           icon={Sparkles}
           className="capsule-trigger capsule-layout"
           menuClassName="sanctuary-dropdown-menu"
@@ -3180,6 +3570,18 @@ function HomeSpotlightAndShelf({
               muted
               playsInline
               className="home-spotlight-video"
+              ref={(videoEl) => {
+                if (!videoEl) return
+                const handleVisibility = () => {
+                  try {
+                    if (document.hidden) videoEl.pause()
+                    else videoEl.play().catch(() => {})
+                  } catch {}
+                }
+                document.addEventListener('visibilitychange', handleVisibility)
+                window.addEventListener('blur', () => { try { videoEl.pause() } catch {} })
+                window.addEventListener('focus', () => { try { if (!document.hidden) videoEl.play().catch(() => {}) } catch {} })
+              }}
             />
           ) : (
             <div
@@ -5539,8 +5941,149 @@ function HeroView({
 
 
 
+function LiveHudOverlayView() {
+  const [hudSettings, setHudSettings] = useState({
+    fpsEnabled: true,
+    fpsStyle: 'blood-moon',
+    fpsPosition: 'top-left',
+    fpsOpacity: 80,
+    fpsOrientation: 'horizontal',
+    fpsMetrics: {
+      fps: true,
+      onePercentLow: true,
+      frametime: true,
+      gpu: true,
+      cpu: true,
+      ram: true,
+      battery: true,
+      clock: true,
+    },
+  })
+
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      try {
+        const s = await window.api?.database?.getLibrarySettings?.()
+        if (active && s) {
+          setHudSettings({
+            fpsEnabled: Boolean(s.fpsEnabled),
+            fpsStyle: s.fpsStyle || 'blood-moon',
+            fpsPosition: s.fpsPosition || 'top-left',
+            fpsOpacity: Number(s.fpsOpacity) || 80,
+            fpsOrientation: s.fpsOrientation || 'horizontal',
+            fpsMetrics: s.fpsMetrics || {
+              fps: true,
+              onePercentLow: true,
+              frametime: true,
+              gpu: true,
+              cpu: true,
+              ram: true,
+              battery: true,
+              clock: true,
+            },
+          })
+        }
+      } catch {}
+    }
+    load()
+
+    const onUpdate = (data) => {
+      if (data) {
+        setHudSettings((prev) => ({
+          ...prev,
+          ...(data.fpsEnabled !== undefined ? { fpsEnabled: Boolean(data.fpsEnabled) } : {}),
+          ...(data.fpsStyle !== undefined ? { fpsStyle: data.fpsStyle } : {}),
+          ...(data.fpsPosition !== undefined ? { fpsPosition: data.fpsPosition } : {}),
+          ...(data.fpsOpacity !== undefined ? { fpsOpacity: Number(data.fpsOpacity) } : {}),
+          ...(data.fpsOrientation !== undefined ? { fpsOrientation: data.fpsOrientation } : {}),
+          ...(data.fpsMetrics !== undefined ? { fpsMetrics: data.fpsMetrics } : {}),
+        }))
+      }
+    }
+
+    const unsubSettings = window.api?.fps?.onSettingsUpdated?.(onUpdate)
+    const unsubStatus = window.api?.fps?.onStatusChanged?.(onUpdate)
+
+    // Enforce transparent background on HTML, Body, and #root for HUD window
+    document.documentElement.classList.add('is-hud')
+    document.body.classList.add('is-hud')
+    document.documentElement.style.background = 'transparent'
+    document.body.style.background = 'transparent'
+    const rootEl = document.getElementById('root')
+    if (rootEl) {
+      rootEl.classList.add('is-hud')
+      rootEl.style.background = 'transparent'
+    }
+
+    return () => {
+      active = false
+      document.documentElement.classList.remove('is-hud')
+      document.body.classList.remove('is-hud')
+      if (rootEl) rootEl.classList.remove('is-hud')
+      unsubSettings?.()
+      unsubStatus?.()
+    }
+  }, [])
+
+  if (!hudSettings.fpsEnabled) return null
+
+  const getAlignment = (pos) => {
+    switch (pos) {
+      case 'top-left':
+        return { alignItems: 'flex-start', justifyContent: 'flex-start' }
+      case 'top-center':
+        return { alignItems: 'flex-start', justifyContent: 'center' }
+      case 'top-right':
+        return { alignItems: 'flex-start', justifyContent: 'flex-end' }
+      case 'left-center':
+        return { alignItems: 'center', justifyContent: 'flex-start' }
+      case 'right-center':
+        return { alignItems: 'center', justifyContent: 'flex-end' }
+      case 'bottom-left':
+        return { alignItems: 'flex-end', justifyContent: 'flex-start' }
+      case 'bottom-center':
+        return { alignItems: 'flex-end', justifyContent: 'center' }
+      case 'bottom-right':
+      default:
+        return { alignItems: 'flex-end', justifyContent: 'flex-end' }
+    }
+  }
+
+  const alignment = getAlignment(hudSettings.fpsPosition)
+
+  return (
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        margin: 0,
+        padding: 0,
+        boxSizing: 'border-box',
+        display: 'flex',
+        ...alignment,
+        background: 'transparent',
+        overflow: 'hidden',
+        pointerEvents: 'none',
+        userSelect: 'none',
+        opacity: (hudSettings.fpsOpacity || 80) / 100,
+      }}
+    >
+      {renderHudPreview(hudSettings.fpsStyle, hudSettings.fpsMetrics, hudSettings.fpsOrientation)}
+    </div>
+  )
+}
+
 function App() {
   const isOverlayMode = typeof window !== 'undefined' && window.location.hash === '#overlay'
+  const isHudMode = typeof window !== 'undefined' && window.location.hash === '#hud'
+  if (isHudMode) {
+    return (
+      <ErrorBoundary fallback={() => null}>
+        <LiveHudOverlayView />
+      </ErrorBoundary>
+    )
+  }
   if (isOverlayMode) {
     return (
       <ErrorBoundary fallback={({ error, reset }) => (
@@ -5576,6 +6119,25 @@ function App() {
     })
   }, [])
 
+  const [inAppSearchShortcut, setInAppSearchShortcut] = useState('CommandOrControl+F')
+  useEffect(() => {
+    let active = true
+    api.database?.getLibrarySettings?.().then((settings) => {
+      if (!active || !settings) return
+      if (settings.searchShortcut) setInAppSearchShortcut(settings.searchShortcut)
+    }).catch(() => {})
+    const off = api.database?.onUpdated?.(() => {
+      api.database?.getLibrarySettings?.().then((settings) => {
+        if (!active || !settings) return
+        if (settings.searchShortcut) setInAppSearchShortcut(settings.searchShortcut)
+      }).catch(() => {})
+    })
+    return () => {
+      active = false
+      off?.()
+    }
+  }, [])
+
   useEffect(() => {
     const handleKey = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b' && !e.target.matches('input, textarea')) {
@@ -5584,7 +6146,7 @@ function App() {
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'h' && !e.target.matches('input, textarea')) {
         e.preventDefault()
         handleToggleSpotlight()
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      } else if (matchesShortcut(e, inAppSearchShortcut) || (!inAppSearchShortcut && (e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'k' || e.key.toLowerCase() === 'f'))) {
         e.preventDefault()
         searchInputRef.current?.focus()
         searchInputRef.current?.select()
@@ -5604,12 +6166,43 @@ function App() {
     }
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
-  }, [toggleSidebar, handleToggleSpotlight])
+  }, [toggleSidebar, handleToggleSpotlight, inAppSearchShortcut])
 
-  const mainScrollRef = useRef(null); const searchInputRef = useRef(null); const libraryScrollRef = useRef(0); const lastClickedGameIdRef = useRef(null); const navOriginRef = useRef({ view: 'installed', source: 'grid', scrollTop: 0 }); const hasSeededRef = useRef(false); const [restoredGameId, setRestoredGameId] = useState(null); const [games, setGames] = useState([]); const [hiddenGames, setHiddenGames] = useState([]); const [stats, setStats] = useState(() => ({ ...EMPTY_LIBRARY_STATS })); const [query, setQuery] = useState(''); const [debouncedQuery, setDebouncedQuery] = useState(''); const [view, setView] = useState('installed'); const [sourceFilters, setSourceFilters] = useState([]); const [genreFilter, setGenreFilter] = useState('all'); const [backlogFilter, setBacklogFilter] = useState('all'); const [sortKey, setSortKey] = useState('title-asc'); const [viewMode, setViewMode] = useState('grid'); const [activeGame, setActiveGame] = useState(null); const isDetailView = viewMode === 'hero' && Boolean(activeGame); const [layoutTheme, setLayoutTheme] = useState(() => localStorage.getItem('logpile-layout-theme') || 'cinematic'); const handleLayoutThemeChange = (newTheme) => { setLayoutTheme(newTheme); localStorage.setItem('logpile-layout-theme', newTheme); }; const mode = 'dark'; const [loading, setLoading] = useState(true); const [notice, setNotice] = useState(''); const [noticeTone, setNoticeTone] = useState('success'); const [scanOpen, setScanOpen] = useState(false); const [editorGame, setEditorGame] = useState(null); const [purgeOpen, setPurgeOpen] = useState(false); const [purgeBusy, setPurgeBusy] = useState(false); const [confirmModal, setConfirmModal] = useState(null); const [contextMenu, setContextMenu] = useState(null); const contextMenuRef = useRef(null); const [selectMode, setSelectMode] = useState(false); const [selectedIds, setSelectedIds] = useState([]); const [bulkEditOpen, setBulkEditOpen] = useState(false); const [bulkBusy, setBulkBusy] = useState(false); const [qualityFilters, setQualityFilters] = useState([]); const [failedImageIds, setFailedImageIds] = useState(new Set()); const [scannerStatus, setScannerStatus] = useState(null); const [isDetailHudIdle, setIsDetailHudIdle] = useState(false); const [isDetailScrolled, setIsDetailScrolled] = useState(false)
+  const mainScrollRef = useRef(null); const searchInputRef = useRef(null); const libraryScrollRef = useRef(0); const lastClickedGameIdRef = useRef(null); const navOriginRef = useRef({ view: 'installed', source: 'grid', scrollTop: 0 }); const hasSeededRef = useRef(false); const [restoredGameId, setRestoredGameId] = useState(null); const [games, setGames] = useState([]); const [hiddenGames, setHiddenGames] = useState([]); const [stats, setStats] = useState(() => ({ ...EMPTY_LIBRARY_STATS })); const [query, setQuery] = useState(''); const [debouncedQuery, setDebouncedQuery] = useState(''); const [view, setView] = useState('installed'); const [sourceFilters, setSourceFilters] = useState([]); const [genreFilter, setGenreFilter] = useState('all'); const [backlogFilter, setBacklogFilter] = useState('all'); const [sortKey, setSortKey] = useState('title-asc'); const [viewMode, setViewMode] = useState('grid'); const [activeGame, setActiveGame] = useState(null); const isDetailView = viewMode === 'hero' && Boolean(activeGame);   const [layoutTheme, setLayoutTheme] = useState(() => localStorage.getItem('logpile-layout-theme') || 'cinematic');
+  const handleLayoutThemeChange = (newTheme) => {
+    if (!newTheme) return;
+    const isDifferent = newTheme !== layoutTheme;
+    setLayoutTheme(newTheme);
+    localStorage.setItem('logpile-layout-theme', newTheme);
+    if (isDifferent) {
+      let playOnSwitch = true;
+      try {
+        playOnSwitch = localStorage.getItem('logpile-intro-on-theme-change') !== 'false';
+      } catch {
+        playOnSwitch = true;
+      }
+      if (playOnSwitch) {
+        setSettingsModalOpen(false);
+        setShowIntro(true);
+      }
+    }
+  };
+  const mode = 'dark';
+  const [loading, setLoading] = useState(true);
+  const [showIntro, setShowIntro] = useState(() => {
+    try {
+      const playIntroEnabled = localStorage.getItem('logpile-play-intro') !== 'false';
+      const alreadyPlayedInSession = sessionStorage.getItem('logpile-intro-session-played') === 'true';
+      return playIntroEnabled && !alreadyPlayedInSession;
+    } catch {
+      return false;
+    }
+  }); const [dataLoaded, setDataLoaded] = useState(false); const [notice, setNotice] = useState(''); const [noticeTone, setNoticeTone] = useState('success'); const [scanOpen, setScanOpen] = useState(false); const [editorGame, setEditorGame] = useState(null); const [purgeOpen, setPurgeOpen] = useState(false); const [purgeBusy, setPurgeBusy] = useState(false); const [confirmModal, setConfirmModal] = useState(null); const [contextMenu, setContextMenu] = useState(null); const contextMenuRef = useRef(null); const [selectMode, setSelectMode] = useState(false); const [selectedIds, setSelectedIds] = useState([]); const [bulkEditOpen, setBulkEditOpen] = useState(false); const [bulkBusy, setBulkBusy] = useState(false); const [qualityFilters, setQualityFilters] = useState([]); const [failedImageIds, setFailedImageIds] = useState(new Set()); const [scannerStatus, setScannerStatus] = useState(null); const [isDetailHudIdle, setIsDetailHudIdle] = useState(false); const [isDetailScrolled, setIsDetailScrolled] = useState(false)
   const [screenshotBusy, setScreenshotBusy] = useState(false)
   const [activeCaptureAction, setActiveCaptureAction] = useState(null)
   const [aiDrawerOpen, setAiDrawerOpen] = useState(false)
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false)
+  const [settingsModalTab, setSettingsModalTab] = useState('general')
   const [familyLocks, setFamilyLocks] = useState({})
   const [timeFilter, setTimeFilter] = useState('all')
   const [aiFilter, setAiFilter] = useState(null)
@@ -5881,10 +6474,22 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (view === 'system') {
+    if (view === 'system' || settingsModalOpen) {
       fetchSystemHealthAndActivity()
     }
-  }, [view, fetchSystemHealthAndActivity])
+  }, [view, settingsModalOpen, fetchSystemHealthAndActivity])
+
+  useEffect(() => {
+    if (view === 'system') {
+      setSettingsModalTab('general')
+      setSettingsModalOpen(true)
+      setView('all')
+    } else if (view === 'about') {
+      setSettingsModalTab('about')
+      setSettingsModalOpen(true)
+      setView('all')
+    }
+  }, [view])
 
   const handleBackupNow = async () => {
     if (backupBusy) return
@@ -6552,6 +7157,7 @@ function App() {
       setNotice(error.message || 'Unable to read the local library database.')
     } finally {
       setLoading(false)
+      setDataLoaded(true)
       if (preserveScroll && scrollTop !== null) {
         window.requestAnimationFrame(() => {
           if (mainScrollRef.current) mainScrollRef.current.scrollTop = scrollTop
@@ -6772,13 +7378,13 @@ function App() {
     { value: '50plus', label: '50+ Hours (Epic)' },
   ], [])
   const filteredGames = useMemo(() => {
-    let result = strictTitleSearch(games, debouncedQuery)
+    let result = view === 'hidden' ? strictTitleSearch(hiddenGames, debouncedQuery) : strictTitleSearch(games, debouncedQuery)
     if (view === 'installed') result = result.filter((game) => game.is_installed && !game.is_utility && !game.is_dlc)
     if (view === 'favorites') result = result.filter((game) => Boolean(game.is_favorite) && !game.is_utility && !game.is_dlc)
     if (view === 'ready') result = result.filter((game) => !game.is_installed && !game.is_utility && !game.is_dlc)
     if (view === 'utilities') result = result.filter((game) => game.is_utility)
     if (view === 'dlc') result = result.filter((game) => game.is_dlc && !game.is_utility)
-    if (view !== 'utilities' && view !== 'dlc' && view !== 'system') result = result.filter((game) => !game.is_utility && !game.is_dlc)
+    if (view !== 'utilities' && view !== 'dlc' && view !== 'system' && view !== 'hidden') result = result.filter((game) => !game.is_utility && !game.is_dlc)
     if (qualityFilters.includes('missingArtwork')) {
       result = result.filter((game) => {
         const artwork = String(game.cover_url ?? '').trim().toLowerCase()
@@ -6884,6 +7490,7 @@ function App() {
     if (view === 'ready') return 'Ready to Install'
     if (view === 'utilities') return 'Utility Tools'
     if (view === 'dlc') return 'DLC & Add-ons'
+    if (view === 'hidden') return 'Hidden Apps & Exclusions'
     return 'Full Collection'
   }, [sourceFilters, sourceOptions, view, aiFilter])
   const setSidebarView = (nextView) => {
@@ -7337,7 +7944,18 @@ function App() {
       }
       case 'SWITCH_VIEW': {
         let v = String(payload.view || 'all').toLowerCase().trim()
-        if (v === 'settings' || v === 'settigns' || v === 'config' || v === 'prefs' || v === 'preferences' || v === 'options') v = 'system'
+        if (v === 'settings' || v === 'settigns' || v === 'config' || v === 'prefs' || v === 'preferences' || v === 'options' || v === 'system') {
+          setSettingsModalTab('general')
+          setSettingsModalOpen(true)
+          alertUser(`AI Companion: Opened Settings`)
+          break
+        }
+        if (v === 'about') {
+          setSettingsModalTab('about')
+          setSettingsModalOpen(true)
+          alertUser(`AI Companion: Opened About Logpile`)
+          break
+        }
         if (v === 'library') v = 'all'
         setSidebarView(v)
         alertUser(`AI Companion: Switched view to ${v}`)
@@ -7771,23 +8389,27 @@ function App() {
               title="Logpile — Return to library"
             >
               <img
-                src={logoDark}
+                src={THEME_LOGOS[layoutTheme] || logoDark}
                 alt="Logpile"
                 className="w-5 h-5 object-contain flex-shrink-0 shrink-0 aspect-square select-none pointer-events-none app-logo titlebar-logo"
                 style={{ width: '18px', height: '18px', minWidth: '18px', minHeight: '18px', maxWidth: '18px', maxHeight: '18px', objectFit: 'contain', flexShrink: 0 }}
               />
-              <span className="titlebar-brand-label">Logpile</span>
+              <span className="titlebar-brand-label">
+                {layoutTheme === 'kinetic' ? '// LOGPILE //' : layoutTheme === 'playful' ? 'Logpile' : 'LOGPILE'}
+              </span>
             </div>
           </div>
         ) : (
           <div className="titlebar-brand-capsule">
             <img
-              src={logoDark}
+              src={THEME_LOGOS[layoutTheme] || logoDark}
               alt="Logpile"
               className="w-5 h-5 object-contain flex-shrink-0 shrink-0 aspect-square select-none pointer-events-none app-logo titlebar-logo"
               style={{ width: '18px', height: '18px', minWidth: '18px', minHeight: '18px', maxWidth: '18px', maxHeight: '18px', objectFit: 'contain', flexShrink: 0 }}
             />
-            <span className="titlebar-brand-label">Logpile</span>
+            <span className="titlebar-brand-label">
+              {layoutTheme === 'kinetic' ? '// LOGPILE //' : layoutTheme === 'playful' ? 'Logpile' : 'LOGPILE'}
+            </span>
           </div>
         )}
       </div>
@@ -7956,7 +8578,7 @@ function App() {
                   title="9:16 vertical 4K - ideal for Instagram Stories, Reels, and Mobile"
                 >
                   <div className="brag-ratio-btn-header">
-                    <Smartphone size={12} style={{ color: '#a855f7' }} />
+                    <Smartphone size={12} style={{ color: 'var(--accent, #d6ff4b)' }} />
                     <span>9:16</span>
                   </div>
                   <span className="brag-ratio-tag">Story / Reel</span>
@@ -7968,7 +8590,7 @@ function App() {
                   title="1:1 square 4K - ideal for Instagram feed posts and Discord"
                 >
                   <div className="brag-ratio-btn-header">
-                    <Square size={12} style={{ color: '#22c55e' }} />
+                    <Square size={12} style={{ color: 'var(--accent, #d6ff4b)' }} />
                     <span>1:1</span>
                   </div>
                   <span className="brag-ratio-tag">Square Post</span>
@@ -8118,21 +8740,12 @@ function App() {
         <div className="sidebar-bottom-dock">
           <button
             type="button"
-            className={cn('sidebar-dock-btn', view === 'system' && 'active')}
-            onClick={() => setSidebarView('system')}
-            title="Settings"
+            className={cn('sidebar-dock-btn', settingsModalOpen && 'active')}
+            onClick={() => { setSettingsModalTab('general'); setSettingsModalOpen(true); }}
+            title="Settings & Preferences"
           >
             <Settings2 size={14} />
             {!sidebarCollapsed && <span>Settings</span>}
-          </button>
-          <button
-            type="button"
-            className={cn('sidebar-dock-btn', view === 'about' && 'active')}
-            onClick={() => setSidebarView('about')}
-            title="About Logpile"
-          >
-            <CircleHelp size={14} />
-            {!sidebarCollapsed && <span>About</span>}
           </button>
         </div>
       </aside>
@@ -8602,8 +9215,8 @@ function App() {
     </div>
   </div>
 )}
-{selectMode ? <div className="bulk-action-bar"><span><Check size={14} /> {selectedIds.length} selected · {filteredRecordIds.length} filtered</span><div className="bulk-action-group"><button className="outline-button" disabled={bulkBusy || !filteredRecordIds.length} onClick={selectAllFiltered}><Check size={14} /> Select All Filtered</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={deselectAll}><X size={14} /> Deselect All</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={() => handleBulkMove('dlc')}><PackageOpen size={14} /> Move to DLC</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleBulkHide}><EyeOff size={14} /> Hide from Library</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleRefetchSelected}><RefreshCw size={14} /> Re-fetch Artwork</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleExportSelected}><FileDown size={14} /> Export Selected to CSV</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={() => setBulkEditOpen(true)}><SlidersHorizontal size={14} /> Edit Selected</button><button className="danger-button" disabled={bulkBusy || !selectedIds.length} onClick={handleDeleteSelected}><Trash2 size={14} /> Delete Selected</button></div></div> : null}{notice ? <div className={cn('notice', noticeTone === 'error' && 'notice-error', noticeTone === 'warning' && 'notice-warning')}>{noticeTone === 'error' ? <X size={14} /> : noticeTone === 'warning' ? <AlertTriangle size={14} /> : <Check size={14} />} {notice}</div> : null}{loading && !filteredGames.length ? <div className="empty-state"><div className="loader" /> Loading and indexing your library…</div> : filteredGames.length ? <ErrorBoundary><VirtualGrid games={filteredGames} familyLocks={familyLocks} onLaunch={handleLaunch} onSelect={handleSelectGame} onHideGame={(game) => updateHiddenState(game, true)} onMoveCategory={moveCategory} onEditGame={setEditorGame} onContextMenu={handleCardContextMenu} onArtworkChanged={handleArtworkChanged} onArtworkError={handleArtworkError} selectMode={selectMode} selectedIds={selectedIds} onToggleSelect={toggleGameSelection} scrollElementRef={mainScrollRef} onImageError={handleImageError} initialScrollTop={activeGame?.id === lastClickedGameIdRef.current ? libraryScrollRef.current : 0} restoreGameId={activeGame?.id || lastClickedGameIdRef.current} restoredGameId={restoredGameId} gamepadFocusIndex={isGamepadMode ? gamepadIndex : -1} onToggleFavorite={handleToggleFavorite} /></ErrorBoundary> : (!games.length && !query && !sourceFilters.length && genreFilter === 'all' && backlogFilter === 'all' && !qualityFilters.length) ? <div className="empty-state"><strong>Your library is empty.</strong><span>Click Scan & import (top right) to add your games.</span></div> : <div className="empty-state"><Search size={21} /><span>No titles match {query ? `"${query}"` : aiFilter ? `AI filter "${aiFilter.originalQuery || 'custom'}"` : 'these filters'}.</span>{aiFilter ? (<button type="button" className="outline-button" style={{ marginTop: '10px', borderColor: 'rgba(239, 68, 68, 0.4)', color: '#f87171', display: 'inline-flex', alignItems: 'center', gap: '6px' }} onClick={handleClearAiFilter}><X size={14} /><span>Clear Smart AI Filter</span></button>) : null}{query ? (<button type="button" className="outline-button" style={{ marginTop: '10px', borderColor: 'var(--accent, #d6ff4b)', color: 'var(--accent, #d6ff4b)', display: 'inline-flex', alignItems: 'center', gap: '6px' }} onClick={() => setAiDrawerOpen(true)}><Sparkles size={14} /><span>Ask AI Companion about "{query}"</span></button>) : null}</div>}</section>}</ErrorBoundary></div><footer className="statusbar"><span className="statusbar-item statusbar-terminal"><TerminalSquare size={13} /> {scannerStatus ? <span className="inline-flex items-center gap-1.5"><span className="pulse-dot" /> {scannerStatus}</span> : 'Ready'}</span>{globalSyncRunning && (<span className="statusbar-item statusbar-sync-active" title="Artwork & metadata sync in progress"><span className="pulse-dot" /><span>{globalSyncProgress?.gameTitle ? `Syncing: ${globalSyncProgress.gameTitle} (${globalSyncProgress.current}/${globalSyncProgress.total})${globalSyncProgress.formattedTransfer ? ` • ${globalSyncProgress.formattedTransfer}` : ''}` : (globalSyncProgress?.message || `Syncing artwork (${globalSyncProgress?.current || 0}/${globalSyncProgress?.total || 0})...`)}</span><button type="button" onClick={handleCancelGlobalSync} className="statusbar-cancel-btn" title="Cancel sync immediately"><X size={11} /> Cancel</button></span>)}{guideSyncStatus?.running && (<span className="statusbar-item statusbar-sync-active" title="Strategy guides downloading from StrategyWiki in progress"><span className="pulse-dot" /><span>{guideSyncStatus.progress?.title ? `Downloading Guides: ${guideSyncStatus.progress.title} (${guideSyncStatus.progress.current}/${guideSyncStatus.progress.total})` : 'Downloading Guides from StrategyWiki...'}</span><button type="button" onClick={() => window.api?.guides?.cancelBatch?.()} className="statusbar-cancel-btn" title="Cancel guide download"><X size={11} /> Cancel</button></span>)}<span className="statusbar-item statusbar-storage"><span className="pulse-dot" /> Offline · Local storage</span>{isVoiceListening && (<span className="statusbar-item statusbar-voice-listening" style={{ color: '#22c55e' }}><span className="pulse-dot" style={{ background: '#22c55e', boxShadow: '0 0 8px rgba(34, 197, 94, 0.6)' }} /> Listening (PTT)...</span>)}{connectedGamepad && (<span className="statusbar-item statusbar-gamepad" title={`Connected Controller: ${connectedGamepad}`}><Gamepad2 size={13} style={{ color: '#22c55e' }} /><span>{connectedGamepad}</span><span className="gamepad-hud-bar" style={{ marginLeft: '6px' }}><span className="gamepad-key-badge badge-a">A</span> Select<span className="gamepad-key-badge badge-b">B</span> Back<span className="gamepad-key-badge badge-x">X</span> Status<span className="gamepad-key-badge badge-y">Y</span> Fav<span className="gamepad-key-badge">LB/RB</span> Views</span></span>)}<span className="statusbar-item statusbar-version">Version 1.3.2</span></footer></main>
-    </div><AiAssistantDrawer open={aiDrawerOpen} onClose={() => setAiDrawerOpen(false)} activeGame={activeGame} layoutTheme={layoutTheme} games={games} onAction={handleAiAction} isVoiceListening={isVoiceListening} onToggleVoice={toggleVoiceListening} /><ScanImportPanel open={scanOpen} onClose={() => setScanOpen(false)} onRefresh={loadData} /><GameEditorModal game={editorGame} onClose={() => setEditorGame(null)} onSaved={handleEditorSaved} /><PurgeConfirmModal open={purgeOpen} busy={purgeBusy} onClose={() => setPurgeOpen(false)} onConfirm={handlePurge} /><BulkEditModal open={bulkEditOpen} count={selectedIds.length} busy={bulkBusy} onClose={() => setBulkEditOpen(false)} onApply={handleBulkApply} /><ContextMenu menu={contextMenu} menuRef={contextMenuRef} onClose={() => setContextMenu(null)} onMoveCategory={moveCategory} onEditGame={setEditorGame} onHideGame={(game) => updateHiddenState(game, true)} onArtworkChanged={handleArtworkChanged} onArtworkError={handleArtworkError} onToggleFavorite={handleToggleFavorite} /><ConfirmActionModal config={confirmModal} onClose={() => setConfirmModal(null)} />{checkpointPrompt && (
+{selectMode ? <div className="bulk-action-bar"><span><Check size={14} /> {selectedIds.length} selected · {filteredRecordIds.length} filtered</span><div className="bulk-action-group"><button className="outline-button" disabled={bulkBusy || !filteredRecordIds.length} onClick={selectAllFiltered}><Check size={14} /> Select All Filtered</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={deselectAll}><X size={14} /> Deselect All</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={() => handleBulkMove('dlc')}><PackageOpen size={14} /> Move to DLC</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleBulkHide}><EyeOff size={14} /> Hide from Library</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleRefetchSelected}><RefreshCw size={14} /> Re-fetch Artwork</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleExportSelected}><FileDown size={14} /> Export Selected to CSV</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={() => setBulkEditOpen(true)}><SlidersHorizontal size={14} /> Edit Selected</button><button className="danger-button" disabled={bulkBusy || !selectedIds.length} onClick={handleDeleteSelected}><Trash2 size={14} /> Delete Selected</button></div></div> : null}{notice ? <div className={cn('notice', noticeTone === 'error' && 'notice-error', noticeTone === 'warning' && 'notice-warning')}>{noticeTone === 'error' ? <X size={14} /> : noticeTone === 'warning' ? <AlertTriangle size={14} /> : <Check size={14} />} {notice}</div> : null}{loading && !filteredGames.length && !showIntro ? <div className="empty-state"><div className="loader" /> Loading and indexing your library…</div> : filteredGames.length ? <ErrorBoundary><VirtualGrid games={filteredGames} familyLocks={familyLocks} onLaunch={handleLaunch} onSelect={handleSelectGame} onHideGame={(game) => updateHiddenState(game, true)} onMoveCategory={moveCategory} onEditGame={setEditorGame} onContextMenu={handleCardContextMenu} onArtworkChanged={handleArtworkChanged} onArtworkError={handleArtworkError} selectMode={selectMode} selectedIds={selectedIds} onToggleSelect={toggleGameSelection} scrollElementRef={mainScrollRef} onImageError={handleImageError} initialScrollTop={activeGame?.id === lastClickedGameIdRef.current ? libraryScrollRef.current : 0} restoreGameId={activeGame?.id || lastClickedGameIdRef.current} restoredGameId={restoredGameId} gamepadFocusIndex={isGamepadMode ? gamepadIndex : -1} onToggleFavorite={handleToggleFavorite} /></ErrorBoundary> : (!games.length && !query && !sourceFilters.length && genreFilter === 'all' && backlogFilter === 'all' && !qualityFilters.length) ? <div className="empty-state"><strong>Your library is empty.</strong><span>Click Scan & import (top right) to add your games.</span></div> : <div className="empty-state"><Search size={21} /><span>No titles match {query ? `"${query}"` : aiFilter ? `AI filter "${aiFilter.originalQuery || 'custom'}"` : 'these filters'}.</span>{aiFilter ? (<button type="button" className="outline-button" style={{ marginTop: '10px', borderColor: 'rgba(239, 68, 68, 0.4)', color: '#f87171', display: 'inline-flex', alignItems: 'center', gap: '6px' }} onClick={handleClearAiFilter}><X size={14} /><span>Clear Smart AI Filter</span></button>) : null}{query ? (<button type="button" className="outline-button" style={{ marginTop: '10px', borderColor: 'var(--accent, #d6ff4b)', color: 'var(--accent, #d6ff4b)', display: 'inline-flex', alignItems: 'center', gap: '6px' }} onClick={() => setAiDrawerOpen(true)}><Sparkles size={14} /><span>Ask AI Companion about "{query}"</span></button>) : null}</div>}</section>}</ErrorBoundary></div><footer className="statusbar"><span className="statusbar-item statusbar-terminal"><TerminalSquare size={13} style={{ color: 'var(--accent, #d6ff4b)', opacity: 0.9 }} /> {scannerStatus ? <span className="inline-flex items-center gap-1.5"><span className="pulse-dot" /> {scannerStatus}</span> : 'Ready'}</span>{globalSyncRunning && (<span className="statusbar-item statusbar-sync-active" title="Artwork & metadata sync in progress"><span className="pulse-dot" /><span>{globalSyncProgress?.gameTitle ? `Syncing: ${globalSyncProgress.gameTitle} (${globalSyncProgress.current}/${globalSyncProgress.total})${globalSyncProgress.formattedTransfer ? ` • ${globalSyncProgress.formattedTransfer}` : ''}` : (globalSyncProgress?.message || `Syncing artwork (${globalSyncProgress?.current || 0}/${globalSyncProgress?.total || 0})...`)}</span><button type="button" onClick={handleCancelGlobalSync} className="statusbar-cancel-btn" title="Cancel sync immediately"><X size={11} /> Cancel</button></span>)}{guideSyncStatus?.running && (<span className="statusbar-item statusbar-sync-active" title="Strategy guides downloading from StrategyWiki in progress"><span className="pulse-dot" /><span>{guideSyncStatus.progress?.title ? `Downloading Guides: ${guideSyncStatus.progress.title} (${guideSyncStatus.progress.current}/${guideSyncStatus.progress.total})` : 'Downloading Guides from StrategyWiki...'}</span><button type="button" onClick={() => window.api?.guides?.cancelBatch?.()} className="statusbar-cancel-btn" title="Cancel guide download"><X size={11} /> Cancel</button></span>)}<span className="statusbar-item statusbar-storage"><HardDrive size={11} style={{ color: 'var(--accent, #d6ff4b)', opacity: 0.85 }} /> Offline · Local storage</span>{isVoiceListening && (<span className="statusbar-item statusbar-voice-listening" style={{ color: 'var(--accent, #d6ff4b)' }}><span className="pulse-dot" style={{ background: 'var(--accent, #d6ff4b)', boxShadow: '0 0 8px var(--accent-glow, rgba(214, 255, 75, 0.6))' }} /> Listening (PTT)...</span>)}{connectedGamepad && (<><span className="statusbar-item statusbar-gamepad" title={`Connected Controller: ${connectedGamepad}`}><Gamepad2 size={12} style={{ color: 'var(--accent, #d6ff4b)' }} /><span>{connectedGamepad}</span></span><span className="statusbar-item statusbar-shortcuts" title="Controller Navigation Shortcuts"><span className="gamepad-key-badge badge-a">A</span> Select<span className="gamepad-key-badge badge-b">B</span> Back<span className="gamepad-key-badge badge-x">X</span> Status<span className="gamepad-key-badge badge-y">Y</span> Fav<span className="gamepad-key-badge">LB/RB</span> Views</span></>)}<span className="statusbar-item statusbar-version">Version 1.3.5</span></footer></main>
+    </div><SettingsModal isOpen={settingsModalOpen} onClose={() => setSettingsModalOpen(false)} initialTab={settingsModalTab} stats={stats} health={libraryHealth} backupsList={backupsList} backupBusy={backupBusy} restoreBusy={restoreBusy} onBackupNow={handleBackupNow} onOpenBackupsFolder={handleOpenBackupsFolder} onOpenBackupsManager={handleOpenBackupsManager} onExport={handleExport} onBackupCache={handleBackupCache} onRestoreCache={handleRestoreCache} onPurge={() => setPurgeOpen(true)} onRefresh={() => loadData({ preserveScroll: true })} connectedGamepad={connectedGamepad} hiddenGames={hiddenGames} onRestoreHidden={(game) => updateHiddenState(game, false)} activityLog={activityLog} activityLoading={activityLoading} onRefreshActivity={fetchSystemHealthAndActivity} layoutTheme={layoutTheme} onLayoutThemeChange={handleLayoutThemeChange} onTriggerIntroPreview={() => { setSettingsModalOpen(false); setShowIntro(true); }} /><AiAssistantDrawer open={aiDrawerOpen} onClose={() => setAiDrawerOpen(false)} activeGame={activeGame} layoutTheme={layoutTheme} games={games} onAction={handleAiAction} isVoiceListening={isVoiceListening} onToggleVoice={toggleVoiceListening} /><ScanImportPanel open={scanOpen} onClose={() => setScanOpen(false)} onRefresh={loadData} /><GameEditorModal game={editorGame} onClose={() => setEditorGame(null)} onSaved={handleEditorSaved} /><PurgeConfirmModal open={purgeOpen} busy={purgeBusy} onClose={() => setPurgeOpen(false)} onConfirm={handlePurge} /><BulkEditModal open={bulkEditOpen} count={selectedIds.length} busy={bulkBusy} onClose={() => setBulkEditOpen(false)} onApply={handleBulkApply} /><ContextMenu menu={contextMenu} menuRef={contextMenuRef} onClose={() => setContextMenu(null)} onMoveCategory={moveCategory} onEditGame={setEditorGame} onHideGame={(game) => updateHiddenState(game, true)} onArtworkChanged={handleArtworkChanged} onArtworkError={handleArtworkError} onToggleFavorite={handleToggleFavorite} /><ConfirmActionModal config={confirmModal} onClose={() => setConfirmModal(null)} />{checkpointPrompt && (
   <div
     className="checkpoint-note-toast"
     style={{
@@ -8669,9 +9282,9 @@ function App() {
         style={{
           padding: '7px',
           background: isVoiceListening ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-          border: isVoiceListening ? '1px solid #22c55e' : '1px solid rgba(255, 255, 255, 0.1)',
+          border: isVoiceListening ? '1px solid var(--accent, #d6ff4b)' : '1px solid rgba(255, 255, 255, 0.1)',
           borderRadius: '6px',
-          color: isVoiceListening ? '#22c55e' : 'var(--text-secondary, #94a3b8)',
+          color: isVoiceListening ? 'var(--accent, #d6ff4b)' : 'var(--text-secondary, #94a3b8)',
           cursor: 'pointer',
         }}
       >
@@ -8695,6 +9308,6 @@ function App() {
       </button>
     </form>
   </div>
-)}<BackupsManagerModal open={backupsModalOpen} busy={backupBusy || restoreBusy} backups={backupsList} loading={backupsLoading} backupsDirectory={backupsDirectory || libraryHealth?.backupsDirectory} onClose={() => setBackupsModalOpen(false)} onBackupNow={handleBackupNow} onOpenFolder={handleOpenBackupsFolder} onRestoreBackup={handleRestoreBackup} onChooseAndRestoreFile={handleChooseAndRestoreFile} /></div>
+)}<BackupsManagerModal open={backupsModalOpen} busy={backupBusy || restoreBusy} backups={backupsList} loading={backupsLoading} backupsDirectory={backupsDirectory || libraryHealth?.backupsDirectory} onClose={() => setBackupsModalOpen(false)} onBackupNow={handleBackupNow} onOpenFolder={handleOpenBackupsFolder} onRestoreBackup={handleRestoreBackup} onChooseAndRestoreFile={handleChooseAndRestoreFile} />{showIntro && <IntroSplash layoutTheme={layoutTheme} isDataLoaded={dataLoaded} onFinish={() => setShowIntro(false)} />}</div>
 }
 export default App

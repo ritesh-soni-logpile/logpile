@@ -148,6 +148,7 @@ contextBridge.exposeInMainWorld('api', {
   },
   system: {
     getSpecs: () => ipcRenderer.invoke('system:getSpecs'),
+    getConnectedGamepads: () => ipcRenderer.invoke('system:getConnectedGamepads'),
     checkPreLaunch: () => ipcRenderer.invoke('system:checkPreLaunch'),
     closeHeavyProcesses: (processes) => ipcRenderer.invoke('system:closeHeavyProcesses', processes),
   },
@@ -169,11 +170,24 @@ contextBridge.exposeInMainWorld('api', {
   },
   ai: {
     getStatus: () => ipcRenderer.invoke('ai:getStatus'),
+    selectModelFile: () => ipcRenderer.invoke('ai:selectModelFile'),
+    attachModelFile: (filePath, action) => ipcRenderer.invoke('ai:attachModelFile', filePath, action),
+    setExecutionMode: (mode) => ipcRenderer.invoke('ai:setExecutionMode', mode),
+    getExecutionMode: () => ipcRenderer.invoke('ai:getExecutionMode'),
+    setAutoUnload: (enabled) => ipcRenderer.invoke('ai:setAutoUnload', enabled),
+    getAutoUnload: () => ipcRenderer.invoke('ai:getAutoUnload'),
     askQuestion: (prompt, activeGameTitle, options) => ipcRenderer.invoke('ai:askQuestion', prompt, activeGameTitle, options),
     getRecommendation: (preference, options) => ipcRenderer.invoke('ai:getRecommendation', preference, options),
     unload: () => ipcRenderer.invoke('ai:unload'),
     openFolder: () => ipcRenderer.invoke('ai:openFolder'),
     parseFilter: (text) => ipcRenderer.invoke('ai:parseFilter', text),
+    generateHudTheme: (userPrompt, gameInfo, options) => ipcRenderer.invoke('ai:generateHudTheme', userPrompt, gameInfo, options),
+    onToken: (callback) => {
+      if (typeof callback !== 'function') return () => {}
+      const listener = (_event, payload) => callback(payload)
+      ipcRenderer.on('ai:token', listener)
+      return () => ipcRenderer.removeListener('ai:token', listener)
+    },
   },
   steam: {
     getFamilyLocks: () => ipcRenderer.invoke('steam:getFamilyLocks'),
@@ -224,5 +238,28 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.on('voice:stateChange', handler)
       return () => ipcRenderer.removeListener('voice:stateChange', handler)
     },
+  },
+  fps: {
+    onStatusChanged: (callback) => {
+      if (typeof callback !== 'function') return () => {}
+      const handler = (_event, data) => callback(data)
+      ipcRenderer.on('fps:status-changed', handler)
+      return () => ipcRenderer.removeListener('fps:status-changed', handler)
+    },
+    onSettingsUpdated: (callback) => {
+      if (typeof callback !== 'function') return () => {}
+      const handler = (_event, data) => callback(data)
+      ipcRenderer.on('fps:settings-updated', handler)
+      return () => ipcRenderer.removeListener('fps:settings-updated', handler)
+    },
+  },
+  hardware: {
+    onTelemetry: (callback) => {
+      if (typeof callback !== 'function') return () => {}
+      const handler = (_event, data) => callback(data)
+      ipcRenderer.on('hardware:telemetry-update', handler)
+      return () => ipcRenderer.removeListener('hardware:telemetry-update', handler)
+    },
+    getMetrics: () => ipcRenderer.invoke('hardware:getMetrics'),
   },
 })

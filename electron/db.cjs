@@ -632,6 +632,34 @@ function getLibrarySettings(db) {
   const storedPreferAnimated = getAppSetting(db, 'prefer_animated_artwork', 'false')
   const storedPreferAnimatedCovers = getAppSetting(db, 'prefer_animated_covers', 'false')
   const storedMinimizeToTray = getAppSetting(db, 'minimize_to_tray', 'false')
+  const storedOverlayShortcut = getAppSetting(db, 'overlay_shortcut', 'CommandOrControl+Shift+Space')
+  const storedFpsShortcut = getAppSetting(db, 'fps_shortcut', 'CommandOrControl+Shift+F')
+  const storedSearchShortcut = getAppSetting(db, 'search_shortcut', 'CommandOrControl+F')
+  const storedFpsEnabled = getAppSetting(db, 'fps_enabled', 'false')
+  const storedFpsPosition = getAppSetting(db, 'fps_position', 'top-right')
+  const storedFpsOrientation = getAppSetting(db, 'fps_orientation', 'horizontal')
+  const storedFpsOpacity = getAppSetting(db, 'fps_opacity', '80')
+  const storedFpsStyle = getAppSetting(db, 'fps_style', 'minimalist-pill')
+  const storedFpsTestMode = getAppSetting(db, 'fps_test_mode', 'true')
+  const storedFpsMetrics = getAppSetting(db, 'fps_metrics', null)
+  let parsedFpsMetrics = {
+    fps: true,
+    onePercentLow: true,
+    frametime: true,
+    gpu: true,
+    cpu: true,
+    ram: true,
+    battery: true,
+    clock: true,
+  }
+  if (storedFpsMetrics) {
+    try {
+      const parsed = JSON.parse(storedFpsMetrics)
+      if (parsed && typeof parsed === 'object') {
+        parsedFpsMetrics = { ...parsedFpsMetrics, ...parsed }
+      }
+    } catch {}
+  }
   return {
     autoHideSupportEntries: Boolean(autoHideSupportEntriesEnabled(db)),
     steamGridDbApiKey: typeof storedKey === 'string' ? storedKey : '',
@@ -641,6 +669,16 @@ function getLibrarySettings(db) {
     preferAnimatedArtwork: storedPreferAnimated === 'true' || storedPreferAnimated === '1',
     preferAnimatedCovers: storedPreferAnimatedCovers === 'true' || storedPreferAnimatedCovers === '1',
     minimizeToTray: storedMinimizeToTray === 'true' || storedMinimizeToTray === '1',
+    overlayShortcut: typeof storedOverlayShortcut === 'string' && storedOverlayShortcut ? storedOverlayShortcut : 'CommandOrControl+Shift+Space',
+    fpsShortcut: typeof storedFpsShortcut === 'string' && storedFpsShortcut ? storedFpsShortcut : 'CommandOrControl+Shift+F',
+    searchShortcut: typeof storedSearchShortcut === 'string' && storedSearchShortcut ? storedSearchShortcut : 'CommandOrControl+F',
+    fpsEnabled: storedFpsEnabled === 'true' || storedFpsEnabled === '1',
+    fpsPosition: typeof storedFpsPosition === 'string' && storedFpsPosition ? storedFpsPosition : 'top-right',
+    fpsOrientation: typeof storedFpsOrientation === 'string' && storedFpsOrientation ? storedFpsOrientation : 'horizontal',
+    fpsOpacity: Number(storedFpsOpacity) || 80,
+    fpsStyle: typeof storedFpsStyle === 'string' && storedFpsStyle ? storedFpsStyle : 'minimalist-pill',
+    fpsTestMode: storedFpsTestMode === 'true' || storedFpsTestMode === '1',
+    fpsMetrics: parsedFpsMetrics,
   }
 }
 
@@ -654,6 +692,15 @@ function setLibrarySettings(db, settings = {}) {
   if (settings.preferAnimatedArtwork !== undefined && typeof settings.preferAnimatedArtwork !== 'boolean') throw new Error('Invalid prefer-animated setting.')
   if (settings.preferAnimatedCovers !== undefined && typeof settings.preferAnimatedCovers !== 'boolean') throw new Error('Invalid prefer-animated-covers setting.')
   if (settings.minimizeToTray !== undefined && typeof settings.minimizeToTray !== 'boolean') throw new Error('Invalid minimize-to-tray setting.')
+  if (settings.overlayShortcut !== undefined && (typeof settings.overlayShortcut !== 'string' || settings.overlayShortcut.length > 100)) throw new Error('Invalid overlay shortcut.')
+  if (settings.fpsShortcut !== undefined && (typeof settings.fpsShortcut !== 'string' || settings.fpsShortcut.length > 100)) throw new Error('Invalid FPS shortcut.')
+  if (settings.searchShortcut !== undefined && (typeof settings.searchShortcut !== 'string' || settings.searchShortcut.length > 100)) throw new Error('Invalid search shortcut.')
+  if (settings.fpsEnabled !== undefined && typeof settings.fpsEnabled !== 'boolean') throw new Error('Invalid FPS enabled setting.')
+  if (settings.fpsPosition !== undefined && typeof settings.fpsPosition !== 'string') throw new Error('Invalid FPS position.')
+  if (settings.fpsOrientation !== undefined && typeof settings.fpsOrientation !== 'string') throw new Error('Invalid FPS orientation.')
+  if (settings.fpsOpacity !== undefined && (typeof settings.fpsOpacity !== 'number' || isNaN(settings.fpsOpacity))) throw new Error('Invalid FPS opacity.')
+  if (settings.fpsStyle !== undefined && typeof settings.fpsStyle !== 'string') throw new Error('Invalid FPS style.')
+  if (settings.fpsTestMode !== undefined && typeof settings.fpsTestMode !== 'boolean') throw new Error('Invalid FPS test mode setting.')
 
   if (settings.autoHideSupportEntries !== undefined) db.prepare("INSERT INTO app_settings (key, value) VALUES ('auto_hide_support_entries', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(settings.autoHideSupportEntries ? '1' : '0')
   if (settings.steamGridDbApiKey !== undefined) db.prepare("INSERT INTO app_settings (key, value) VALUES ('steamgriddb_api_key', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(String(settings.steamGridDbApiKey).trim())
@@ -663,6 +710,16 @@ function setLibrarySettings(db, settings = {}) {
   if (settings.preferAnimatedArtwork !== undefined) db.prepare("INSERT INTO app_settings (key, value) VALUES ('prefer_animated_artwork', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(settings.preferAnimatedArtwork ? 'true' : 'false')
   if (settings.preferAnimatedCovers !== undefined) db.prepare("INSERT INTO app_settings (key, value) VALUES ('prefer_animated_covers', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(settings.preferAnimatedCovers ? 'true' : 'false')
   if (settings.minimizeToTray !== undefined) db.prepare("INSERT INTO app_settings (key, value) VALUES ('minimize_to_tray', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(settings.minimizeToTray ? 'true' : 'false')
+  if (settings.overlayShortcut !== undefined) db.prepare("INSERT INTO app_settings (key, value) VALUES ('overlay_shortcut', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(String(settings.overlayShortcut).trim())
+  if (settings.fpsShortcut !== undefined) db.prepare("INSERT INTO app_settings (key, value) VALUES ('fps_shortcut', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(String(settings.fpsShortcut).trim())
+  if (settings.searchShortcut !== undefined) db.prepare("INSERT INTO app_settings (key, value) VALUES ('search_shortcut', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(String(settings.searchShortcut).trim())
+  if (settings.fpsEnabled !== undefined) db.prepare("INSERT INTO app_settings (key, value) VALUES ('fps_enabled', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(settings.fpsEnabled ? 'true' : 'false')
+  if (settings.fpsPosition !== undefined) db.prepare("INSERT INTO app_settings (key, value) VALUES ('fps_position', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(String(settings.fpsPosition).trim())
+  if (settings.fpsOrientation !== undefined) db.prepare("INSERT INTO app_settings (key, value) VALUES ('fps_orientation', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(String(settings.fpsOrientation).trim())
+  if (settings.fpsOpacity !== undefined) db.prepare("INSERT INTO app_settings (key, value) VALUES ('fps_opacity', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(String(Math.min(100, Math.max(30, settings.fpsOpacity))))
+  if (settings.fpsStyle !== undefined) db.prepare("INSERT INTO app_settings (key, value) VALUES ('fps_style', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(String(settings.fpsStyle).trim())
+  if (settings.fpsTestMode !== undefined) db.prepare("INSERT INTO app_settings (key, value) VALUES ('fps_test_mode', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(settings.fpsTestMode ? 'true' : 'false')
+  if (settings.fpsMetrics !== undefined && typeof settings.fpsMetrics === 'object') db.prepare("INSERT INTO app_settings (key, value) VALUES ('fps_metrics', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(JSON.stringify(settings.fpsMetrics))
 
   if (settings.autoHideSupportEntries !== undefined) enforceHiddenClassification(db)
   return getLibrarySettings(db)

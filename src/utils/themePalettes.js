@@ -1,3 +1,5 @@
+import { getAddonPalette } from './themeAddons'
+
 export const LAYOUT_PALETTES = {
   cinematic: {
     base: '#000000',
@@ -82,7 +84,7 @@ export const LAYOUT_PALETTES = {
 }
 
 export function themeVars(layoutKey = 'cinematic') {
-  const p = LAYOUT_PALETTES[layoutKey] || LAYOUT_PALETTES.cinematic
+  const p = LAYOUT_PALETTES[layoutKey] || getAddonPalette(layoutKey) || LAYOUT_PALETTES.cinematic
   return {
     '--bg-base': p.base,
     '--bg-primary': p.base,

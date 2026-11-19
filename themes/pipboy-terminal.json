@@ -1,0 +1,24 @@
+{
+  "id": "pipboy-terminal",
+  "name": "Pip-Boy 3000 Terminal",
+  "author": "Ritesh Soni",
+  "tagline": "Fallout Wasteland Amber/Green CRT Scanline",
+  "version": "1.0.0",
+  "category": "Sci-Fi & Cyberware",
+  "palette": {
+    "base": "#020d04",
+    "surface": "#051808",
+    "surfaceHover": "#0a260f",
+    "card": "#041407",
+    "textPrimary": "#1bfd30",
+    "textSecondary": "#14b823",
+    "textMuted": "#0c6b15",
+    "accent": "#1bfd30",
+    "accentGlow": "rgba(27, 253, 48, 0.35)",
+    "accentContrast": "#020d04",
+    "borderColor": "rgba(27, 253, 48, 0.22)",
+    "borderHover": "rgba(27, 253, 48, 0.60)",
+    "badgeBg": "rgba(27, 253, 48, 0.16)",
+    "badgeText": "#86efac"
+  }
+}

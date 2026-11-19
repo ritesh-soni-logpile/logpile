@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { Search, X, Check } from 'lucide-react'
+import { Search, X, Check, Mic, MicOff } from 'lucide-react'
 import { LAYOUT_PALETTES, themeVars } from '../../utils/themePalettes'
+import { speakConfirmation } from '../../utils/voiceService'
+import { useGamepad } from '../../utils/useGamepad'
+import { renderHudPreview } from '../SettingsModal'
 
 const api = typeof window !== 'undefined' ? window.api : null
 
@@ -94,6 +97,7 @@ function InGameOverlayView() {
   const [aiAnswer, setAiAnswer] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState('')
+  const [isVoiceListening, setIsVoiceListening] = useState(false)
   const inputRef = useRef(null)
 
   const [aiPersonality, setAiPersonality] = useState(() => {
@@ -111,6 +115,68 @@ function InGameOverlayView() {
       return false
     }
   })
+
+  const [hudSettings, setHudSettings] = useState({
+    fpsEnabled: false,
+    fpsStyle: 'bonfire-ember',
+    fpsPosition: 'top-right',
+    fpsOpacity: 80,
+    fpsOrientation: 'horizontal',
+    fpsMetrics: {
+      fps: true,
+      onePercentLow: true,
+      frametime: true,
+      gpu: true,
+      cpu: true,
+      ram: true,
+      battery: true,
+      clock: true
+    }
+  })
+
+  useEffect(() => {
+    let active = true
+    const loadHudSettings = async () => {
+      try {
+        const s = await api?.database?.getLibrarySettings?.()
+        if (active && s) {
+          setHudSettings({
+            fpsEnabled: Boolean(s.fpsEnabled),
+            fpsStyle: s.fpsStyle || 'bonfire-ember',
+            fpsPosition: s.fpsPosition || 'top-right',
+            fpsOpacity: Number(s.fpsOpacity) || 80,
+            fpsOrientation: s.fpsOrientation || 'horizontal',
+            fpsMetrics: s.fpsMetrics || {
+              fps: true,
+              onePercentLow: true,
+              frametime: true,
+              gpu: true,
+              cpu: true,
+              ram: true,
+              battery: true,
+              clock: true
+            }
+          })
+        }
+      } catch {}
+    }
+    loadHudSettings()
+
+    const onIpc = (_event, data) => {
+      if (data && typeof data.fpsEnabled === 'boolean') {
+        setHudSettings((prev) => ({ ...prev, fpsEnabled: data.fpsEnabled }))
+      }
+    }
+    if (window.electron?.ipcRenderer?.on) {
+      window.electron.ipcRenderer.on('fps:status-changed', onIpc)
+    }
+    return () => {
+      active = false
+      if (window.electron?.ipcRenderer?.removeListener) {
+        window.electron.ipcRenderer.removeListener('fps:status-changed', onIpc)
+      }
+    }
+  }, [])
 
   const handleDismissAdvisory = () => {
     setAdvisoryDismissed(true)
@@ -284,8 +350,15 @@ function InGameOverlayView() {
     const isAppOrGeneric = !title || title.trim().toLowerCase() === 'game' || /wallpaper engine|steam|launcher|epic games/i.test(title)
     let target = ''
     if (trimmed) {
-      let cleaned = trimmed.replace(/^(i'm stuck on|im stuck on|stuck on|help me with|how do i beat|how to beat|how do i solve|how to solve|guide for|help me|walkthrough for)\s+/i, '').trim()
-      cleaned = cleaned.replace(/\s+(help me|please|guide|walkthrough|pls)$/i, '').trim()
+      let cleaned = trimmed
+        .replace(/\bstaut\b/gi, 'statue')
+        .replace(/\bpuzzel\b/gi, 'puzzle')
+        .replace(/\benmey\b/gi, 'enemy')
+        .replace(/^(?:here is a|here is|there is a|there is|i'm at a|i'm at|im at a|im at|i am at|i found a|i found|i see a|i see|looking at|how do i|how to|what do i do with|what do i do|what should i do with|what should i do|what do i need to do with|what do i need to do|where do i go|tell me how to|tell me|help me with|stuck on|how do you|not sure what to do with|not sure what to do)\s+/i, '')
+        .replace(/\s+(?:what do i need to do here|what do i need to do|what do i do here|what do i do|what should i do here|what should i do|what to do here|what to do|where to go|where do i go|how to solve|how to beat|how to pass|help me|please|pls|\?)+$/i, '')
+        .replace(/^(?:i'm stuck on|im stuck on|stuck on|help me with|how do i beat|how to beat|how do i solve|how to solve|guide for|walkthrough for)\s+/i, '')
+        .replace(/\s+(?:help me|please|guide|walkthrough|pls)$/i, '')
+        .trim()
       if (!cleaned) cleaned = trimmed
       if (!isAppOrGeneric && title && !new RegExp(title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(cleaned)) {
         target = `${title} ${cleaned}`
@@ -331,6 +404,66 @@ function InGameOverlayView() {
     const q = /wiki|fandom|guide/i.test(target) ? target : `${target} wiki guide`
     api.overlay?.openUrl?.(`https://www.google.com/search?q=${encodeURIComponent(q)}`)
   }
+
+  const toggleVoiceListening = async () => {
+    if (isVoiceListening) {
+      await api?.voice?.stop?.()
+      setIsVoiceListening(false)
+    } else {
+      const res = await api?.voice?.start?.()
+      if (res?.success) {
+        setIsVoiceListening(true)
+      }
+    }
+  }
+
+  useGamepad({
+    enabled: true,
+    onAction: (code) => {
+      if (code === 'R3') {
+        toggleVoiceListening()
+      } else if (code === 'B') {
+        api?.overlay?.hide?.()
+      }
+    },
+  })
+
+  useEffect(() => {
+    if (!api?.voice?.onRecognized) return
+    const unbindRecognized = api.voice.onRecognized(async (data) => {
+      if (!data?.text) return
+      const spokenText = data.text.trim()
+      setQuery(spokenText)
+      if (mode !== 'ai') setMode('ai')
+      setAiLoading(true)
+      setAiError('')
+      setAiAnswer('')
+      refreshAiStatus()
+      try {
+        const answer = await api.ai?.askQuestion?.(spokenText, title || '', { personality: aiPersonality, theme: layoutTheme })
+        setAiAnswer(answer || 'No response generated.')
+        refreshAiStatus()
+        if (answer) {
+          speakConfirmation(answer)
+        }
+      } catch (err) {
+        setAiError(err?.message || 'Failed to generate answer.')
+      } finally {
+        setAiLoading(false)
+      }
+    })
+
+    const unbindState = api.voice.onStateChange?.((st) => {
+      if (st && typeof st.isListening === 'boolean') {
+        setIsVoiceListening(st.isListening)
+      }
+    })
+
+    return () => {
+      unbindRecognized?.()
+      unbindState?.()
+    }
+  }, [title, aiPersonality, layoutTheme, mode])
 
   const handleAskAi = async () => {
     if (!trimmed) return
@@ -585,6 +718,7 @@ function InGameOverlayView() {
           <input
             ref={inputRef}
             type="text"
+            spellCheck="true"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDownInput}
@@ -596,7 +730,7 @@ function InGameOverlayView() {
               width: '100%',
               height: '44px',
               boxSizing: 'border-box',
-              padding: query ? '0 145px 0 14px' : '0 90px 0 14px',
+              padding: query ? '0 185px 0 14px' : '0 135px 0 14px',
               fontSize: '13px',
               fontWeight: 500,
               background: themeCardConfig.inputBg,
@@ -655,6 +789,29 @@ function InGameOverlayView() {
                 ✕
               </button>
             )}
+
+            {/* Voice Command / Mic Button (Matching Main App AI Drawer) */}
+            <button
+              type="button"
+              onClick={toggleVoiceListening}
+              style={{
+                width: '30px',
+                height: '30px',
+                borderRadius: `calc(${themeCardConfig.innerRadius} - 2px)`,
+                background: isVoiceListening ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255, 255, 255, 0.08)',
+                border: isVoiceListening ? '1px solid #22c55e' : '1px solid rgba(255, 255, 255, 0.1)',
+                color: isVoiceListening ? '#22c55e' : 'var(--text-secondary, #94a3b8)',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.15s ease',
+                flexShrink: 0,
+              }}
+              title={isVoiceListening ? 'Listening for voice command... (Click to stop)' : 'Voice Command / Push-to-Talk (Mic)'}
+            >
+              {isVoiceListening ? <Mic size={14} style={{ color: '#22c55e' }} /> : <MicOff size={14} />}
+            </button>
 
             {mode === 'ai' ? (
               <button
@@ -1040,6 +1197,24 @@ function InGameOverlayView() {
           <span>Press <kbd style={{ padding: '1px 5px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', color: 'var(--text-primary)', fontSize: '10px' }}>Esc</kbd> to {activeGameInfo.isPlaying ? 'return to game' : 'close'}</span>
         </div>
       </div>
+
+      {/* Live Themed Performance HUD Overlay */}
+      {hudSettings.fpsEnabled && (
+        <div
+          style={{
+            position: 'fixed',
+            top: hudSettings.fpsPosition.includes('top') ? '24px' : 'auto',
+            bottom: hudSettings.fpsPosition.includes('bottom') ? '24px' : 'auto',
+            left: hudSettings.fpsPosition.includes('left') ? '24px' : 'auto',
+            right: hudSettings.fpsPosition.includes('right') ? '24px' : 'auto',
+            zIndex: 999999,
+            opacity: (hudSettings.fpsOpacity || 80) / 100,
+            pointerEvents: 'none'
+          }}
+        >
+          {renderHudPreview(hudSettings.fpsStyle, hudSettings.fpsMetrics, hudSettings.fpsOrientation)}
+        </div>
+      )}
     </div>
   )
 }

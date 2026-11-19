@@ -10,13 +10,14 @@ let activeWatchers = []
 
 /**
  * Parses markdown text into discrete sections split by headings (## and ###).
+ * Enforces strict content density and filters out empty headings and placeholder stubs.
  * @param {string} markdownText 
- * @returns {Array<{ sectionTitle: string, content: string }>}
+ * @returns {Array<{ sectionTitle: string, content: string, charCount: number }>}
  */
 function parseMarkdownSections(markdownText) {
   if (!markdownText || typeof markdownText !== 'string') return []
   const lines = markdownText.split(/\r?\n/)
-  const sections = []
+  const rawSections = []
   let currentTitle = 'Overview'
   let currentContent = []
 
@@ -28,7 +29,7 @@ function parseMarkdownSections(markdownText) {
         ? rawBody.replace(/^#\s+[^\r\n]+\r?\n?/, '').trim()
         : rawBody
       if (cleanBody) {
-        sections.push({ sectionTitle: currentTitle, content: cleanBody })
+        rawSections.push({ sectionTitle: currentTitle, content: cleanBody })
       }
       currentTitle = headerMatch[1].trim()
       currentContent = []
@@ -42,10 +43,43 @@ function parseMarkdownSections(markdownText) {
     ? rawLastBody.replace(/^#\s+[^\r\n]+\r?\n?/, '').trim()
     : rawLastBody
   if (lastBody) {
-    sections.push({ sectionTitle: currentTitle, content: lastBody })
+    rawSections.push({ sectionTitle: currentTitle, content: lastBody })
   }
 
-  return sections
+  // --- Strict Content Density & Placeholder Filter (Points 1 & 2) ---
+  const PLACEHOLDER_REGEX = /\b(under construction|needs? expansion|to be added|tbd|wip|work in progress|coming soon|stub|see also|external links?|references|navigation|categories)\b/i
+
+  const validSections = []
+  for (const sec of rawSections) {
+    const title = sec.sectionTitle.trim()
+    let body = sec.content.trim()
+
+    // Strip links, markdown formatting, images, and category tags to measure real text length
+    const cleanProse = body
+      .replace(/\[\[(?:Category|File|Image):[^\]]*\]\]/gi, '')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/<[^>]*>/g, '')
+      .replace(/[#*_`~-]/g, '')
+      .trim()
+
+    // 1. Drop placeholder headers or sections matching WIP / stub flags
+    if (PLACEHOLDER_REGEX.test(title) || (cleanProse.length < 150 && PLACEHOLDER_REGEX.test(cleanProse))) {
+      continue
+    }
+
+    // 2. Minimum body length per section: At least 200 characters of meaningful text
+    if (cleanProse.length < 200) {
+      continue
+    }
+
+    validSections.push({
+      sectionTitle: title,
+      content: body,
+      charCount: cleanProse.length,
+    })
+  }
+
+  return validSections
 }
 
 /**
@@ -140,8 +174,15 @@ function importGuideFile(db, filePath, explicitGameId, explicitTitle) {
 
     const content = fs.readFileSync(filePath, 'utf8')
     const sections = parseMarkdownSections(content)
-    if (sections.length === 0) {
-      return { success: false, error: `No readable sections in "${filePath}"` }
+
+    // Quality Gate (Point 3): Must have at least 2 detailed sections and total prose >= 800 chars
+    const totalChars = sections.reduce((sum, s) => sum + (s.charCount || s.content.length), 0)
+    if (sections.length < 2 || totalChars < 800) {
+      try {
+        deleteGameKnowledge(targetDb, game.id)
+        targetDb.prepare('UPDATE games SET has_guide = 0 WHERE id = ?').run(game.id)
+      } catch {}
+      return { success: false, error: `Guide lacks sufficient detailed walkthrough content (${sections.length} valid sections, ${totalChars} chars). Stub rejected.` }
     }
 
     const insertTx = targetDb.transaction(() => {
@@ -213,9 +254,33 @@ function scanAndImportGuides(db, app) {
   const imported = results.filter((r) => r.success)
   const failed = results.filter((r) => !r.success)
 
+  const validGameIds = new Set()
+  for (const r of imported) {
+    if (r.gameId) {
+      validGameIds.add(String(r.gameId))
+    }
+  }
+
+  // Disk reconciliation: If a game was previously marked has_guide = 1 in database,
+  // but no valid guide file exists on disk, clean up its database records and set has_guide = 0
+  let purgedCount = 0
+  try {
+    const currentWithGuide = targetDb.prepare('SELECT id, canonical_title FROM games WHERE has_guide = 1').all() || []
+    for (const g of currentWithGuide) {
+      if (!validGameIds.has(String(g.id))) {
+        deleteGameKnowledge(targetDb, g.id)
+        targetDb.prepare('UPDATE games SET has_guide = 0 WHERE id = ?').run(g.id)
+        purgedCount++
+      }
+    }
+  } catch (purgeErr) {
+    console.warn('[Guides] Disk reconciliation error:', purgeErr.message)
+  }
+
   return {
     scanned: results.length,
     imported: imported.length,
+    purged: purgedCount,
     failed: failed.length,
     games: imported.map((r) => r.canonicalTitle),
   }

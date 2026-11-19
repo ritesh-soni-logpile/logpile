@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gaming Library & Launcher Comparison</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background-color: #0b0f17;
+      color: #e6edf3;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      padding: 30px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrapper {
+      width: 1300px;
+      background: #111827;
+      border: 1px solid #1f293d;
+      border-radius: 16px;
+      padding: 32px 36px 30px 36px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+    }
+    .header {
+      margin-bottom: 24px;
+    }
+    .title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    h1 {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .accent-bar {
+      width: 5px;
+      height: 24px;
+      background: #10b981;
+      border-radius: 4px;
+      display: inline-block;
+    }
+    .subtitle {
+      font-size: 14px;
+      color: #94a3b8;
+      font-weight: 400;
+      margin-left: 17px;
+    }
+    .tags {
+      display: flex;
+      gap: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: #64748b;
+    }
+    .tags span {
+      background: #1e293b;
+      padding: 4px 10px;
+      border-radius: 6px;
+      color: #94a3b8;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 13px;
+    }
+
+    th {
+      padding: 14px 16px;
+      text-align: left;
+      font-weight: 600;
+      color: #cbd5e1;
+      font-size: 13px;
+      border-bottom: 1px solid #1e293b;
+      background: #0f172a;
+    }
+
+    th:first-child {
+      border-top-left-radius: 10px;
+      width: 250px;
+    }
+    th:last-child {
+      border-top-right-radius: 10px;
+    }
+
+    /* Highlight Logpile Column */
+    .col-logpile {
+      background: rgba(16, 185, 129, 0.07);
+      border-left: 1px solid rgba(16, 185, 129, 0.25);
+      border-right: 1px solid rgba(16, 185, 129, 0.25);
+      width: 240px;
+    }
+    th.col-logpile {
+      background: rgba(16, 185, 129, 0.14);
+      border-top: 2px solid #10b981;
+      border-bottom: 1px solid rgba(16, 185, 129, 0.3);
+      color: #ffffff;
+      font-size: 14px;
+    }
+    .logpile-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .logpile-badge svg {
+      width: 18px;
+      height: 18px;
+      fill: #10b981;
+    }
+    .version-tag {
+      font-size: 11px;
+      background: #10b981;
+      color: #042f1a;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 4px;
+      margin-left: 6px;
+    }
+
+    td {
+      padding: 13px 16px;
+      border-bottom: 1px solid #1e293b;
+      vertical-align: middle;
+      line-height: 1.4;
+      color: #94a3b8;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+    tr:last-child td.col-logpile {
+      border-bottom: 2px solid #10b981;
+      border-bottom-left-radius: 8px;
+      border-bottom-right-radius: 8px;
+    }
+
+    .feature-name {
+      font-weight: 600;
+      color: #f1f5f9;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .feature-icon {
+      width: 16px;
+      height: 16px;
+      opacity: 0.7;
+    }
+
+    /* Status indicators */
+    .status-yes {
+      color: #34d399;
+      font-weight: 600;
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+    }
+    .status-no {
+      color: #ef4444;
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+    }
+    .status-partial {
+      color: #f59e0b;
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+    }
+
+    .subtext {
+      display: block;
+      font-size: 11px;
+      color: #64748b;
+      font-weight: 400;
+      margin-top: 2px;
+    }
+    .col-logpile .subtext {
+      color: #a7f3d0;
+      opacity: 0.85;
+    }
+
+    svg.check {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+      margin-top: 2px;
+      stroke: #10b981;
+      stroke-width: 2.5;
+      fill: none;
+    }
+    svg.cross {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+      margin-top: 2px;
+      stroke: #64748b;
+      stroke-width: 2;
+      fill: none;
+    }
+
+    .footer-note {
+      margin-top: 22px;
+      font-size: 11px;
+      color: #475569;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid #1e293b;
+      padding-top: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="header">
+      <div class="title-row">
+        <h1><span class="accent-bar"></span> Game Launcher & Library Comparison</h1>
+        <div class="tags">
+          <span>Local First</span>
+          <span>Zero Accounts</span>
+          <span>MIT Licensed</span>
+        </div>
+      </div>
+      <div class="subtitle">Comparing Logpile with Steam, Playnite, GOG Galaxy, and LaunchBox on privacy, portability, and local library control.</div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Feature</th>
+          <th class="col-logpile">
+            <div class="logpile-badge">
+              <svg viewBox="0 0 24 24"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg>
+              <span>Logpile</span>
+              <span class="version-tag">v1.3.5</span>
+            </div>
+          </th>
+          <th>Steam</th>
+          <th>Playnite</th>
+          <th>GOG Galaxy</th>
+          <th>LaunchBox</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <div class="feature-name">Local Game Detection</div>
+          </td>
+          <td class="col-logpile">
+            <div class="status-yes">
+              <svg class="check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              <div>Zero logins<span class="subtext">Scans local drives & folders directly</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-no">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>Account login<span class="subtext">Requires Steam store account</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-no">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>Accounts needed<span class="subtext">Requires store credentials to import</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-no">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>Account login<span class="subtext">Requires GOG store credentials</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-no">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>Account or keys<span class="subtext">Requires store tokens or accounts</span></div>
+            </div>
+          </td>
+        </tr>
+
+        <tr>
+          <td>
+            <div class="feature-name">Bulk Backlog Import</div>
+          </td>
+          <td class="col-logpile">
+            <div class="status-yes">
+              <svg class="check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              <div>Full Excel / CSV<span class="subtext">Import entire collection in seconds</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-no">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>No<span class="subtext">Single manual shortcut only</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-partial">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>Plugin only<span class="subtext">Not natively supported</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-no">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>No<span class="subtext">Store sync only</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-partial">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>Plugin only<span class="subtext">Not natively supported</span></div>
+            </div>
+          </td>
+        </tr>
+
+        <tr>
+          <td>
+            <div class="feature-name">Portable Drive Healing</div>
+          </td>
+          <td class="col-logpile">
+            <div class="status-yes">
+              <svg class="check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              <div>Self-healing paths<span class="subtext">Auto-adapts when D: becomes E:</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-no">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>Breaks<span class="subtext">Requires re-adding library folder</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-no">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>Breaks<span class="subtext">Fixed drive paths get broken</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-no">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>Breaks<span class="subtext">Installation path disconnects</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-no">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>Breaks<span class="subtext">Requires manual path reassignment</span></div>
+            </div>
+          </td>
+        </tr>
+
+        <tr>
+          <td>
+            <div class="feature-name">Steam Family Sharing Check</div>
+          </td>
+          <td class="col-logpile">
+            <div class="status-yes">
+              <svg class="check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              <div>Live status check<span class="subtext">Shows if shared copy is free before launch</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-partial">
+              <svg class="check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              <div>Steam client only<span class="subtext">Only inside Steam app</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-no">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>No live check<span class="subtext">Launches blindly</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-no">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>No live check<span class="subtext">Launches blindly</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-no">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>No live check<span class="subtext">Launches blindly</span></div>
+            </div>
+          </td>
+        </tr>
+
+        <tr>
+          <td>
+            <div class="feature-name">Automated Save Backups</div>
+          </td>
+          <td class="col-logpile">
+            <div class="status-yes">
+              <svg class="check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              <div>Local rolling ZIPs<span class="subtext">Automatic timestamped local archives</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-partial">
+              <svg class="check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              <div>Cloud only<span class="subtext">Requires internet & Steam Cloud support</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-partial">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>Plugin needed<span class="subtext">Requires external setup</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-partial">
+              <svg class="check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              <div>Cloud only<span class="subtext">Requires GOG Cloud support</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-partial">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>Plugin needed<span class="subtext">Requires external scripts</span></div>
+            </div>
+          </td>
+        </tr>
+
+        <tr>
+          <td>
+            <div class="feature-name">Offline Strategy Guides</div>
+          </td>
+          <td class="col-logpile">
+            <div class="status-yes">
+              <svg class="check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              <div>Built-in offline viewer<span class="subtext">Quick local search, maps, tips</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-no">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>Online browser tabs<span class="subtext">Community web pages</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-no">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>External links<span class="subtext">Opens web browser</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-no">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>External links<span class="subtext">Opens web browser</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-no">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>External links<span class="subtext">Opens web browser</span></div>
+            </div>
+          </td>
+        </tr>
+
+        <tr>
+          <td>
+            <div class="feature-name">Themed Performance HUD</div>
+          </td>
+          <td class="col-logpile">
+            <div class="status-yes">
+              <svg class="check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              <div>50+ themed HUD overlays<span class="subtext">0% idle GPU drain on desktop</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-partial">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>Plain text counter<span class="subtext">Basic green FPS numbers</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-no">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>External tools only<span class="subtext">Requires RTSS or RivaTuner</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-partial">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>Basic overlay<span class="subtext">Standard FPS counter</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-no">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>External tools only<span class="subtext">Requires third-party software</span></div>
+            </div>
+          </td>
+        </tr>
+
+        <tr>
+          <td>
+            <div class="feature-name">Custom HUD Studio</div>
+          </td>
+          <td class="col-logpile">
+            <div class="status-yes">
+              <svg class="check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              <div>Prompt & manual editor<span class="subtext">Create, customize, and save HUDs</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-no">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>None<span class="subtext">No overlay customization</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-no">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>None<span class="subtext">No built-in HUD editor</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-no">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>None<span class="subtext">No overlay customization</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-no">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>None<span class="subtext">No built-in HUD editor</span></div>
+            </div>
+          </td>
+        </tr>
+
+        <tr>
+          <td>
+            <div class="feature-name">Controller Detection</div>
+          </td>
+          <td class="col-logpile">
+            <div class="status-yes">
+              <svg class="check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              <div>Instant auto-detect<span class="subtext">Windows plug-and-play ready</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-partial">
+              <svg class="check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              <div>Big Picture mode<span class="subtext">Requires steam input setup</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-partial">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>Wake-up button<span class="subtext">Requires button press to register</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-partial">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>Manual setup<span class="subtext">Limited native mapping</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-partial">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>Wake-up button<span class="subtext">Requires button press to register</span></div>
+            </div>
+          </td>
+        </tr>
+
+        <tr>
+          <td>
+            <div class="feature-name">Privacy & Offline Control</div>
+          </td>
+          <td class="col-logpile">
+            <div class="status-yes">
+              <svg class="check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              <div>100% offline & MIT<span class="subtext">Zero logins, zero telemetry</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-no">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>Closed source<span class="subtext">Online accounts & tracking</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-partial">
+              <svg class="check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              <div>Open source (MIT)<span class="subtext">Requires account logins for sync</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-no">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>Closed source<span class="subtext">Account logins & sync tracking</span></div>
+            </div>
+          </td>
+          <td>
+            <div class="status-no">
+              <svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <div>Closed source<span class="subtext">Account logins for metadata scraping</span></div>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="footer-note">
+      <span>Based on publicly available features across latest 2026 releases.</span>
+      <span>Logpile is free and open-source under the MIT license.</span>
+    </div>
+  </div>
+</body>
+</html>

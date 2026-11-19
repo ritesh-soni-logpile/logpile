@@ -119,6 +119,7 @@ function getUninstallRegistryEntries() {
 }
 
 module.exports = {
+  fsPromises,
   safeRead,
   safeReadAsync,
   fileExists,

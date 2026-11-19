@@ -1,0 +1,24 @@
+{
+  "id": "gameboy-8bit",
+  "name": "8-Bit Game Boy",
+  "author": "Ritesh Soni",
+  "tagline": "1989 Dot-Matrix Spinach LCD Green",
+  "version": "1.0.0",
+  "category": "Retro & Handheld",
+  "palette": {
+    "base": "#0f1a0e",
+    "surface": "#182b17",
+    "surfaceHover": "#223d21",
+    "card": "#142413",
+    "textPrimary": "#8bac0f",
+    "textSecondary": "#68840b",
+    "textMuted": "#306230",
+    "accent": "#9bbc0f",
+    "accentGlow": "rgba(155, 188, 15, 0.32)",
+    "accentContrast": "#0f1a0e",
+    "borderColor": "rgba(155, 188, 15, 0.22)",
+    "borderHover": "rgba(155, 188, 15, 0.60)",
+    "badgeBg": "rgba(155, 188, 15, 0.16)",
+    "badgeText": "#d1fae5"
+  }
+}

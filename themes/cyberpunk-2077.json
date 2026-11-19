@@ -1,0 +1,24 @@
+{
+  "id": "cyberpunk-2077",
+  "name": "Cyberpunk 2077",
+  "author": "Ritesh Soni",
+  "tagline": "Night City Canary Yellow & High-Tech Cyan",
+  "version": "1.0.0",
+  "category": "Sci-Fi & Cyberware",
+  "palette": {
+    "base": "#07080e",
+    "surface": "#0e101a",
+    "surfaceHover": "#181b29",
+    "card": "#0b0d16",
+    "textPrimary": "#ffffff",
+    "textSecondary": "#94a3b8",
+    "textMuted": "#64748b",
+    "accent": "#fcee0a",
+    "accentGlow": "rgba(252, 238, 10, 0.32)",
+    "accentContrast": "#111000",
+    "borderColor": "rgba(252, 238, 10, 0.18)",
+    "borderHover": "rgba(0, 240, 255, 0.55)",
+    "badgeBg": "rgba(252, 238, 10, 0.15)",
+    "badgeText": "#fef08a"
+  }
+}

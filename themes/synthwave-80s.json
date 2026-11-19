@@ -1,0 +1,24 @@
+{
+  "id": "synthwave-80s",
+  "name": "Synthwave 80s",
+  "author": "Ritesh Soni",
+  "tagline": "Outrun Hot Neon Magenta & Cyan Grid",
+  "version": "1.0.0",
+  "category": "Retro & Neon",
+  "palette": {
+    "base": "#0c0714",
+    "surface": "#140c24",
+    "surfaceHover": "#201338",
+    "card": "#110a1f",
+    "textPrimary": "#ffffff",
+    "textSecondary": "#c084fc",
+    "textMuted": "#7e22ce",
+    "accent": "#ff2a85",
+    "accentGlow": "rgba(255, 42, 133, 0.35)",
+    "accentContrast": "#ffffff",
+    "borderColor": "rgba(255, 42, 133, 0.22)",
+    "borderHover": "rgba(5, 217, 232, 0.55)",
+    "badgeBg": "rgba(255, 42, 133, 0.16)",
+    "badgeText": "#fbcfe8"
+  }
+}

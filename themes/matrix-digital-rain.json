@@ -1,0 +1,24 @@
+{
+  "id": "matrix-digital-rain",
+  "name": "Matrix Digital Rain",
+  "author": "Ritesh Soni",
+  "tagline": "Terminal Black & Falling Green Phosphor Hex",
+  "version": "1.0.0",
+  "category": "Sci-Fi & Cyberware",
+  "palette": {
+    "base": "#020703",
+    "surface": "#051308",
+    "surfaceHover": "#0a220e",
+    "card": "#041007",
+    "textPrimary": "#00ff41",
+    "textSecondary": "#008f11",
+    "textMuted": "#003b00",
+    "accent": "#00ff41",
+    "accentGlow": "rgba(0, 255, 65, 0.35)",
+    "accentContrast": "#020703",
+    "borderColor": "rgba(0, 255, 65, 0.22)",
+    "borderHover": "rgba(0, 255, 65, 0.65)",
+    "badgeBg": "rgba(0, 255, 65, 0.15)",
+    "badgeText": "#4ade80"
+  }
+}
