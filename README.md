@@ -7,12 +7,12 @@
 [![Zero Cloud](https://img.shields.io/badge/Telemetry-0%25%20Offline-emerald?style=for-the-badge)](#)
 
 <p align="center">
-  <a href="https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.1/Logpile.Setup.1.3.1.exe">
-    <img src="https://img.shields.io/badge/Download-Installer%20(.exe)%20--%20166%20MB-2ea44f?style=for-the-badge&logo=windows" alt="Download Installer" />
+  <a href="https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.5/Logpile.Setup.1.3.5.exe">
+    <img src="https://img.shields.io/badge/Download-Installer%20(.exe)%20--%20v1.3.5-2ea44f?style=for-the-badge&logo=windows" alt="Download Installer" />
   </a>
   &nbsp;&nbsp;
-  <a href="https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.1/Logpile-v1.3.1-Portable.zip">
-    <img src="https://img.shields.io/badge/Download-Portable%20(.zip)%20--%20210%20MB-0969da?style=for-the-badge&logo=zip" alt="Download Portable" />
+  <a href="https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.5/Logpile-v1.3.5-Portable.zip">
+    <img src="https://img.shields.io/badge/Download-Portable%20(.zip)%20--%20v1.3.5-0969da?style=for-the-badge&logo=zip" alt="Download Portable" />
   </a>
 </p>
 
@@ -22,31 +22,75 @@
 </p>
 
 ## Why Logpile?
-Traditional game launchers break on portable SSDs when drive letters change, lock saves behind cloud subscriptions, and run heavy background chromium engines that steal CPU cycles and VRAM while gaming. They also leave you guessing whether a shared Steam Family game is actually free to play before you launch it.
+Most PC game launchers are storefronts first. They run heavy web browsers in the background, demand account logins just to view games on your own drives, and break when Windows shifts an external SSD from `D:` to `E:`. They also leave you guessing whether a shared Steam Family title is actually free to play before you launch it.
 
-Logpile stores everything—databases, artwork, and save backups—inside a single portable directory. It self-heals broken Windows drive letters automatically, detects live Steam Family availability status directly from your local library, protects frame rates with an active RAM guard, and indexes strategy guides locally so you never have to Alt-Tab for help.
+Logpile is built for gamers who want an offline-first library that manages local files properly. It stores everything—databases, artwork, and save backups—inside a single portable directory. It self-heals broken Windows drive paths automatically, checks live Steam Family availability before you launch, offers themed in-game performance overlays at 0% idle GPU load, and indexes strategy guides locally so you never have to Alt-Tab for help.
 
 ---
 
 ## At a Glance: Feature Comparison
 
-| Capability | Logpile v1.3.1 | Playnite | LaunchBox |
-| :--- | :--- | :--- | :--- |
-| **Storefront Auto-Detection** | **8 Native Sources** (Steam, Epic, GOG, Xbox, EA, Ubisoft, Amazon, Standalone) + automatic DLC/Utility filtering | Requires 3rd-party community plugins that break on API updates | Limited native store sync |
-| **Steam Family Sharing Status** | **Yes (Exclusive)** Detects live playing & availability status of shared family titles before launch | No (Library detection only; no in-use/active player status) | No |
-| **Portable Drive Self-Healing** | **Yes (`{{PORTABLE_ROOT}}`)** Auto-resolves drive-letter shifts across different PCs | No (Absolute paths break on letter change) | Partial |
-| **Save Sync & Conflict Guard** | **Yes** (Automated 3-tier rolling zip backup + pre-launch restore prompt on new PCs) | Requires community plugin (Ludusavi) | No native tool |
-| **In-Game Companion & Guides** | **Yes** (Fast Guide with near-zero memory footprint + Local Offline AI RAG via SQLite FTS5) | No | Manual PDF viewer only |
-| **Active RAM Protection** | **Yes** (Auto-unloads GGUF model from RAM on game spawn + Pre-Launch RAM Guard) | No (Extensions remain resident) | Heavy .NET runtime overhead |
-| **Backlog Recovery System** | **Yes** (Post-game checkpoint notes + 14-day idle refresher cards with combat cheat-sheets) | Basic status tags only | Static text notes |
-| **Voice & Gamepad Control** | **Yes** (Gamepad R3 Push-to-Talk, optional "Hey Logpile" wake word + 60fps controller grid) | Requires controller addon | Separate Big Box paid license |
-| **Retro / ROM Emulation** | Planned for v1.4.0 | Extensive | Extensive |
+<p align="center">
+  <img src="docs/assets/comparison-table-v1.3.5.png" alt="Logpile v1.3.5 vs Competitors Comparison Matrix" width="100%" />
+</p>
+
+| Feature | Logpile v1.3.5 | Steam | Playnite | GOG Galaxy | LaunchBox |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Local Game Detection** | **Zero logins:** Scans drives & folders directly | Store account login required | Account logins required for library sync | GOG account login required | Account logins or store tokens required |
+| **Bulk Backlog Import** | **Built-in:** Import entire uninstalled library via Excel / CSV | No (Single manual shortcut only) | Plugin required | No | Plugin required |
+| **Portable Drive Path Healing** | **Built-in:** Auto-adapts when drive letters change (`D:` to `E:`) | Breaks on drive letter change | Breaks on drive letter change | Breaks on drive letter change | Breaks on drive letter change |
+| **Live Steam Family Status** | **Yes:** Checks if shared game is free to play before launch | In-app store client only | No live check | No live check | No live check |
+| **Automated Save Backups** | **Built-in:** Automatic rolling local ZIP archives | Cloud only (for supported games) | Plugin required (e.g. Ludusavi) | Cloud only (for supported games) | Plugin required |
+| **Offline Strategy Guides** | **Built-in:** Offline guide, map & tip viewer | Community web browser tabs only | External browser links only | External browser links only | External browser links only |
+| **Themed Performance HUD** | **50+ Custom Styles:** Themed in-game overlays (0% idle GPU) | Basic plain text FPS counter | Third-party tools needed (RTSS) | Basic plain text FPS counter | Third-party tools needed |
+| **Custom HUD Theme Studio** | **Built-in:** Create, tweak, and save custom in-game HUDs | No | No | No | No |
+| **Controller Auto-Detect** | **Yes:** Instant Windows plug-and-play detection | Big Picture mode or manual setup | Wake-up button press required | Manual setup / limited | Wake-up button press required |
+| **Privacy & Offline First** | **100% Offline:** MIT open source, zero logins, zero tracking | Closed source, store accounts & tracking | Open source, relies on store logins | Closed source, accounts & telemetry | Closed source, logins for metadata |
+
+---
+
+## What's New in v1.3.5
+
+### 1. Themed In-Game Performance HUDs
+Most performance overlays give you generic green numbers or force you to install third-party software like RivaTuner. Logpile includes over 50 custom HUD overlay styles that match what you're playing—including MI6 007 Covert, Cyberpunk Netrunner, Witcher Wolf, Doom, GameBoy 8-Bit, and retro Winamp 1999.
+
+<p align="center">
+  <img src="docs/assets/hud-theme-styles-stack.jpg" alt="Logpile Themed Performance HUD Styles" width="90%" />
+</p>
+
+### 2. Custom HUD Theme Studio
+Build, modify, and save custom in-game performance HUDs directly inside the launcher. You can dial in themes manually or generate them from aesthetic prompts using local models or offline presets. Unmatched searches automatically fall back to clean neutral slate designs without breaking.
+
+<p align="center">
+  <img src="docs/assets/hud-theme-studio.jpg" alt="Logpile HUD Theme Studio" width="85%" />
+</p>
+
+### 3. Zero Desktop Idle GPU Drain & Hardware Guard
+Running modern launchers on laptops or gaming handhelds often drains battery life due to constant desktop animation loops. Logpile completely kills background animation loops while sitting idle or minimized, pulling 0% idle GPU power. You can also configure dynamic VRAM caps and automatically purge AI models from RAM the moment a game launches.
+
+<p align="center">
+  <img src="docs/assets/settings-ai-hardware-guard.jpg" alt="Logpile AI Hardware Guard and Memory Purge" width="85%" />
+</p>
+
+### 4. Automatic Theme Transformation Splash
+Switching themes now greets you with that theme's visual branding, spatial Web Audio, and logo animation. A single toggle in General Preferences lets you choose between cinematic transformations or instant theme switching.
+
+<p align="center">
+  <img src="docs/assets/settings-general-splash.jpg" alt="Logpile Transformation Splash Settings" width="85%" />
+</p>
+
+### 5. Customizable Global Shortcuts
+Assign your own key combinations for library search, the in-game overlay, and the performance HUD toggle with built-in Excel conflict safety.
+
+<p align="center">
+  <img src="docs/assets/settings-custom-shortcuts.jpg" alt="Logpile Customizable Key Combinations" width="85%" />
+</p>
 
 ---
 
 ## Visual Showcase & Architecture
 
-### 1. Dynamic Game Dossier Themes
+### Dynamic Game Dossier Themes
 Adapts visually per game with 5 hardware-accelerated aesthetic profiles: Cinematic, Atmospheric, Competitive, Kinetic, and Playful.
 
 <p align="center">
@@ -58,26 +102,11 @@ Adapts visually per game with 5 hardware-accelerated aesthetic profiles: Cinemat
   <img src="docs/assets/kinetic.png" width="48%" />
 </p>
 
-### 2. Backlog Intelligence & Sanctuary Analytics
+### Backlog Intelligence & Sanctuary Analytics
 Tracks your true gaming journey: backlog campaign debt (HLTB synced), source distribution, playtime curves, and local strategy guide indexing.
 
 <p align="center">
   <img src="docs/assets/Sancutry%20Dashboard.png" alt="Sanctuary Dashboard" width="85%" />
-</p>
-
-### 3. Dual-Engine In-Game Overlay (`Ctrl+Space`)
-- **Fast Guide Mode:** Near-zero memory footprint with zero game lag to access offline strategy guides and video walkthroughs without Alt-Tab.
-- **Gaming AI Mode:** Local CPU quantized inference answering questions with context-aware game suggestions.
-
-<p align="center">
-  <img src="docs/assets/AI%20companion%20-%20Big%20picture.png" alt="Dual Engine Companion" width="85%" />
-</p>
-
-### 4. Zero-Bloat Settings & Hardware Optimization
-Configure 1440p hero backdrops, toggle the offline engine with automatic 30-second RAM unloading, and manage high-speed asset sync.
-
-<p align="center">
-  <img src="docs/assets/Full%20blown%20app%20settings.png" alt="Logpile Settings" width="85%" />
 </p>
 
 ---
@@ -94,8 +123,8 @@ Configure 1440p hero backdrops, toggle the offline engine with automatic 30-seco
 
 ### For Gamers
 1. Grab the latest installer or portable archive from [Releases](../../releases/latest):
-   - **Installer:** [`Logpile.Setup.1.3.1.exe`](https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.1/Logpile.Setup.1.3.1.exe) (166 MB)
-   - **Portable (.zip):** [`Logpile-v1.3.1-Portable.zip`](https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.1/Logpile-v1.3.1-Portable.zip) (210 MB)
+   - **Installer:** [`Logpile.Setup.1.3.5.exe`](https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.5/Logpile.Setup.1.3.5.exe)
+   - **Portable (.zip):** [`Logpile-v1.3.5-Portable.zip`](https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.5/Logpile-v1.3.5-Portable.zip)
 2. Extract or install to any internal drive or portable SSD (`logpile_data/` stores all assets self-contained).
 3. *(Optional)* Drop any quantized `.gguf` model into the `/models` directory to enable conversational backlog guidance.
 
