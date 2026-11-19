@@ -1,5 +1,5 @@
-# Logpile
-> **An offline-first, zero-bloat PC game library manager. Built for portable drives, powered by local AI, and completely disconnected from the cloud.**
+# Logpile — Best Free Offline PC Game Launcher & Library Manager (Playnite Alternative)
+> **The lightweight, open-source PC game launcher, library manager, and game saver for Windows. Built as an offline alternative to Playnite and GOG Galaxy. Unify games across Steam, Epic, GOG, and portable SSDs with automatic save backups, HowLongToBeat backlog tracking, 50+ custom HUD overlays, and zero cloud tracking.**
 
 [![Release](https://img.shields.io/github/v/release/ritesh-soni-logpile/logpile?style=for-the-badge&color=22c55e)](../../releases/latest)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue?style=for-the-badge&logo=windows)](../../releases/latest)
@@ -21,10 +21,16 @@
   <img src="docs/assets/Install%20Library%2016-9.png" alt="Logpile Fast UI Demo" width="100%" />
 </p>
 
-## Why Logpile?
-Most PC game launchers are storefronts first. They run heavy web browsers in the background, demand account logins just to view games on your own drives, and break when Windows shifts an external SSD from `D:` to `E:`. They also leave you guessing whether a shared Steam Family title is actually free to play before you launch it.
+## Why Gamers Choose Logpile (Playnite & GOG Galaxy Alternative)
+Most PC game launchers and library managers are storefronts first. They run heavy web browsers in the background, demand account logins just to view games on your own drives, and break when Windows shifts an external SSD from `D:` to `E:`. They also leave you guessing whether a shared Steam Family title is actually free to play before you launch it.
 
-Logpile is built for gamers who want an offline-first library that manages local files properly. It stores everything—databases, artwork, and save backups—inside a single portable directory. It self-heals broken Windows drive paths automatically, checks live Steam Family availability before you launch, offers themed in-game performance overlays at 0% idle GPU load, and indexes strategy guides locally so you never have to Alt-Tab for help.
+Logpile is built for gamers who want the best offline PC game launcher, library manager, and game saver:
+- **Playnite & GOG Galaxy Alternative:** Discovers and launches your games directly from disk without store logins, third-party sync plugins, or memory bloat.
+- **Automated Game Saver:** Automatically monitors local game save folders and creates rolling timestamped ZIP backups before every session.
+- **Portable SSD Path Healing:** Uses `{{PORTABLE_ROOT}}` variables to self-heal broken game paths when drive letters change.
+- **50+ Themed Performance HUDs:** Custom in-game FPS and hardware telemetry overlays that pull 0.0% idle GPU power when minimized.
+- **HowLongToBeat Backlog Tracker:** Built-in Excel and CSV backlog import with campaign debt calculation.
+- **100% Offline & Private:** Open-source MIT license, zero network telemetry, and zero background services.
 
 ---
 
@@ -140,7 +146,7 @@ npm run electron:dev
 
 ## Author & License
 
-Logpile is designed, maintained, and tested by **Corporate Introvert Gamer (Ritesh Soni)**.
+Logpile is designed, architected, and tested by **Corporate Introvert Gamer (Ritesh Soni)**. Software code generated with AI assistance.
 
 This project is licensed under the [MIT License](LICENSE).
 
