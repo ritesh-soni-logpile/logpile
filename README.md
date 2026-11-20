@@ -10,12 +10,12 @@
 [![AlternativeTo](https://img.shields.io/badge/AlternativeTo-Listed-267ecb?style=for-the-badge)](https://alternativeto.net/software/logpile-desktop/about/)
 
 <p align="center">
-  <a href="https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.5/Logpile.Setup.1.3.5.exe">
-    <img src="https://img.shields.io/badge/Download-Installer%20(.exe)%20--%20v1.3.5-2ea44f?style=for-the-badge&logo=windows" alt="Download Installer" />
+  <a href="https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.6/Logpile.Setup.1.3.6.exe">
+    <img src="https://img.shields.io/badge/Download-Installer%20(.exe)%20--%20v1.3.6-2ea44f?style=for-the-badge&logo=windows" alt="Download Installer" />
   </a>
   &nbsp;&nbsp;
-  <a href="https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.5/Logpile-v1.3.5-Portable.zip">
-    <img src="https://img.shields.io/badge/Download-Portable%20(.zip)%20--%20v1.3.5-0969da?style=for-the-badge&logo=zip" alt="Download Portable" />
+  <a href="https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.6/Logpile-v1.3.6-Portable.zip">
+    <img src="https://img.shields.io/badge/Download-Portable%20(.zip)%20--%20v1.3.6-0969da?style=for-the-badge&logo=zip" alt="Download Portable" />
   </a>
 </p>
 
@@ -123,6 +123,7 @@ Tracks your true gaming journey: backlog campaign debt (HLTB synced), source dis
 ## Architecture & Tech Stack
 - **Shell:** Electron 34 with strict `contextIsolation: true`, zero raw IPC leaks, and sandbox-isolated window navigation.
 - **Frontend:** React 18, Vite, Tailwind CSS, virtualized catalog grid, and native 60fps Gamepad API polling that auto-pauses during gameplay.
+- **In-Game Telemetry:** Integrated Intel PresentMon (MIT License) for real-time DirectX 11/12 and Vulkan frame time velocity, true 1% lows, GPU/VRAM load, and hardware engine bottleneck detection without game DLL injection.
 - **Local Database:** SQLite with FTS5 full-text indexing via `better-sqlite3`.
 - **Offline Intelligence:** Embedded `node-llama-cpp` for local quantized GGUF inference + offline speech recognition (STT) and Windows native SAPI (TTS).
 
@@ -132,8 +133,8 @@ Tracks your true gaming journey: backlog campaign debt (HLTB synced), source dis
 
 ### For Gamers
 1. Grab the latest installer or portable archive from [Releases](../../releases/latest):
-   - **Installer:** [`Logpile.Setup.1.3.5.exe`](https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.5/Logpile.Setup.1.3.5.exe)
-   - **Portable (.zip):** [`Logpile-v1.3.5-Portable.zip`](https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.5/Logpile-v1.3.5-Portable.zip)
+   - **Installer:** [`Logpile.Setup.1.3.6.exe`](https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.6/Logpile.Setup.1.3.6.exe)
+   - **Portable (.zip):** [`Logpile-v1.3.6-Portable.zip`](https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.6/Logpile-v1.3.6-Portable.zip)
 2. Extract or install to any internal drive or portable SSD (`logpile_data/` stores all assets self-contained).
 3. *(Optional)* Drop any quantized `.gguf` model into the `/models` directory to enable conversational backlog guidance.
 
@@ -156,3 +157,6 @@ This project is licensed under the [MIT License](LICENSE).
 ```
 Copyright (c) 2026 Corporate Introvert Gamer (Ritesh Soni)
 ```
+
+### Third-Party Software & Acknowledgments
+- **Intel PresentMon:** In-game graphics telemetry powered by Intel PresentMon (MIT License). Copyright (c) Intel Corporation.

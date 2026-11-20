@@ -1,5 +1,13 @@
 !include FileFunc.nsh
 
+!macro customInstall
+  # Silently register user to Performance Log Users for Intel PresentMon ETW access
+  ReadEnvStr $R0 USERNAME
+  ${If} $R0 != ""
+    nsExec::Exec 'cmd.exe /c net localgroup "Performance Log Users" "$R0" /add'
+  ${EndIf}
+!macroend
+
 !macro customRemoveFiles
   # Safety check 1: Only proceed if $INSTDIR\Logpile.exe exists
   ${If} ${FileExists} "$INSTDIR\Logpile.exe"

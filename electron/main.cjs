@@ -526,10 +526,17 @@ function findGameExecutables(installPath) {
   return exeNames;
 }
 
-function getRunningProcessNames() {
+let cachedProcessNames = null;
+let lastProcessCheckTime = 0;
+
+function getRunningProcessNames(forceRefresh = false) {
+  const now = Date.now();
+  if (!forceRefresh && cachedProcessNames && (now - lastProcessCheckTime < 5000)) {
+    return Promise.resolve(cachedProcessNames);
+  }
   return new Promise((resolve) => {
     execFile('tasklist', ['/FO', 'CSV', '/NH'], { windowsHide: true }, (err, stdout) => {
-      if (err || !stdout) return resolve(new Set());
+      if (err || !stdout) return resolve(cachedProcessNames || new Set());
       const set = new Set();
       const lines = stdout.split(/\r?\n/);
       for (const line of lines) {
@@ -537,9 +544,129 @@ function getRunningProcessNames() {
         const match = line.match(/^"([^"]+)"/);
         if (match) set.add(match[1].toLowerCase());
       }
+      cachedProcessNames = set;
+      lastProcessCheckTime = now;
       resolve(set);
     });
   });
+}
+
+// -----------------------------------------------------------------------------
+// INTEL PRESENTMON ETW TELEMETRY MANAGER (MIT License)
+// -----------------------------------------------------------------------------
+let presentMonProcess = null;
+let presentMonRollingFrames = [];
+let lastPresentMonIpcTime = 0;
+
+function getPresentMonExecutablePath() {
+  const unpackedPath = path.join(__dirname, 'bin', 'PresentMon-x64.exe').replace('app.asar', 'app.asar.unpacked');
+  if (fs.existsSync(unpackedPath)) return unpackedPath;
+  const directPath = path.join(__dirname, 'bin', 'PresentMon-x64.exe');
+  if (fs.existsSync(directPath)) return directPath;
+  return null;
+}
+
+function startPresentMonForGame(targetExe) {
+  stopPresentMon();
+  const exePath = getPresentMonExecutablePath();
+  if (!exePath) {
+    console.warn('[PresentMon] Executable not found at:', exePath);
+    return;
+  }
+  const cleanExeName = path.basename(targetExe);
+  try {
+    const args = [
+      '--process_name', cleanExeName,
+      '--output_stdout',
+      '--no_console_stats',
+      '--v1_metrics'
+    ];
+    presentMonProcess = spawn(exePath, args, { windowsHide: true });
+    hardwareTelemetry.isEtwActive = true;
+    presentMonRollingFrames = [];
+
+    let buffer = '';
+    let headerMap = null;
+
+    presentMonProcess.stdout.on('data', (chunk) => {
+      buffer += chunk.toString();
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop(); // keep partial trailing line
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const cols = line.split(',');
+        if (!headerMap) {
+          headerMap = {};
+          cols.forEach((col, idx) => {
+            headerMap[col.trim()] = idx;
+          });
+          continue;
+        }
+
+        const msBetweenIdx = headerMap['MsBetweenPresents'] !== undefined ? headerMap['MsBetweenPresents'] : headerMap['FrameTime'];
+        const msRenderIdx = headerMap['MsUntilRenderComplete'] !== undefined ? headerMap['MsUntilRenderComplete'] : headerMap['GPUBusy'];
+
+        if (msBetweenIdx !== undefined && cols[msBetweenIdx]) {
+          const frameTimeMs = parseFloat(cols[msBetweenIdx]);
+          if (!isNaN(frameTimeMs) && frameTimeMs > 0 && frameTimeMs < 1000) {
+            const currentFps = Math.round(1000 / frameTimeMs);
+            hardwareTelemetry.fps = currentFps;
+            hardwareTelemetry.frametime = Number(frameTimeMs.toFixed(1));
+
+            presentMonRollingFrames.push(frameTimeMs);
+            if (presentMonRollingFrames.length > 60) presentMonRollingFrames.shift();
+
+            // Calculate 1% low from rolling 60 frames
+            const sorted = [...presentMonRollingFrames].sort((a, b) => b - a);
+            const slowest = sorted[0];
+            if (slowest > 0) {
+              hardwareTelemetry.onePercentLow = Math.max(1, Math.min(currentFps, Math.round(1000 / slowest)));
+            }
+
+            if (msRenderIdx !== undefined && cols[msRenderIdx]) {
+              const renderMs = parseFloat(cols[msRenderIdx]);
+              if (!isNaN(renderMs)) {
+                hardwareTelemetry.gpuBusyMs = Number(renderMs.toFixed(1));
+                hardwareTelemetry.isGpuBound = renderMs >= (frameTimeMs * 0.82);
+              }
+            }
+
+            const now = Date.now();
+            if (now - lastPresentMonIpcTime >= 100) {
+              lastPresentMonIpcTime = now;
+              if (hudWindow && !hudWindow.isDestroyed() && hudWindow.isVisible()) {
+                hudWindow.webContents.send('hardware:telemetry-update', hardwareTelemetry);
+              }
+            }
+          }
+        }
+      }
+    });
+
+    presentMonProcess.on('error', (err) => {
+      console.warn('[PresentMon] Process error:', err?.message);
+      hardwareTelemetry.isEtwActive = false;
+    });
+
+    presentMonProcess.on('exit', () => {
+      hardwareTelemetry.isEtwActive = false;
+      presentMonProcess = null;
+    });
+  } catch (err) {
+    console.warn('[PresentMon] Failed to spawn:', err?.message);
+    hardwareTelemetry.isEtwActive = false;
+  }
+}
+
+function stopPresentMon() {
+  if (presentMonProcess) {
+    try {
+      presentMonProcess.kill();
+    } catch {}
+    presentMonProcess = null;
+  }
+  hardwareTelemetry.isEtwActive = false;
 }
 
 function startTrackingGameSession(gameId, title, executablePath = null, installPath = null) {
@@ -568,6 +695,12 @@ function startTrackingGameSession(gameId, title, executablePath = null, installP
   if (resolvedInstallPath) {
     const fromFolder = findGameExecutables(resolvedInstallPath);
     for (const name of fromFolder) candidateExes.add(name);
+  }
+
+  // Primary game executable for Intel PresentMon ETW tracking
+  const primaryExe = Array.from(candidateExes).find((e) => !e.includes('crash') && !e.includes('helper') && !e.includes('report') && !e.includes('env') && !e.includes('8za')) || Array.from(candidateExes)[0];
+  if (primaryExe) {
+    startPresentMonForGame(primaryExe);
   }
 
   const session = {
@@ -633,6 +766,7 @@ function startTrackingGameSession(gameId, title, executablePath = null, installP
 function endGameSession(session) {
   if (!session || session.isEnded) return;
   session.isEnded = true;
+  stopPresentMon();
   if (session.timer) {
     clearInterval(session.timer);
     session.timer = null;
@@ -668,6 +802,7 @@ function endGameSession(session) {
 }
 
 function flushAllActiveSessions() {
+  stopPresentMon();
   for (const [_gameId, session] of activeGameSessions.entries()) {
     if (session.timer) clearInterval(session.timer);
     if (session.hasBeenDetected) {
@@ -880,8 +1015,8 @@ function getHudWindowBounds(position, orientation = 'horizontal') {
   const { x, y, width: screenWidth, height: screenHeight } = primaryDisplay.bounds;
 
   const isVertical = orientation === 'vertical';
-  const hudWidth = isVertical ? 160 : 850;
-  const hudHeight = isVertical ? 260 : 28;
+  const hudWidth = isVertical ? 180 : 1200;
+  const hudHeight = isVertical ? 380 : 32;
 
   let posX = x;
   let posY = y;
@@ -1033,7 +1168,11 @@ function startHudGameMonitor() {
         return;
       }
 
-      const running = await checkIsAnyGameRunning();
+      // If a session is tracked directly in Logpile, game is running with zero scan overhead
+      let running = activeGameSessions.size > 0;
+      if (!running) {
+        running = await checkIsAnyGameRunning();
+      }
       if (running !== isGameCurrentlyRunning) {
         isGameCurrentlyRunning = running;
         updateHudDisplayState();
@@ -1045,7 +1184,7 @@ function startHudGameMonitor() {
         }
       }
     } catch {}
-  }, 2000);
+  }, 4000);
 }
 
 let systemIs24Hour = false;
@@ -1089,17 +1228,30 @@ checkSystemTimeFormat();
 
 let hardwareTelemetry = {
   cpuUsage: 12,
+  cpuClock: 2500,
+  cpuTemp: null,
   ramUsage: 44,
   ramUsedGb: 14.1,
   ramTotalGb: 31.8,
   hasGpu: true,
   gpuUsage: 1,
   gpuTemp: 51,
+  gpuClock: 2500,
+  gpuPower: 25,
+  gpuFan: 0,
+  vramUsedGb: 1.5,
+  vramTotalGb: 8.0,
   hasBattery: false,
   batteryPercent: null,
   batteryCharging: false,
   is24Hour: false,
   clock: formatSystemClock(new Date(), false),
+  fps: null,
+  onePercentLow: null,
+  frametime: null,
+  gpuBusyMs: null,
+  isGpuBound: true,
+  isEtwActive: false,
 };
 let prevCpuTimes = null;
 let hardwareMonitorTimer = null;
@@ -1121,6 +1273,9 @@ function sampleHardwareStats() {
   try {
     const cpus = os.cpus();
     if (cpus && cpus.length > 0) {
+      if (cpus[0].speed) {
+        hardwareTelemetry.cpuClock = Math.round(cpus[0].speed);
+      }
       let idle = 0;
       let total = 0;
       for (const cpu of cpus) {
@@ -1150,7 +1305,7 @@ function sampleHardwareStats() {
     hardwareTelemetry.clock = formatSystemClock(now, systemIs24Hour);
 
     if (process.platform === 'win32') {
-      execFile('nvidia-smi', ['--query-gpu=utilization.gpu,temperature.gpu', '--format=csv,noheader,nounits'], { windowsHide: true, timeout: 1500 }, (err, stdout) => {
+      execFile('nvidia-smi', ['--query-gpu=utilization.gpu,temperature.gpu,clocks.current.graphics,power.draw,fan.speed,memory.used,memory.total', '--format=csv,noheader,nounits'], { windowsHide: true, timeout: 1500 }, (err, stdout) => {
         if (!err && stdout) {
           const parts = stdout.trim().split(',');
           if (parts.length >= 2) {
@@ -1158,6 +1313,18 @@ function sampleHardwareStats() {
             const t = parseFloat(parts[1].trim());
             if (!isNaN(u)) hardwareTelemetry.gpuUsage = u;
             if (!isNaN(t)) hardwareTelemetry.gpuTemp = Math.round(t);
+            if (parts.length >= 7) {
+              const clk = parseInt(parts[2].trim(), 10);
+              const pwr = parseFloat(parts[3].trim());
+              const fan = parseInt(parts[4].trim(), 10);
+              const vramUsed = parseFloat(parts[5].trim());
+              const vramTot = parseFloat(parts[6].trim());
+              if (!isNaN(clk)) hardwareTelemetry.gpuClock = clk;
+              if (!isNaN(pwr)) hardwareTelemetry.gpuPower = Math.round(pwr);
+              if (!isNaN(fan)) hardwareTelemetry.gpuFan = fan;
+              if (!isNaN(vramUsed)) hardwareTelemetry.vramUsedGb = Number((vramUsed / 1024).toFixed(1));
+              if (!isNaN(vramTot)) hardwareTelemetry.vramTotalGb = Number((vramTot / 1024).toFixed(1));
+            }
 
             if (hudWindow && !hudWindow.isDestroyed() && hudWindow.isVisible()) {
               hudWindow.webContents.send('hardware:telemetry-update', hardwareTelemetry);
@@ -1182,7 +1349,7 @@ function sampleHardwareStats() {
 function startHardwareMonitor() {
   if (hardwareMonitorTimer) clearInterval(hardwareMonitorTimer);
   sampleHardwareStats();
-  hardwareMonitorTimer = setInterval(sampleHardwareStats, 2000);
+  hardwareMonitorTimer = setInterval(sampleHardwareStats, 2500);
 }
 
 function registerGlobalShortcuts() {
@@ -1608,6 +1775,15 @@ function registerIpc() {
     }
   })
   ipcMain.handle('hardware:getMetrics', () => hardwareTelemetry)
+  ipcMain.handle('telemetry:enableEtw', async () => {
+    return new Promise((resolve) => {
+      if (process.platform !== 'win32') return resolve({ success: false, error: 'Windows required' });
+      execFile('powershell', ['-NoProfile', '-Command', 'Start-Process cmd -ArgumentList "/c net localgroup \\"Performance Log Users\\" \\"$env:USERNAME\\" /add" -Verb RunAs'], { windowsHide: false }, (err) => {
+        if (err) return resolve({ success: false, error: err.message });
+        resolve({ success: true });
+      });
+    });
+  })
   ipcMain.handle('db:setLibrarySettings', (_event, settings) => {
     const next = setLibrarySettings(db, settings) || {}
     if (settings && (settings.overlayShortcut !== undefined || settings.fpsShortcut !== undefined)) {

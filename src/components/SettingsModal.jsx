@@ -1,12 +1,18 @@
 const METRIC_OPTIONS = [
-  { key: 'fps', label: 'Current Framerate (FPS)', desc: 'Real-time frame velocity' },
+  { key: 'fps', label: 'Current Framerate (FPS)', desc: 'Real-time game frame velocity via Intel PresentMon' },
   { key: 'onePercentLow', label: '1% Low Framerate', desc: 'Detect sudden frame drops and micro-stutters' },
   { key: 'frametime', label: 'Frametime (ms)', desc: 'Frame delivery pacing consistency (e.g. 16.6ms at 60 FPS)' },
-  { key: 'gpu', label: 'GPU & VRAM Load', desc: 'Graphics card utilization and video memory usage' },
-  { key: 'cpu', label: 'CPU Load %', desc: 'Processor utilization across all cores' },
-  { key: 'ram', label: 'System RAM Usage', desc: 'Active memory consumption during gameplay' },
+  { key: 'bottleneck', label: 'Engine Bottleneck', desc: 'PresentMon GPU Busy vs CPU Wait indicator' },
+  { key: 'gpu', label: 'GPU Utilization %', desc: 'Graphics card core workload' },
+  { key: 'gpuTemp', label: 'GPU Temperature (°C)', desc: 'Real-time graphics card core thermals' },
+  { key: 'gpuClock', label: 'GPU Clock & Power', desc: 'Core frequency (MHz) and board power draw (W)' },
+  { key: 'vram', label: 'Dedicated VRAM (GB)', desc: 'Active video memory allocation vs capacity' },
+  { key: 'cpu', label: 'CPU Load %', desc: 'Processor utilization across all physical & logical cores' },
+  { key: 'cpuClock', label: 'CPU Clock (MHz)', desc: 'Real-time processor core frequency' },
+  { key: 'ram', label: 'System RAM Usage', desc: 'Active system memory consumption' },
   { key: 'clock', label: 'Clock & Session Timer', desc: 'Real-time clock and playtime to track late-night gaming' },
-  { key: 'battery', label: 'Battery Level %', desc: 'Battery charge & power status for gaming laptops and handhelds' }
+  { key: 'battery', label: 'Battery Level %', desc: 'Battery charge & power status for gaming laptops and handhelds' },
+  { key: 'hwinfoCpuTemp', label: 'HWiNFO CPU Temp (Optional)', desc: 'Read CPU package thermals if HWiNFO is running' }
 ]
 
 function getFpsPositionStyle(pos) {
@@ -39,9 +45,17 @@ const HUD_PREVIEW_TELEMETRY = {
   onePercentLow: 138,
   frametime: 6.9,
   hasGpu: true,
-  gpuUsage: 0,
-  gpuTemp: 42,
-  cpuUsage: 8,
+  gpuUsage: 64,
+  gpuTemp: 58,
+  gpuClock: 2655,
+  gpuPower: 115,
+  vramUsedGb: 5.4,
+  vramTotalGb: 8.0,
+  cpuUsage: 22,
+  cpuClock: 4400,
+  cpuTemp: 52,
+  gpuBusyMs: 6.5,
+  isGpuBound: true,
   ramUsedGb: 13.5,
   hasBattery: false,
   clock: '2:14 PM',
@@ -847,14 +861,35 @@ export function SettingsModal({
     return {
       fps: true,
       onePercentLow: true,
-      frametime: false,
-      gpu: false,
-      cpu: false,
-      ram: false,
+      frametime: true,
+      bottleneck: true,
+      gpu: true,
+      gpuTemp: true,
+      gpuClock: false,
+      vram: true,
+      cpu: true,
+      cpuClock: false,
+      ram: true,
       clock: true,
-      battery: false
+      battery: false,
+      hwinfoCpuTemp: false
     }
   })
+  const [etwStatus, setEtwStatus] = useState(null)
+
+  const handleEnableEtw = async () => {
+    try {
+      setEtwStatus('enabling')
+      const res = await window.api?.hardware?.enableEtw?.()
+      if (res?.success) {
+        setEtwStatus('success')
+      } else {
+        setEtwStatus('error')
+      }
+    } catch {
+      setEtwStatus('error')
+    }
+  }
 
   const toggleFpsMetric = (key) => {
     setFpsMetrics((prev) => {
@@ -2524,6 +2559,36 @@ export function SettingsModal({
                         </label>
                       )
                     })}
+                  </div>
+
+                  {/* Intel PresentMon Notice & Borderless Tip */}
+                  <div style={{
+                    marginTop: '14px',
+                    padding: '12px 14px',
+                    borderRadius: '8px',
+                    background: 'rgba(255, 255, 255, 0.02)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                      <span style={{ fontSize: '11px', color: 'var(--text-secondary, #aaa)' }}>
+                        Powered by <strong>Intel PresentMon</strong> (MIT License). Accurate real-time DirectX &amp; Vulkan framerates without game DLL injection.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleEnableEtw}
+                        disabled={etwStatus === 'enabling' || etwStatus === 'success'}
+                        className="btn btn-secondary"
+                        style={{ fontSize: '10.5px', padding: '4px 10px' }}
+                      >
+                        {etwStatus === 'success' ? '✓ Kernel ETW Active' : etwStatus === 'enabling' ? 'Enabling...' : 'Enable Kernel ETW (One-Click)'}
+                      </button>
+                    </div>
+                    <div style={{ fontSize: '10.5px', color: 'var(--text-muted, #777)', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '6px' }}>
+                      <strong>Gamer Tip:</strong> To see the transparent overlay inside DirectX 12 &amp; Unreal Engine games without display lag, set your game display mode to <strong>Borderless Windowed</strong>.
+                    </div>
                   </div>
                 </div>
 

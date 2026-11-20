@@ -31,7 +31,16 @@ export function useLiveTelemetry(enabled = true) {
     hasGpu: true,
     gpuUsage: null,
     gpuTemp: null,
+    gpuClock: null,
+    gpuPower: null,
+    vramUsedGb: null,
+    vramTotalGb: null,
     cpuUsage: 12,
+    cpuClock: null,
+    cpuTemp: null,
+    gpuBusyMs: null,
+    isGpuBound: true,
+    isEtwActive: false,
     ramUsedGb: 14.1,
     ramTotalGb: 31.8,
     ramPercent: 44,
@@ -57,11 +66,23 @@ export function useLiveTelemetry(enabled = true) {
             hasGpu: nextHasGpu,
             hasBattery: nextHasBattery,
             cpuUsage: data.cpuUsage ?? prev.cpuUsage,
+            cpuClock: data.cpuClock ?? prev.cpuClock,
+            cpuTemp: data.cpuTemp ?? prev.cpuTemp,
             ramPercent: data.ramUsage ?? prev.ramPercent,
             ramUsedGb: data.ramUsedGb ?? prev.ramUsedGb,
             ramTotalGb: data.ramTotalGb ?? prev.ramTotalGb,
             gpuUsage: data.gpuUsage ?? prev.gpuUsage,
             gpuTemp: data.gpuTemp ?? prev.gpuTemp,
+            gpuClock: data.gpuClock ?? prev.gpuClock,
+            gpuPower: data.gpuPower ?? prev.gpuPower,
+            vramUsedGb: data.vramUsedGb ?? prev.vramUsedGb,
+            vramTotalGb: data.vramTotalGb ?? prev.vramTotalGb,
+            gpuBusyMs: data.gpuBusyMs ?? prev.gpuBusyMs,
+            isGpuBound: data.isGpuBound !== undefined ? data.isGpuBound : prev.isGpuBound,
+            isEtwActive: data.isEtwActive !== undefined ? data.isEtwActive : prev.isEtwActive,
+            fps: (data.isEtwActive && data.fps) ? data.fps : prev.fps,
+            onePercentLow: (data.isEtwActive && data.onePercentLow) ? data.onePercentLow : prev.onePercentLow,
+            frametime: (data.isEtwActive && data.frametime) ? data.frametime : prev.frametime,
             is24Hour,
             clock: formatSystemClock(new Date(), is24Hour),
           }
@@ -81,11 +102,23 @@ export function useLiveTelemetry(enabled = true) {
             hasGpu: nextHasGpu,
             hasBattery: nextHasBattery,
             cpuUsage: data.cpuUsage ?? prev.cpuUsage,
+            cpuClock: data.cpuClock ?? prev.cpuClock,
+            cpuTemp: data.cpuTemp ?? prev.cpuTemp,
             ramPercent: data.ramUsage ?? prev.ramPercent,
             ramUsedGb: data.ramUsedGb ?? prev.ramUsedGb,
             ramTotalGb: data.ramTotalGb ?? prev.ramTotalGb,
             gpuUsage: data.gpuUsage ?? prev.gpuUsage,
             gpuTemp: data.gpuTemp ?? prev.gpuTemp,
+            gpuClock: data.gpuClock ?? prev.gpuClock,
+            gpuPower: data.gpuPower ?? prev.gpuPower,
+            vramUsedGb: data.vramUsedGb ?? prev.vramUsedGb,
+            vramTotalGb: data.vramTotalGb ?? prev.vramTotalGb,
+            gpuBusyMs: data.gpuBusyMs ?? prev.gpuBusyMs,
+            isGpuBound: data.isGpuBound !== undefined ? data.isGpuBound : prev.isGpuBound,
+            isEtwActive: data.isEtwActive !== undefined ? data.isEtwActive : prev.isEtwActive,
+            fps: (data.isEtwActive && data.fps) ? data.fps : prev.fps,
+            onePercentLow: (data.isEtwActive && data.onePercentLow) ? data.onePercentLow : prev.onePercentLow,
+            frametime: (data.isEtwActive && data.frametime) ? data.frametime : prev.frametime,
             is24Hour,
             clock: formatSystemClock(new Date(), is24Hour),
           }
@@ -114,7 +147,6 @@ export function useLiveTelemetry(enabled = true) {
     }
 
     // 4. Clean 180ms cadence (~5.5 Hz) telemetry loop:
-    // Matches RTSS real-time responsiveness without unneeded GPU compositor wakeups.
     let frameCount = 0
     let windowStart = performance.now()
     let lastFrameTime = windowStart
@@ -149,6 +181,11 @@ export function useLiveTelemetry(enabled = true) {
 
         setTelemetry((prev) => {
           const nextClock = formatSystemClock(new Date(), prev.is24Hour)
+          // If Intel PresentMon ETW is actively streaming in-game framerate, do NOT overwrite it with Chromium RAF
+          if (prev.isEtwActive) {
+            if (prev.clock === nextClock) return prev
+            return { ...prev, clock: nextClock }
+          }
           if (
             prev.fps === measuredFps &&
             prev.frametime === avgFrametime &&
@@ -254,8 +291,15 @@ function MetricRow({ label, value, color = '#38bdf8', labelColor, isVertical }) 
     switch (lbl) {
       case '1%L': return '24px'
       case 'TIME': return '36px'
+      case 'GPU-LIM':
+      case 'CPU-LIM': return '38px'
       case 'GPU': return '28px'
+      case 'G-TEMP': return '32px'
+      case 'G-CLK': return '38px'
+      case 'VRAM': return '32px'
       case 'CPU': return '28px'
+      case 'C-CLK': return '38px'
+      case 'C-TEMP': return '32px'
       case 'RAM': return '36px'
       default: return '24px'
     }
@@ -309,8 +353,14 @@ export function PerformanceHud({ style = 'blood-moon', metrics = {}, orientation
   const hasFps = metrics.fps !== false
   const has1Percent = Boolean(metrics.onePercentLow)
   const hasFrametime = Boolean(metrics.frametime)
+  const hasBottleneck = Boolean(metrics.bottleneck) && (data.gpuBusyMs !== null && data.gpuBusyMs !== undefined)
   const hasGpu = Boolean(metrics.gpu) && (data.hasGpu !== false) && (data.gpuUsage !== null && data.gpuUsage !== undefined)
+  const hasGpuTemp = Boolean(metrics.gpuTemp) && (data.gpuTemp !== null && data.gpuTemp !== undefined)
+  const hasGpuClock = Boolean(metrics.gpuClock) && (data.gpuClock !== null && data.gpuClock !== undefined)
+  const hasVram = Boolean(metrics.vram) && (data.vramUsedGb !== null && data.vramUsedGb !== undefined)
   const hasCpu = Boolean(metrics.cpu)
+  const hasCpuClock = Boolean(metrics.cpuClock) && (data.cpuClock !== null && data.cpuClock !== undefined)
+  const hasHwinfoCpuTemp = Boolean(metrics.hwinfoCpuTemp) && (data.cpuTemp !== null && data.cpuTemp !== undefined)
   const hasRam = Boolean(metrics.ram)
   const hasClock = Boolean(metrics.clock)
   const hasBattery = Boolean(metrics.battery) && (data.hasBattery === true) && (data.batteryPercent !== null && data.batteryPercent !== undefined)
@@ -320,8 +370,14 @@ export function PerformanceHud({ style = 'blood-moon', metrics = {}, orientation
     const items = []
     if (has1Percent) items.push(<MetricRow key="1p" label="1%L" value={data.onePercentLow} color={primaryColor} labelColor={labelColor} isVertical={isVertical} />)
     if (hasFrametime) items.push(<MetricRow key="ft" label="TIME" value={`${data.frametime}ms`} color={primaryColor} labelColor={labelColor} isVertical={isVertical} />)
+    if (hasBottleneck) items.push(<MetricRow key="bn" label={data.isGpuBound ? "GPU-LIM" : "CPU-LIM"} value={`${data.gpuBusyMs}ms`} color={data.isGpuBound ? primaryColor : '#f59e0b'} labelColor={labelColor} isVertical={isVertical} />)
     if (hasGpu) items.push(<MetricRow key="gpu" label="GPU" value={`${data.gpuUsage}%`} color={primaryColor} labelColor={labelColor} isVertical={isVertical} />)
+    if (hasGpuTemp) items.push(<MetricRow key="gt" label="G-TEMP" value={`${data.gpuTemp}°C`} color={primaryColor} labelColor={labelColor} isVertical={isVertical} />)
+    if (hasGpuClock) items.push(<MetricRow key="gc" label="G-CLK" value={`${data.gpuClock}M`} color={primaryColor} labelColor={labelColor} isVertical={isVertical} />)
+    if (hasVram) items.push(<MetricRow key="vram" label="VRAM" value={`${data.vramUsedGb}G`} color={primaryColor} labelColor={labelColor} isVertical={isVertical} />)
     if (hasCpu) items.push(<MetricRow key="cpu" label="CPU" value={`${data.cpuUsage}%`} color={primaryColor} labelColor={labelColor} isVertical={isVertical} />)
+    if (hasCpuClock) items.push(<MetricRow key="cc" label="C-CLK" value={`${data.cpuClock}M`} color={primaryColor} labelColor={labelColor} isVertical={isVertical} />)
+    if (hasHwinfoCpuTemp) items.push(<MetricRow key="ct" label="C-TEMP" value={`${data.cpuTemp}°C`} color={primaryColor} labelColor={labelColor} isVertical={isVertical} />)
     if (hasRam) items.push(<MetricRow key="ram" label="RAM" value={`${data.ramUsedGb}G`} color={primaryColor} labelColor={labelColor} isVertical={isVertical} />)
     if (hasClock) {
       if (isVertical) {

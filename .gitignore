@@ -34,6 +34,7 @@ logpile_data/
 captures/
 UserData/
 *.exe
+!electron/bin/*.exe
 
 # Internal notes & AI handoff docs
 HANDOFF*.md

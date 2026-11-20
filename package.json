@@ -1,6 +1,6 @@
 {
   "name": "logpile",
-  "version": "1.3.5",
+  "version": "1.3.6",
   "private": true,
   "description": "Desktop game library with local storefront scanning and catalog import",
   "author": "Corporate Introvert Gamer (Ritesh Soni)",
@@ -83,6 +83,9 @@
       "!**/*.db*",
       "!**/*.log"
     ],
+    "asarUnpack": [
+      "electron/bin/**/*"
+    ],
     "win": {
       "target": [
         "nsis",
@@ -94,6 +97,7 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "perMachine": false,
+      "warningsAsErrors": false,
       "include": "build/installer.nsh",
       "installerIcon": "build/installer-icon.ico",
       "installerHeaderIcon": "build/installer-icon.ico"
