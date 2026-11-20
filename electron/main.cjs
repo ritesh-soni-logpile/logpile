@@ -551,6 +551,15 @@ function getRunningProcessNames(forceRefresh = false) {
   });
 }
 
+let isProcessElevated = false;
+function checkProcessElevation() {
+  if (process.platform !== 'win32') return;
+  execFile('net', ['session'], { windowsHide: true }, (err) => {
+    isProcessElevated = !err;
+  });
+}
+checkProcessElevation();
+
 // -----------------------------------------------------------------------------
 // INTEL PRESENTMON ETW TELEMETRY MANAGER (MIT License)
 // -----------------------------------------------------------------------------
@@ -1782,6 +1791,13 @@ function registerIpc() {
     }
   })
   ipcMain.handle('hardware:getMetrics', () => hardwareTelemetry)
+  ipcMain.handle('telemetry:getEtwStatus', async () => {
+    if (process.platform !== 'win32') return { active: true, isAdmin: false };
+    return {
+      active: hardwareTelemetry.isEtwActive || isProcessElevated,
+      isAdmin: isProcessElevated,
+    };
+  })
   ipcMain.handle('telemetry:enableEtw', async () => {
     return new Promise((resolve) => {
       if (process.platform !== 'win32') return resolve({ success: false, error: 'Windows required' });

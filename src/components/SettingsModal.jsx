@@ -877,6 +877,14 @@ export function SettingsModal({
   })
   const [etwStatus, setEtwStatus] = useState(null)
 
+  useEffect(() => {
+    window.api?.hardware?.getEtwStatus?.().then((res) => {
+      if (res?.isAdmin || res?.active) {
+        setEtwStatus('admin')
+      }
+    }).catch(() => {})
+  }, [])
+
   const handleEnableEtw = async () => {
     try {
       setEtwStatus('enabling')
@@ -2580,11 +2588,11 @@ export function SettingsModal({
                     <button
                       type="button"
                       onClick={handleEnableEtw}
-                      disabled={etwStatus === 'enabling' || etwStatus === 'success'}
+                      disabled={etwStatus === 'enabling' || etwStatus === 'success' || etwStatus === 'admin'}
                       className="btn btn-secondary"
                       style={{ fontSize: '10.5px', padding: '4px 10px' }}
                     >
-                      {etwStatus === 'success' ? '✓ Kernel ETW Active' : etwStatus === 'enabling' ? 'Enabling...' : 'Enable Kernel ETW (One-Click)'}
+                      {etwStatus === 'admin' ? '✓ Active (Running as Admin)' : etwStatus === 'success' ? '✓ Active' : etwStatus === 'enabling' ? 'Enabling...' : 'Authorize In-Game FPS Capture'}
                     </button>
                   </div>
                 </div>

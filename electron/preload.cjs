@@ -261,6 +261,7 @@ contextBridge.exposeInMainWorld('api', {
       return () => ipcRenderer.removeListener('hardware:telemetry-update', handler)
     },
     getMetrics: () => ipcRenderer.invoke('hardware:getMetrics'),
+    getEtwStatus: () => ipcRenderer.invoke('telemetry:getEtwStatus'),
     enableEtw: () => ipcRenderer.invoke('telemetry:enableEtw'),
   },
 })
