@@ -2304,8 +2304,8 @@ export function SettingsModal({
                         className="settings-select"
                         disabled={!fpsEnabled}
                       >
-                        <option value="game">In-Game Only (Default — auto-shows when game starts, 0% desktop load)</option>
-                        <option value="test">Always On (Testing / Desktop Ticker)</option>
+                        <option value="game">In-Game Only (Auto-detects active games)</option>
+                        <option value="test">Always On</option>
                       </select>
                     </div>
 
@@ -2561,7 +2561,7 @@ export function SettingsModal({
                     })}
                   </div>
 
-                  {/* Intel PresentMon Notice & Borderless Tip */}
+                  {/* Intel PresentMon Notice */}
                   <div style={{
                     marginTop: '14px',
                     padding: '12px 14px',
@@ -2569,26 +2569,23 @@ export function SettingsModal({
                     background: 'rgba(255, 255, 255, 0.02)',
                     border: '1px solid rgba(255, 255, 255, 0.08)',
                     display: 'flex',
-                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
                     gap: '8px'
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-                      <span style={{ fontSize: '11px', color: 'var(--text-secondary, #aaa)' }}>
-                        Powered by <strong>Intel PresentMon</strong> (MIT License). Accurate real-time DirectX &amp; Vulkan framerates without game DLL injection.
-                      </span>
-                      <button
-                        type="button"
-                        onClick={handleEnableEtw}
-                        disabled={etwStatus === 'enabling' || etwStatus === 'success'}
-                        className="btn btn-secondary"
-                        style={{ fontSize: '10.5px', padding: '4px 10px' }}
-                      >
-                        {etwStatus === 'success' ? '✓ Kernel ETW Active' : etwStatus === 'enabling' ? 'Enabling...' : 'Enable Kernel ETW (One-Click)'}
-                      </button>
-                    </div>
-                    <div style={{ fontSize: '10.5px', color: 'var(--text-muted, #777)', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '6px' }}>
-                      <strong>Gamer Tip:</strong> To see the transparent overlay inside DirectX 12 &amp; Unreal Engine games without display lag, set your game display mode to <strong>Borderless Windowed</strong>.
-                    </div>
+                    <span style={{ fontSize: '11px', color: 'var(--text-secondary, #aaa)' }}>
+                      Powered by <strong>Intel PresentMon</strong> (MIT License). Real-time DirectX &amp; Vulkan framerates and hardware telemetry.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleEnableEtw}
+                      disabled={etwStatus === 'enabling' || etwStatus === 'success'}
+                      className="btn btn-secondary"
+                      style={{ fontSize: '10.5px', padding: '4px 10px' }}
+                    >
+                      {etwStatus === 'success' ? '✓ Kernel ETW Active' : etwStatus === 'enabling' ? 'Enabling...' : 'Enable Kernel ETW (One-Click)'}
+                    </button>
                   </div>
                 </div>
 

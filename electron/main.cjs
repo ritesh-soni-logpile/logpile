@@ -1140,6 +1140,7 @@ function updateHudDisplayState(forceShow = false) {
       if (!hudWindow.isVisible()) {
         hudWindow.showInactive();
       }
+      try { hudWindow.moveTop(); } catch {}
     } else {
       if (hudWindow.isVisible()) {
         hudWindow.hide();
@@ -1168,7 +1169,6 @@ function startHudGameMonitor() {
         return;
       }
 
-      // If a session is tracked directly in Logpile, game is running with zero scan overhead
       let running = activeGameSessions.size > 0;
       if (!running) {
         running = await checkIsAnyGameRunning();
@@ -1176,15 +1176,22 @@ function startHudGameMonitor() {
       if (running !== isGameCurrentlyRunning) {
         isGameCurrentlyRunning = running;
         updateHudDisplayState();
-      } else if (isGameCurrentlyRunning && hudWindow && !hudWindow.isDestroyed()) {
-        if (!hudWindow.isVisible()) {
-          updateHudDisplayState();
-        } else {
-          hudWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+      } else if (hudWindow && !hudWindow.isDestroyed()) {
+        const fpsTestMode = settings.fpsTestMode !== undefined ? !!settings.fpsTestMode : false;
+        const shouldShow = settings.fpsEnabled && (isGameCurrentlyRunning || fpsTestMode);
+        if (shouldShow) {
+          if (!hudWindow.isVisible()) {
+            updateHudDisplayState();
+          } else {
+            hudWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+            try { hudWindow.moveTop(); } catch {}
+          }
+        } else if (hudWindow.isVisible()) {
+          hudWindow.hide();
         }
       }
     } catch {}
-  }, 4000);
+  }, 2500);
 }
 
 let systemIs24Hour = false;
