@@ -678,6 +678,55 @@ function stopPresentMon() {
   hardwareTelemetry.isEtwActive = false;
 }
 
+// -----------------------------------------------------------------------------
+// HWiNFO SHARED MEMORY CPU TEMP BRIDGE
+// -----------------------------------------------------------------------------
+let hwInfoProcess = null;
+
+function getHwInfoReaderPath() {
+  const unpackedPath = path.join(__dirname, 'bin', 'HwInfoReader.exe').replace('app.asar', 'app.asar.unpacked');
+  if (fs.existsSync(unpackedPath)) return unpackedPath;
+  const directPath = path.join(__dirname, 'bin', 'HwInfoReader.exe');
+  if (fs.existsSync(directPath)) return directPath;
+  return null;
+}
+
+function startHwInfoReader() {
+  if (hwInfoProcess) return;
+  const exePath = getHwInfoReaderPath();
+  if (!exePath) return;
+
+  try {
+    hwInfoProcess = spawn(exePath, ['--watch'], { windowsHide: true });
+    let buffer = '';
+    hwInfoProcess.stdout.on('data', (chunk) => {
+      buffer += chunk.toString();
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (line.startsWith('CPU_TEMP:')) {
+          const temp = parseInt(line.replace('CPU_TEMP:', '').trim(), 10);
+          if (!isNaN(temp) && temp > 15 && temp < 115) {
+            hardwareTelemetry.cpuTemp = temp;
+          }
+        }
+      }
+    });
+
+    hwInfoProcess.on('error', () => { hwInfoProcess = null; });
+    hwInfoProcess.on('exit', () => { hwInfoProcess = null; });
+  } catch {
+    hwInfoProcess = null;
+  }
+}
+
+function stopHwInfoReader() {
+  if (hwInfoProcess) {
+    try { hwInfoProcess.kill(); } catch {}
+    hwInfoProcess = null;
+  }
+}
+
 function startTrackingGameSession(gameId, title, executablePath = null, installPath = null) {
   if (!gameId) return;
   if (activeGameSessions.has(gameId)) return;
@@ -1364,6 +1413,7 @@ function sampleHardwareStats() {
 
 function startHardwareMonitor() {
   if (hardwareMonitorTimer) clearInterval(hardwareMonitorTimer);
+  startHwInfoReader();
   sampleHardwareStats();
   hardwareMonitorTimer = setInterval(sampleHardwareStats, 2500);
 }
@@ -3343,6 +3393,7 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   app.isQuitting = true
   if (hudMonitorTimer) clearInterval(hudMonitorTimer);
+  stopHwInfoReader();
   try { globalShortcut.unregisterAll() } catch {}
   try { stopSteamFamilyWatcher() } catch {}
   try { voiceService.stop() } catch {}
