@@ -181,24 +181,18 @@ export function useLiveTelemetry(enabled = true) {
 
         setTelemetry((prev) => {
           const nextClock = formatSystemClock(new Date(), prev.is24Hour)
-          // If Intel PresentMon ETW is actively streaming in-game framerate, do NOT overwrite it with Chromium RAF
+          // If Intel PresentMon ETW is actively streaming in-game framerate, maintain it
           if (prev.isEtwActive) {
             if (prev.clock === nextClock) return prev
             return { ...prev, clock: nextClock }
           }
-          if (
-            prev.fps === measuredFps &&
-            prev.frametime === avgFrametime &&
-            prev.onePercentLow === trueOneLow &&
-            prev.clock === nextClock
-          ) {
-            return prev
-          }
+          // In live HUD, if ETW is not active, do NOT invent fake 200 FPS from Chromium's internal window RAF!
+          if (prev.fps === null && prev.clock === nextClock) return prev
           return {
             ...prev,
-            fps: measuredFps,
-            frametime: avgFrametime,
-            onePercentLow: trueOneLow,
+            fps: null,
+            frametime: null,
+            onePercentLow: null,
             clock: nextClock,
           }
         })
@@ -308,10 +302,10 @@ function MetricRow({ label, value, color = '#38bdf8', labelColor, isVertical }) 
   return (
     <div style={{
       display: 'inline-flex',
-      alignItems: 'baseline',
+      alignItems: 'center',
       gap: '3px',
       whiteSpace: 'nowrap',
-      lineHeight: 1
+      lineHeight: 1.15
     }}>
       {label && (
         <span style={{
@@ -320,7 +314,7 @@ function MetricRow({ label, value, color = '#38bdf8', labelColor, isVertical }) 
           fontWeight: 600,
           color: labelColor || 'inherit',
           letterSpacing: '0.03em',
-          lineHeight: 1
+          lineHeight: 1.15
         }}>
           {label}:
         </span>
@@ -333,7 +327,7 @@ function MetricRow({ label, value, color = '#38bdf8', labelColor, isVertical }) 
         display: 'inline-block',
         minWidth: getMinWidth(label),
         textAlign: 'right',
-        lineHeight: 1
+        lineHeight: 1.15
       }}>
         {value}
       </strong>
@@ -351,8 +345,8 @@ export function PerformanceHud({ style = 'blood-moon', metrics = {}, orientation
   const data = telemetry || live
 
   const hasFps = metrics.fps !== false
-  const has1Percent = Boolean(metrics.onePercentLow)
-  const hasFrametime = Boolean(metrics.frametime)
+  const has1Percent = Boolean(metrics.onePercentLow) && data.onePercentLow !== null && data.onePercentLow !== undefined
+  const hasFrametime = Boolean(metrics.frametime) && data.frametime !== null && data.frametime !== undefined
   const hasBottleneck = Boolean(metrics.bottleneck) && (data.gpuBusyMs !== null && data.gpuBusyMs !== undefined)
   const hasGpu = Boolean(metrics.gpu) && (data.hasGpu !== false) && (data.gpuUsage !== null && data.gpuUsage !== undefined)
   const hasGpuTemp = Boolean(metrics.gpuTemp) && (data.gpuTemp !== null && data.gpuTemp !== undefined)
@@ -365,7 +359,10 @@ export function PerformanceHud({ style = 'blood-moon', metrics = {}, orientation
   const hasClock = Boolean(metrics.clock)
   const hasBattery = Boolean(metrics.battery) && (data.hasBattery === true) && (data.batteryPercent !== null && data.batteryPercent !== undefined)
 
-  // Secondary metrics helper (Adaptive: inline row horizontally, stacked column vertically)
+  const activeMetricsCount = (has1Percent ? 1 : 0) + (hasFrametime ? 1 : 0) + (hasBottleneck ? 1 : 0) + (hasGpu ? 1 : 0) + (hasGpuTemp ? 1 : 0) + (hasGpuClock ? 1 : 0) + (hasVram ? 1 : 0) + (hasCpu ? 1 : 0) + (hasCpuClock ? 1 : 0) + (hasHwinfoCpuTemp ? 1 : 0) + (hasRam ? 1 : 0) + (hasClock ? 1 : 0) + (hasBattery ? 1 : 0);
+  const isMultiRow = !isVertical && activeMetricsCount >= 7;
+
+  // Secondary metrics helper (Adaptive: inline row horizontally, stacked column vertically, dual-row when dense)
   const renderExtraMetrics = (primaryColor = '#38bdf8', labelColor = null, dividerColor = null) => {
     const items = []
     if (has1Percent) items.push(<MetricRow key="1p" label="1%L" value={data.onePercentLow} color={primaryColor} labelColor={labelColor} isVertical={isVertical} />)
@@ -486,6 +483,59 @@ export function PerformanceHud({ style = 'blood-moon', metrics = {}, orientation
       )
     }
 
+    if (isMultiRow) {
+      const splitIdx = Math.ceil(items.length / 2);
+      const row1 = items.slice(0, splitIdx);
+      const row2 = items.slice(splitIdx);
+      return (
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '6px',
+          justifyContent: 'center',
+          height: '100%',
+          lineHeight: 1.2
+        }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '9px', whiteSpace: 'nowrap' }}>
+            {row1.map((item, idx) => (
+              <React.Fragment key={idx}>
+                {idx > 0 && (
+                  <span style={{
+                    width: '1px',
+                    height: '9px',
+                    background: divColor,
+                    opacity: 0.35,
+                    display: 'inline-block',
+                    flexShrink: 0,
+                    margin: '0 1px'
+                  }} />
+                )}
+                {item}
+              </React.Fragment>
+            ))}
+          </div>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '9px', whiteSpace: 'nowrap' }}>
+            {row2.map((item, idx) => (
+              <React.Fragment key={idx}>
+                {idx > 0 && (
+                  <span style={{
+                    width: '1px',
+                    height: '9px',
+                    background: divColor,
+                    opacity: 0.35,
+                    display: 'inline-block',
+                    flexShrink: 0,
+                    margin: '0 1px'
+                  }} />
+                )}
+                {item}
+              </React.Fragment>
+            ))}
+          </div>
+        </div>
+      )
+    }
+
     return (
       <div style={{
         display: 'inline-flex',
@@ -518,26 +568,27 @@ export function PerformanceHud({ style = 'blood-moon', metrics = {}, orientation
   }
 
   // Base container layout:
-  // - Horizontal: 1-line strip (~28px height, dynamic width)
+  // - Horizontal single-line: ~28px height, dynamic width
+  // - Horizontal dual-line: ~44px height, compact 2-tier width
   // - Vertical: compact column (~110px wide, items stacked vertically)
   // - Flushed to corner without margin gap
   const baseBox = {
     display: 'inline-flex',
     flexDirection: isVertical ? 'column' : 'row',
     alignItems: isVertical ? 'stretch' : 'center',
-    gap: isVertical ? '2px' : '8px',
-    padding: isVertical ? '6px 9px' : '0 10px',
-    height: isVertical ? 'auto' : '28px',
-    minWidth: isVertical ? '110px' : 'auto',
+    gap: isVertical ? '4px' : (isMultiRow ? '14px' : '10px'),
+    padding: isVertical ? '10px 14px' : (isMultiRow ? '8px 16px' : '6px 14px'),
+    height: isVertical ? 'auto' : (isMultiRow ? 'auto' : '32px'),
+    minHeight: isVertical ? 'auto' : (isMultiRow ? '48px' : '32px'),
+    minWidth: isVertical ? '120px' : 'auto',
     boxSizing: 'border-box',
     whiteSpace: 'nowrap',
     width: 'fit-content',
-    lineHeight: 1,
+    lineHeight: 1.2,
     userSelect: 'none',
     margin: 0,
     transform: 'translateZ(0)',
     backfaceVisibility: 'hidden',
-    contain: 'paint layout',
   }
 
   // Header helper for FPS + Badge
@@ -545,15 +596,18 @@ export function PerformanceHud({ style = 'blood-moon', metrics = {}, orientation
     return (
       <div style={{
         display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: isVertical ? 'space-between' : 'flex-start',
-        gap: '6px',
+        flexDirection: isMultiRow ? 'column' : 'row',
+        alignItems: isMultiRow ? 'flex-start' : (isVertical ? 'stretch' : 'center'),
+        justifyContent: isVertical ? 'space-between' : 'center',
+        gap: isMultiRow ? '4px' : '6px',
         flexShrink: 0,
         width: isVertical ? '100%' : 'auto',
         height: isVertical ? 'auto' : '100%',
-        lineHeight: 1,
+        lineHeight: 1.2,
         position: 'relative',
-        zIndex: 1
+        zIndex: 1,
+        paddingRight: isMultiRow ? '14px' : 0,
+        borderRight: isMultiRow ? '1px solid rgba(255, 255, 255, 0.2)' : 'none'
       }}>
         <span style={{
           display: 'inline-flex',
@@ -581,7 +635,7 @@ export function PerformanceHud({ style = 'blood-moon', metrics = {}, orientation
             lineHeight: 1,
             letterSpacing: '0.02em'
           }}>
-            {data.fps} FPS
+            {data.fps ? `${data.fps} FPS` : '-- FPS'}
           </strong>
         )}
       </div>

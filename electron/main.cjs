@@ -6,6 +6,11 @@ const { spawn, execFile } = require('node:child_process')
 const windowStateKeeper = require('electron-window-state')
 const { pathToFileURL } = require('node:url')
 
+app.name = 'Logpile';
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.logpile.app');
+}
+
 // Force all app data, databases, and caches to save alongside the executable (Zero-C-Drive)
 const isPackaged = app.isPackaged;
 const APP_DATA_DIR = isPackaged
@@ -28,21 +33,22 @@ process.env.XDG_CACHE_HOME = path.join(APP_DATA_DIR, 'cache');
 app.commandLine.appendSwitch('disable-background-timer-throttling');
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
-// Cap compositor frame rate to 60 FPS to eliminate redundant DWM composition wakeups on 144Hz/200Hz+ panels (under 1% GPU overhead)
-app.commandLine.appendSwitch('limit-fps', '60');
 
-// Enforce single instance lock
-const gotSingleInstanceLock = app.requestSingleInstanceLock();
-if (!gotSingleInstanceLock) {
-  app.quit();
-} else {
-  app.on('second-instance', () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      if (!mainWindow.isVisible()) mainWindow.show();
-      mainWindow.focus();
-    }
-  });
+// Enforce single instance lock (exempt installer mode)
+const isInstallerArg = process.argv.includes('--installer');
+if (!isInstallerArg) {
+  const gotSingleInstanceLock = app.requestSingleInstanceLock();
+  if (!gotSingleInstanceLock) {
+    app.quit();
+  } else {
+    app.on('second-instance', () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        if (!mainWindow.isVisible()) mainWindow.show();
+        mainWindow.focus();
+      }
+    });
+  }
 }
 
 protocol.registerSchemesAsPrivileged([
@@ -123,6 +129,7 @@ const {
   setExecutionMode,
   getExecutionMode,
   generateHudThemeDesign,
+  generateCssThemeDesign,
   askGamingAssistant,
   recommendFromLibrary,
   unloadEngine,
@@ -485,44 +492,30 @@ function isCleanGameExe(name) {
   return true;
 }
 
-function findGameExecutables(installPath) {
+function findGameExecutables(installPath, maxDepth = 3) {
   const exeNames = new Set();
   if (!installPath || typeof installPath !== 'string' || !fs.existsSync(installPath)) return exeNames;
-  try {
-    const entries = fs.readdirSync(installPath, { withFileTypes: true });
-    const subdirsToCheck = [];
 
-    for (const entry of entries) {
-      if (entry.isFile()) {
-        if (isCleanGameExe(entry.name)) exeNames.add(entry.name.toLowerCase());
-      } else if (entry.isDirectory()) {
-        const subName = entry.name.toLowerCase();
-        if (BINARY_SUBDIRS.has(subName)) {
-          subdirsToCheck.push(path.join(installPath, entry.name));
-        }
-      }
-    }
-
-    for (const sdir of subdirsToCheck) {
-      try {
-        const subEntries = fs.readdirSync(sdir, { withFileTypes: true });
-        for (const s of subEntries) {
-          if (s.isFile()) {
-            if (isCleanGameExe(s.name)) exeNames.add(s.name.toLowerCase());
-          } else if (s.isDirectory() && ['win64', 'x64', 'win32', 'x86', 'retail', 'shipping'].includes(s.name.toLowerCase())) {
-            try {
-              const sub2 = fs.readdirSync(path.join(sdir, s.name), { withFileTypes: true });
-              for (const s2 of sub2) {
-                if (s2.isFile() && isCleanGameExe(s2.name)) {
-                  exeNames.add(s2.name.toLowerCase());
-                }
-              }
-            } catch {}
+  function scan(currentPath, currentDepth) {
+    if (currentDepth > maxDepth) return;
+    try {
+      const entries = fs.readdirSync(currentPath, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isFile()) {
+          if (isCleanGameExe(entry.name)) {
+            exeNames.add(entry.name.toLowerCase());
+          }
+        } else if (entry.isDirectory()) {
+          const lower = entry.name.toLowerCase();
+          if (!IGNORED_EXE_SUBSTRINGS.some((ign) => lower.includes(ign))) {
+            scan(path.join(currentPath, entry.name), currentDepth + 1);
           }
         }
-      } catch {}
-    }
-  } catch {}
+      }
+    } catch {}
+  }
+
+  scan(installPath, 0);
   return exeNames;
 }
 
@@ -575,21 +568,68 @@ function getPresentMonExecutablePath() {
   return null;
 }
 
-function startPresentMonForGame(targetExe) {
-  stopPresentMon();
+const IGNORED_ETW_PROCESSES = new Set([
+  'dwm.exe',
+  'explorer.exe',
+  'electron.exe',
+  'logpile.exe',
+  'code.exe',
+  'devenv.exe',
+  'nvidia overlay.exe',
+  'nvcontainer.exe',
+  'eosoverlayrenderer-win64-shipping.exe',
+  'eagameoverlay.exe',
+  'gameoverlayui.exe',
+  'discord.exe',
+  'spotify.exe',
+  'chrome.exe',
+  'msedge.exe',
+  'firefox.exe',
+  'hwinfo64.exe',
+  'hwinfo32.exe',
+  'armourycrate.usersessionhelper.exe',
+  'taskmgr.exe',
+  'cmd.exe',
+  'powershell.exe',
+  'steam.exe',
+  'steamwebhelper.exe',
+  'epicgameslauncher.exe',
+  'eadesktop.exe'
+]);
+
+function startPresentMonForGame(targetExe = null) {
+  if (presentMonProcess) return;
   const exePath = getPresentMonExecutablePath();
   if (!exePath) {
     console.warn('[PresentMon] Executable not found at:', exePath);
     return;
   }
-  const cleanExeName = path.basename(targetExe);
   try {
     const args = [
-      '--process_name', cleanExeName,
+      '--session_name', 'LogpilePresentMon',
+      '--stop_existing_session',
       '--output_stdout',
       '--no_console_stats',
-      '--v1_metrics'
+      '--v1_metrics',
+      '--exclude', 'electron.exe',
+      '--exclude', 'Logpile.exe',
+      '--exclude', 'devenv.exe',
+      '--exclude', 'Code.exe',
+      '--exclude', 'dwm.exe',
+      '--exclude', 'explorer.exe',
+      '--exclude', 'EOSOverlayRenderer-Win64-Shipping.exe',
+      '--exclude', 'NVIDIA Overlay.exe',
+      '--exclude', 'Discord.exe',
+      '--exclude', 'chrome.exe',
+      '--exclude', 'msedge.exe',
+      '--exclude', 'Steam.exe',
+      '--exclude', 'steamwebhelper.exe',
+      '--exclude', 'EpicGamesLauncher.exe',
+      '--exclude', 'EADesktop.exe'
     ];
+    if (targetExe) {
+      args.push('--process_name', path.basename(targetExe));
+    }
     presentMonProcess = spawn(exePath, args, { windowsHide: true });
     hardwareTelemetry.isEtwActive = true;
     presentMonRollingFrames = [];
@@ -608,13 +648,21 @@ function startPresentMonForGame(targetExe) {
         if (!headerMap) {
           headerMap = {};
           cols.forEach((col, idx) => {
-            headerMap[col.trim()] = idx;
+            headerMap[col.trim().toLowerCase()] = idx;
           });
           continue;
         }
 
-        const msBetweenIdx = headerMap['MsBetweenPresents'] !== undefined ? headerMap['MsBetweenPresents'] : headerMap['FrameTime'];
-        const msRenderIdx = headerMap['MsUntilRenderComplete'] !== undefined ? headerMap['MsUntilRenderComplete'] : headerMap['GPUBusy'];
+        const appIdx = headerMap['application'];
+        if (appIdx !== undefined && cols[appIdx]) {
+          const app = cols[appIdx].trim().toLowerCase();
+          if (IGNORED_ETW_PROCESSES.has(app)) {
+            continue;
+          }
+        }
+
+        const msBetweenIdx = headerMap['msbetweenpresents'] !== undefined ? headerMap['msbetweenpresents'] : headerMap['frametime'];
+        const msRenderIdx = headerMap['msuntilrendercomplete'] !== undefined ? headerMap['msuntilrendercomplete'] : headerMap['gpubusy'];
 
         if (msBetweenIdx !== undefined && cols[msBetweenIdx]) {
           const frameTimeMs = parseFloat(cols[msBetweenIdx]);
@@ -653,6 +701,17 @@ function startPresentMonForGame(targetExe) {
       }
     });
 
+    if (presentMonProcess.stderr) {
+      presentMonProcess.stderr.on('data', (errChunk) => {
+        const errStr = errChunk.toString();
+        if (errStr.includes('access denied')) {
+          console.warn('[PresentMon] Access denied: ETW requires Administrator or "Performance Log Users" group.');
+          hardwareTelemetry.isEtwActive = false;
+          hardwareTelemetry.fps = null;
+        }
+      });
+    }
+
     presentMonProcess.on('error', (err) => {
       console.warn('[PresentMon] Process error:', err?.message);
       hardwareTelemetry.isEtwActive = false;
@@ -676,12 +735,17 @@ function stopPresentMon() {
     presentMonProcess = null;
   }
   hardwareTelemetry.isEtwActive = false;
+  hardwareTelemetry.fps = null;
+  hardwareTelemetry.frametime = null;
+  hardwareTelemetry.onePercentLow = null;
+  hardwareTelemetry.gpuBusyMs = null;
 }
 
 // -----------------------------------------------------------------------------
 // HWiNFO SHARED MEMORY CPU TEMP BRIDGE
 // -----------------------------------------------------------------------------
 let hwInfoProcess = null;
+let lastHwInfoTempTime = 0;
 
 function getHwInfoReaderPath() {
   const unpackedPath = path.join(__dirname, 'bin', 'HwInfoReader.exe').replace('app.asar', 'app.asar.unpacked');
@@ -708,6 +772,10 @@ function startHwInfoReader() {
           const temp = parseInt(line.replace('CPU_TEMP:', '').trim(), 10);
           if (!isNaN(temp) && temp > 15 && temp < 115) {
             hardwareTelemetry.cpuTemp = temp;
+            lastHwInfoTempTime = Date.now();
+            if (hudWindow && !hudWindow.isDestroyed() && hudWindow.isVisible()) {
+              hudWindow.webContents.send('hardware:telemetry-update', hardwareTelemetry);
+            }
           }
         }
       }
@@ -1073,8 +1141,8 @@ function getHudWindowBounds(position, orientation = 'horizontal') {
   const { x, y, width: screenWidth, height: screenHeight } = primaryDisplay.bounds;
 
   const isVertical = orientation === 'vertical';
-  const hudWidth = isVertical ? 180 : 1200;
-  const hudHeight = isVertical ? 380 : 32;
+  const hudWidth = isVertical ? 180 : Math.min(1450, screenWidth - 20);
+  const hudHeight = isVertical ? 450 : 76;
 
   let posX = x;
   let posY = y;
@@ -1186,6 +1254,9 @@ function updateHudDisplayState(forceShow = false) {
 
   try {
     if (shouldShow) {
+      if (!presentMonProcess) {
+        startPresentMonForGame();
+      }
       const bounds = getHudWindowBounds(settings.fpsPosition || 'top-left', settings.fpsOrientation || 'horizontal');
       hudWindow.setBounds(bounds);
       hudWindow.setPosition(bounds.x, bounds.y);
@@ -1200,6 +1271,7 @@ function updateHudDisplayState(forceShow = false) {
       }
       try { hudWindow.moveTop(); } catch {}
     } else {
+      stopPresentMon();
       if (hudWindow.isVisible()) {
         hudWindow.hide();
       }
@@ -1336,6 +1408,9 @@ checkPhysicalBatteryHardware();
 
 function sampleHardwareStats() {
   try {
+    if (!hwInfoProcess) {
+      startHwInfoReader();
+    }
     const cpus = os.cpus();
     if (cpus && cpus.length > 0) {
       if (cpus[0].speed) {
@@ -1355,6 +1430,10 @@ function sampleHardwareStats() {
         }
       }
       prevCpuTimes = { idle, total };
+    }
+
+    if (Date.now() - lastHwInfoTempTime > 4500) {
+      hardwareTelemetry.cpuTemp = null;
     }
 
     const totalMem = os.totalmem();
@@ -1464,6 +1543,58 @@ function registerGlobalShortcuts() {
   }
 }
 
+let installerWindow = null;
+
+function createInstallerWindow() {
+  if (installerWindow && !installerWindow.isDestroyed()) {
+    installerWindow.focus();
+    return installerWindow;
+  }
+
+  installerWindow = new BrowserWindow({
+    width: 640,
+    height: 440,
+    frame: false,
+    resizable: false,
+    maximizable: false,
+    center: true,
+    backgroundColor: '#08090d',
+    show: true,
+    alwaysOnTop: true,
+    icon: getAppIconPath(),
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    }
+  });
+
+  setTimeout(() => {
+    try {
+      if (installerWindow && !installerWindow.isDestroyed()) {
+        installerWindow.setAlwaysOnTop(false);
+      }
+    } catch {}
+  }, 1500);
+
+  const isDev = !app.isPackaged && (process.argv.includes('--dev') || process.env.NODE_ENV === 'development');
+  const rendererUrl = !app.isPackaged ? (process.env.ELECTRON_RENDERER_URL || (isDev ? 'http://127.0.0.1:5173' : null)) : null;
+  const indexPath = path.join(__dirname, '..', 'app-dist', 'index.html');
+
+  if (rendererUrl) {
+    installerWindow.loadURL(`${rendererUrl}#installer`);
+  } else {
+    installerWindow.loadFile(indexPath, { hash: 'installer' });
+  }
+
+  installerWindow.on('closed', () => {
+    installerWindow = null;
+  });
+
+  return installerWindow;
+}
+
 function createWindow() {
   const windowState = windowStateKeeper({
     defaultWidth: 1280,
@@ -1473,6 +1604,7 @@ function createWindow() {
   })
 
   mainWindow = new BrowserWindow({
+    title: 'Logpile',
     x: windowState.x,
     y: windowState.y,
     width: windowState.width,
@@ -3008,6 +3140,10 @@ function registerIpc() {
     return await generateHudThemeDesign(userPrompt, gameInfo, { ...options, app });
   });
 
+  ipcMain.handle('ai:generateCssTheme', async (_event, userPrompt, options = {}) => {
+    return await generateCssThemeDesign(userPrompt, { ...options, app });
+  });
+
   ipcMain.handle('ai:selectModelFile', async () => {
     try {
       const result = await dialog.showOpenDialog(mainWindow, {
@@ -3194,6 +3330,274 @@ function registerIpc() {
   ipcMain.handle('voice:stop', () => voiceService.stop());
   ipcMain.handle('voice:setWakeWord', (_event, enabled) => voiceService.setWakeWord(enabled));
   ipcMain.handle('voice:getStatus', () => voiceService.getStatus());
+
+  // --- Theme Persistence IPC Handler ---
+  ipcMain.handle('theme:save', async (_event, { layoutTheme, colorPalette }) => {
+    try {
+      if (layoutTheme) {
+        const themeJsonPath = path.join(APP_DATA_DIR, 'theme.json');
+        fs.writeFileSync(themeJsonPath, JSON.stringify({ layoutTheme, colorPalette: colorPalette || 'auto', updatedAt: Date.now() }, null, 2), 'utf8');
+        try {
+          db.prepare("INSERT INTO app_settings (key, value) VALUES ('layout_theme', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(layoutTheme);
+          if (colorPalette) {
+            db.prepare("INSERT INTO app_settings (key, value) VALUES ('color_palette', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(colorPalette);
+          }
+        } catch {}
+      }
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  // --- Dedicated Modern Installer IPC Handlers ---
+  ipcMain.handle('installer:detect', async () => {
+    try {
+      let savedTheme = 'cinematic';
+      let savedPalette = 'auto';
+
+      const tryReadThemeFromDir = (dataDir) => {
+        try {
+          const themeJsonPath = path.join(dataDir, 'theme.json');
+          if (fs.existsSync(themeJsonPath)) {
+            const data = JSON.parse(fs.readFileSync(themeJsonPath, 'utf8'));
+            if (data?.layoutTheme) return { theme: data.layoutTheme, palette: data.colorPalette || 'auto' };
+          }
+          const dbPath = path.join(dataDir, 'logpile.db');
+          if (fs.existsSync(dbPath)) {
+            const Database = require('better-sqlite3');
+            const tempDb = new Database(dbPath, { readonly: true, fileMustExist: true });
+            const row = tempDb.prepare("SELECT value FROM app_settings WHERE key = 'layout_theme'").get();
+            const palRow = tempDb.prepare("SELECT value FROM app_settings WHERE key = 'color_palette'").get();
+            tempDb.close();
+            if (row && row.value) {
+              return { theme: row.value, palette: palRow?.value || 'auto' };
+            }
+          }
+        } catch {}
+        return null;
+      };
+
+      const localTheme = tryReadThemeFromDir(APP_DATA_DIR);
+      if (localTheme) {
+        savedTheme = localTheme.theme;
+        savedPalette = localTheme.palette;
+      }
+
+      if (process.platform === 'win32') {
+        const { execSync } = require('node:child_process')
+        try {
+          const regQuery = execSync('reg query "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\com.logpile.app" /v InstallLocation', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+          const match = regQuery.match(/InstallLocation\s+REG_SZ\s+(.+)/i)
+          if (match && match[1]) {
+            const regPath = match[1].trim()
+            if (fs.existsSync(path.join(regPath, 'Logpile.exe'))) {
+              const installedTheme = tryReadThemeFromDir(path.join(regPath, 'logpile_data')) || tryReadThemeFromDir(APP_DATA_DIR)
+              return {
+                isInstalled: true,
+                installPath: regPath,
+                currentVersion: '1.3.7',
+                theme: installedTheme?.theme || savedTheme,
+                palette: installedTheme?.palette || savedPalette
+              }
+            }
+          }
+        } catch {}
+      }
+
+      const candidates = [
+        'K:\\Library\\Logpile',
+        'D:\\Games\\Logpile',
+        'D:\\Logpile',
+        'C:\\Logpile',
+        path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Logpile'),
+      ]
+      for (const cand of candidates) {
+        if (cand && fs.existsSync(path.join(cand, 'Logpile.exe'))) {
+          const installedTheme = tryReadThemeFromDir(path.join(cand, 'logpile_data')) || tryReadThemeFromDir(APP_DATA_DIR)
+          return {
+            isInstalled: true,
+            installPath: cand,
+            currentVersion: '1.3.7',
+            theme: installedTheme?.theme || savedTheme,
+            palette: installedTheme?.palette || savedPalette
+          }
+        }
+      }
+
+      let defaultPath = 'D:\\Games\\Logpile'
+      if (!fs.existsSync('D:\\')) {
+        defaultPath = path.join(process.env.LOCALAPPDATA || 'C:\\', 'Programs', 'Logpile')
+      }
+      return { isInstalled: false, defaultPath, theme: savedTheme, palette: savedPalette }
+    } catch (err) {
+      console.warn('[Installer] Detection note:', err?.message)
+      return { isInstalled: false, defaultPath: 'D:\\Games\\Logpile', theme: 'cinematic', palette: 'auto' }
+    }
+  })
+
+  ipcMain.handle('installer:browse', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const result = await dialog.showOpenDialog(win, {
+      title: 'Select Logpile Installation Folder',
+      properties: ['openDirectory', 'createDirectory']
+    })
+    if (!result.canceled && result.filePaths && result.filePaths[0]) {
+      return result.filePaths[0]
+    }
+    return null
+  })
+
+  ipcMain.handle('installer:getDriveSpace', async (_event, targetPath) => {
+    try {
+      if (!targetPath) return { freeGb: 'N/A' }
+      const parsed = path.parse(targetPath)
+      const driveRoot = parsed.root || targetPath.slice(0, 3)
+      if (fs.existsSync(driveRoot)) {
+        const stats = fs.statfsSync(driveRoot)
+        const freeGb = (stats.bavail * stats.bsize / (1024 ** 3)).toFixed(1)
+        return { freeGb }
+      }
+      return { freeGb: 'Available' }
+    } catch {
+      return { freeGb: 'Available' }
+    }
+  })
+
+  ipcMain.handle('installer:install', async (event, options) => {
+    const { targetPath, createDesktopShortcut = true, createStartMenuShortcut = true } = options || {}
+    const sender = event.sender
+
+    const sendProgress = (progress, status, done = false, error = null) => {
+      if (sender && !sender.isDestroyed()) {
+        sender.send('installer:progress', { progress, status, done, error })
+      }
+    }
+
+    try {
+      sendProgress(10, 'Initializing destination folder...')
+      if (!fs.existsSync(targetPath)) {
+        fs.mkdirSync(targetPath, { recursive: true })
+      }
+
+      sendProgress(25, 'Closing any running Logpile processes...')
+      if (process.platform === 'win32') {
+        const { execSync } = require('node:child_process')
+        try {
+          execSync('taskkill /F /IM Logpile.exe', { stdio: 'ignore' })
+        } catch {}
+      }
+
+      sendProgress(45, 'Extracting Logpile binaries and assets...')
+      const sourceDir = app.isPackaged ? path.dirname(process.execPath) : path.join(__dirname, '..', 'dist', 'win-unpacked')
+      
+      if (fs.existsSync(sourceDir)) {
+        const copyDirRecursive = (src, dest) => {
+          if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true })
+          const entries = fs.readdirSync(src, { withFileTypes: true })
+          for (const entry of entries) {
+            if (entry.name === 'logpile_data') continue
+            const srcPath = path.join(src, entry.name)
+            const destPath = path.join(dest, entry.name)
+            if (entry.isDirectory()) {
+              copyDirRecursive(srcPath, destPath)
+            } else {
+              try {
+                fs.copyFileSync(srcPath, destPath)
+              } catch (cpErr) {
+                console.warn(`[Installer] Copy note for ${entry.name}:`, cpErr?.message)
+              }
+            }
+          }
+        }
+        copyDirRecursive(sourceDir, targetPath)
+      }
+
+      sendProgress(75, 'Configuring Windows shortcuts...')
+      const exePath = path.join(targetPath, 'Logpile.exe')
+
+      if (process.platform === 'win32') {
+        if (createDesktopShortcut) {
+          try {
+            const desktopLnk = path.join(app.getPath('desktop'), 'Logpile.lnk')
+            shell.writeShortcutLink(desktopLnk, {
+              target: exePath,
+              cwd: targetPath,
+              description: 'Logpile - Offline Game Launcher',
+              icon: exePath,
+              iconIndex: 0
+            })
+          } catch (deskErr) {
+            console.warn('[Installer] Desktop shortcut notice:', deskErr?.message)
+          }
+        }
+
+        if (createStartMenuShortcut) {
+          try {
+            const startMenuDir = path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs')
+            if (fs.existsSync(startMenuDir)) {
+              const startLnk = path.join(startMenuDir, 'Logpile.lnk')
+              shell.writeShortcutLink(startLnk, {
+                target: exePath,
+                cwd: targetPath,
+                description: 'Logpile - Offline Game Launcher',
+                icon: exePath,
+                iconIndex: 0
+              })
+            }
+          } catch (startErr) {
+            console.warn('[Installer] Start menu shortcut notice:', startErr?.message)
+          }
+        }
+
+        sendProgress(88, 'Registering Windows application entry...')
+        const { exec } = require('node:child_process')
+        try {
+          const regBase = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\com.logpile.app'
+          exec(`reg add "${regBase}" /v DisplayName /d "Logpile" /f && reg add "${regBase}" /v DisplayVersion /d "1.3.7" /f && reg add "${regBase}" /v Publisher /d "Corporate Introvert Gamer" /f && reg add "${regBase}" /v InstallLocation /d "${targetPath}" /f && reg add "${regBase}" /v DisplayIcon /d "${targetPath}\\Logpile.exe,0" /f`)
+        } catch (regErr) {
+          console.warn('[Installer] Registry note:', regErr?.message)
+        }
+
+        sendProgress(95, 'Configuring performance telemetry access...')
+        try {
+          exec(`net localgroup "Performance Log Users" "${process.env.USERNAME}" /add`)
+        } catch {}
+      }
+
+      sendProgress(100, 'Installation complete!', true)
+      return { success: true }
+    } catch (err) {
+      console.error('[Installer] Installation failed:', err)
+      sendProgress(0, 'Failed', false, err?.message || 'Installation encountered an unexpected error.')
+      throw err
+    }
+  })
+
+  ipcMain.handle('installer:launch', async (_event, targetPath) => {
+    try {
+      const exePath = path.join(targetPath, 'Logpile.exe')
+      if (fs.existsSync(exePath)) {
+        spawn(exePath, [], { detached: true, stdio: 'ignore' }).unref()
+      }
+    } catch (launchErr) {
+      console.error('[Installer] Launch failed:', launchErr)
+    }
+    app.quit()
+  })
+
+  ipcMain.handle('installer:close', () => {
+    app.quit()
+  })
+
+  ipcMain.handle('installer:minimize', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (win) win.minimize()
+  })
+
+  ipcMain.handle('app:open-installer-preview', () => {
+    createInstallerWindow()
+  })
 }
 
 
@@ -3344,7 +3748,7 @@ app.whenReady().then(() => {
     }
   })
 
-  if (process.platform === 'win32') app.setAppUserModelId('com.logpile.library')
+  if (process.platform === 'win32') app.setAppUserModelId('com.logpile.app')
   db = createDatabase(path.join(app.getPath('userData'), 'logpile.db'))
   try {
     const savedCustomModel = db.prepare("SELECT value FROM app_settings WHERE key = 'ai_custom_model_path'").get()
@@ -3366,19 +3770,26 @@ app.whenReady().then(() => {
     console.warn('[Guides] Initial scan notice:', gErr?.message)
   }
   registerIpc()
-  createWindow()
-  createOverlayWindow()
-  try {
-    startHudGameMonitor()
-    startHardwareMonitor()
-  } catch {}
-  try {
-    registerGlobalShortcuts()
-  } catch (sErr) {
-    console.warn('[Shortcuts] Initial shortcut setup error:', sErr?.message)
+  if (process.argv.includes('--installer')) {
+    createInstallerWindow()
+  } else {
+    createWindow()
+    createOverlayWindow()
+    try {
+      startHudGameMonitor()
+      startHardwareMonitor()
+    } catch {}
+    try {
+      registerGlobalShortcuts()
+    } catch (sErr) {
+      console.warn('[Shortcuts] Initial shortcut setup error:', sErr?.message)
+    }
   }
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (BrowserWindow.getAllWindows().length === 0) {
+      if (process.argv.includes('--installer')) createInstallerWindow()
+      else createWindow()
+    }
   })
 })
 

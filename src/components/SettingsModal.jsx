@@ -12,28 +12,29 @@ const METRIC_OPTIONS = [
   { key: 'ram', label: 'System RAM Usage', desc: 'Active system memory consumption' },
   { key: 'clock', label: 'Clock & Session Timer', desc: 'Real-time clock and playtime to track late-night gaming' },
   { key: 'battery', label: 'Battery Level %', desc: 'Battery charge & power status for gaming laptops and handhelds' },
-  { key: 'hwinfoCpuTemp', label: 'HWiNFO CPU Temp (Optional)', desc: 'Read CPU package thermals if HWiNFO is running' }
+  { key: 'hwinfoCpuTemp', label: 'HWiNFO CPU Temp (Optional)', desc: 'Reads CPU package thermals if HWiNFO is running with Shared Memory active' }
 ]
 
-function getFpsPositionStyle(pos) {
+function getFpsPositionStyle(pos, scale = 1) {
+  const scaleStr = scale !== 1 ? `scale(${scale})` : '';
   switch (pos) {
     case 'top-left':
-      return { top: '14px', left: '14px', transform: 'none' }
+      return { top: '12px', left: '12px', transform: scaleStr || 'none', transformOrigin: 'top left' };
     case 'top-center':
-      return { top: '14px', left: '50%', transform: 'translateX(-50%)' }
+      return { top: '12px', left: '50%', transform: `translateX(-50%) ${scaleStr}`.trim(), transformOrigin: 'top center' };
     case 'top-right':
-      return { top: '14px', right: '14px', transform: 'none' }
+      return { top: '12px', right: '12px', transform: scaleStr || 'none', transformOrigin: 'top right' };
     case 'left-center':
-      return { top: '50%', left: '14px', transform: 'translateY(-50%)' }
+      return { top: '50%', left: '12px', transform: `translateY(-50%) ${scaleStr}`.trim(), transformOrigin: 'left center' };
     case 'right-center':
-      return { top: '50%', right: '14px', transform: 'translateY(-50%)' }
+      return { top: '50%', right: '12px', transform: `translateY(-50%) ${scaleStr}`.trim(), transformOrigin: 'right center' };
     case 'bottom-left':
-      return { bottom: '14px', left: '14px', transform: 'none' }
+      return { bottom: '12px', left: '12px', transform: scaleStr || 'none', transformOrigin: 'bottom left' };
     case 'bottom-center':
-      return { bottom: '14px', left: '50%', transform: 'translateX(-50%)' }
+      return { bottom: '12px', left: '50%', transform: `translateX(-50%) ${scaleStr}`.trim(), transformOrigin: 'bottom center' };
     case 'bottom-right':
     default:
-      return { bottom: '14px', right: '14px', transform: 'none' }
+      return { bottom: '12px', right: '12px', transform: scaleStr || 'none', transformOrigin: 'bottom right' };
   }
 }
 
@@ -125,6 +126,8 @@ import {
   HeartPulse,
   Skull,
   RotateCcw,
+  Code,
+  Camera,
   MicOff
 } from 'lucide-react'
 import {
@@ -138,7 +141,11 @@ import {
   resetAllCustomThemes,
   getEnabledAddonIds,
   toggleAddonTheme,
-  SAMPLE_DAILY_THEME
+  getBundledCommunityThemes,
+  installBundledTheme,
+  applyCustomCss,
+  getCustomCss,
+  generatePresetThemeCss
 } from '../utils/themeAddons'
 import {
   searchThemeRag,
@@ -148,6 +155,7 @@ import {
   getThemeRestorePoint,
   THEME_RAG_DATABASE
 } from '../utils/themePresetsRag'
+import { LAYOUT_PALETTES, COLOR_PALETTES } from '../utils/themePalettes'
 
 function formatGb(value) {
   return `${Number(value || 0).toFixed(value < 10 ? 2 : 1)} GB`
@@ -423,6 +431,8 @@ export function SettingsModal({
   onRefreshActivity,
   layoutTheme = 'cinematic',
   onLayoutThemeChange,
+  colorPalette = 'auto',
+  onColorPaletteChange,
   onTriggerIntroPreview,
 }) {
   const [activeTab, setActiveTab] = useState(initialTab)
@@ -453,6 +463,458 @@ export function SettingsModal({
   const [enabledAddonIds, setEnabledAddonIds] = useState(() => getEnabledAddonIds())
   const [customThemes, setCustomThemes] = useState(() => getCustomThemes())
   const [addonNotice, setAddonNotice] = useState('')
+  const [customCssCode, setCustomCssCode] = useState(() => getCustomCss())
+  const [cssThemePrompt, setCssThemePrompt] = useState('')
+  const [themeGenerating, setThemeGenerating] = useState(false)
+  const [customCssNotice, setCustomCssNotice] = useState('')
+  const [showCssCheatSheet, setShowCssCheatSheet] = useState(false)
+  const bundledThemes = useMemo(() => getBundledCommunityThemes(), [])
+
+  const [snapBusy, setSnapBusy] = useState(false)
+  const [snapNotice, setSnapNotice] = useState('')
+
+  const handleSnapSettings = async () => {
+    if (snapBusy) return
+    setSnapBusy(true)
+    setSnapNotice('Capturing full page...')
+
+    const modalEl = document.querySelector('.settings-modal')
+    const sidebarEl = document.querySelector('.settings-sidebar')
+    const headerEl = document.querySelector('.settings-header')
+    const bodyEl = document.querySelector('.settings-body')
+
+    if (!modalEl || !bodyEl) {
+      try {
+        const prefix = `Logpile-Settings-${activeTab}-FullPage-${layoutTheme}`
+        await window.api?.window?.captureScreen?.(prefix)
+      } finally {
+        setSnapBusy(false)
+      }
+      return
+    }
+
+    const originalScrollTop = bodyEl.scrollTop
+    const originalScrollBehavior = bodyEl.style.scrollBehavior
+    bodyEl.style.scrollBehavior = 'auto'
+
+    // Temporary override style to:
+    // 1. Unify background to solid #0a0c10 and eliminate inset/box-shadows so no shadow seams or gradient cuts appear across stitched slices
+    // 2. Hide scrollbar so no thumb cuts across stitched slices
+    // 3. Hide header action buttons (Full Page Snapshot button, Close X) so header is pristine
+    // 4. Compact sidebar nav slightly so ALL 12 tabs (including About Logpile) and footer fit completely without overflow or clipping
+    // 5. Ensure settings-tab-pane has comfortable bottom padding so the last card is never cut off
+    // 6. Give cards solid background #111319 without external drop-shadow so cross-slice card cuts are 100% invisible
+    const overrideStyle = document.createElement('style')
+    overrideStyle.id = 'settings-fullpage-capture-overrides'
+    overrideStyle.textContent = `
+      .settings-fullpage-capturing .settings-modal {
+        background: #0a0c10 !important;
+        box-shadow: none !important;
+        border-bottom: none !important;
+      }
+      .settings-fullpage-capturing .settings-main {
+        background: #0a0c10 !important;
+      }
+      .settings-fullpage-capturing .settings-header {
+        border-bottom: none !important;
+      }
+      .settings-fullpage-capturing .settings-body {
+        background: #0a0c10 !important;
+        box-shadow: none !important;
+      }
+      .settings-fullpage-capturing .settings-body::-webkit-scrollbar {
+        display: none !important;
+        width: 0 !important;
+        height: 0 !important;
+      }
+      .settings-fullpage-capturing .settings-body {
+        scrollbar-width: none !important;
+      }
+      .settings-fullpage-capturing .settings-header-actions {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+      }
+      .settings-fullpage-capturing .settings-sidebar {
+        justify-content: flex-start !important;
+        gap: 10px !important;
+        height: auto !important;
+        max-height: none !important;
+        overflow: visible !important;
+        background: #07080b !important;
+        border-right: none !important;
+      }
+      .settings-fullpage-capturing .settings-nav {
+        overflow: visible !important;
+        max-height: none !important;
+        height: auto !important;
+        gap: 3px !important;
+      }
+      .settings-fullpage-capturing .settings-tab-btn {
+        padding: 7px 12px !important;
+        font-size: 12px !important;
+      }
+      .settings-fullpage-capturing .settings-sidebar-footer {
+        margin-top: 10px !important;
+        padding-top: 10px !important;
+      }
+      .settings-fullpage-capturing .settings-tab-pane {
+        padding-bottom: 40px !important;
+      }
+      .settings-fullpage-capturing .settings-card {
+        background: #111319 !important;
+        box-shadow: none !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+      }
+    `
+    document.head.appendChild(overrideStyle)
+    document.body.classList.add('settings-fullpage-capturing')
+
+    const cleanup = () => {
+      try {
+        overrideStyle.remove()
+        document.body.classList.remove('settings-fullpage-capturing')
+      } catch {}
+      if (bodyEl) {
+        bodyEl.scrollTop = originalScrollTop
+        bodyEl.style.scrollBehavior = originalScrollBehavior
+      }
+    }
+
+    try {
+      // Allow DOM to apply override layout and repaint before taking measurements
+      await new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 140)))
+      })
+
+      const modalRect = modalEl.getBoundingClientRect()
+      const sidebarRect = sidebarEl ? sidebarEl.getBoundingClientRect() : null
+      const headerRect = headerEl ? headerEl.getBoundingClientRect() : null
+      const bodyRect = bodyEl.getBoundingClientRect()
+
+      const paneEl = bodyEl.querySelector('.settings-tab-pane')
+      const paneHeight = paneEl ? Math.round(paneEl.getBoundingClientRect().height) : 0
+      const totalBodyHeight = Math.max(bodyEl.scrollHeight, paneHeight + 48)
+      const bodyViewportHeight = bodyEl.clientHeight
+      const modalWidth = Math.round(modalRect.width)
+      const sidebarWidth = sidebarRect ? Math.round(sidebarRect.width) : 0
+      const headerHeight = headerRect ? Math.round(headerRect.height) : 0
+      const bodyWidth = Math.round(bodyRect.width)
+      const totalCanvasHeight = headerHeight + totalBodyHeight
+      const prefix = `Logpile-Settings-${activeTab}-FullPage-${layoutTheme}`
+
+      // Step 1: Capture Sidebar & Header
+      let sidebarImg = null
+      let measuredSidebarH = sidebarRect ? Math.round(sidebarRect.height) : 0
+      if (sidebarRect) {
+        const sRes = await window.api?.window?.captureRect?.({
+          x: Math.round(sidebarRect.x),
+          y: Math.round(sidebarRect.y),
+          width: sidebarWidth,
+          height: measuredSidebarH,
+        })
+        if (sRes?.success && sRes?.dataUrl) {
+          sidebarImg = new Image()
+          sidebarImg.src = sRes.dataUrl
+          await new Promise((resolve, reject) => {
+            sidebarImg.onload = resolve
+            sidebarImg.onerror = reject
+          })
+        }
+      }
+
+      let headerImg = null
+      if (headerRect) {
+        const hRes = await window.api?.window?.captureRect?.({
+          x: Math.round(headerRect.x),
+          y: Math.round(headerRect.y),
+          width: Math.round(headerRect.width),
+          height: headerHeight,
+        })
+        if (hRes?.success && hRes?.dataUrl) {
+          headerImg = new Image()
+          headerImg.src = hRes.dataUrl
+          await new Promise((resolve, reject) => {
+            headerImg.onload = resolve
+            headerImg.onerror = reject
+          })
+        }
+      }
+
+      // Step 2: Capture Top Body Slice
+      const fixedCaptureX = Math.round(bodyRect.x)
+      const fixedCaptureY = Math.round(bodyRect.y)
+      const fixedCaptureW = Math.round(bodyRect.width)
+      const fixedStepH = Math.floor(bodyViewportHeight)
+
+      bodyEl.scrollTop = 0
+      await new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 140)))
+      })
+
+      const firstRes = await window.api?.window?.captureRect?.({
+        x: fixedCaptureX,
+        y: fixedCaptureY,
+        width: fixedCaptureW,
+        height: fixedStepH,
+      })
+      if (!firstRes?.success || !firstRes?.dataUrl) {
+        throw new Error(firstRes?.error || 'Failed capturing settings content')
+      }
+
+      const firstImg = new Image()
+      firstImg.src = firstRes.dataUrl
+      await new Promise((resolve, reject) => {
+        firstImg.onload = resolve
+        firstImg.onerror = reject
+      })
+
+      const scale = firstImg.naturalWidth / fixedCaptureW
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.round(modalWidth * scale)
+      canvas.height = Math.round(totalCanvasHeight * scale)
+      const ctx = canvas.getContext('2d')
+      ctx.imageSmoothingEnabled = true
+      ctx.imageSmoothingQuality = 'high'
+
+      // Background fill matching unified dark sanctuary tone
+      ctx.fillStyle = '#0a0c10'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+      const cSidebarW = Math.round(sidebarWidth * scale)
+      const cHeaderH = Math.round(headerHeight * scale)
+      const stepCanvasHeight = firstImg.naturalHeight
+
+      // Step 3: Draw Left Sidebar (Seamless single-block with all 12 tabs + footer)
+      if (sidebarImg) {
+        ctx.fillStyle = '#07080b'
+        ctx.fillRect(0, 0, cSidebarW, canvas.height)
+
+        const drawSidebarH = Math.min(canvas.height, sidebarImg.naturalHeight)
+        ctx.drawImage(
+          sidebarImg,
+          0, 0, sidebarImg.naturalWidth, drawSidebarH,
+          0, 0, cSidebarW, drawSidebarH
+        )
+
+        // Sidebar right border line
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.08)'
+        ctx.fillRect(cSidebarW - Math.round(1 * scale), 0, Math.round(1 * scale), canvas.height)
+      }
+
+      // Step 4: Draw Header
+      if (headerImg) {
+        ctx.drawImage(
+          headerImg,
+          0, 0, headerImg.naturalWidth, headerImg.naturalHeight,
+          cSidebarW, 0, canvas.width - cSidebarW, cHeaderH
+        )
+      }
+
+      // Step 5: Draw First Body Slice (native pixel height, zero stretching)
+      ctx.drawImage(
+        firstImg,
+        0, 0, firstImg.naturalWidth, stepCanvasHeight,
+        cSidebarW, cHeaderH, canvas.width - cSidebarW, stepCanvasHeight
+      )
+
+      // Step 6: Loop & Stitch Remaining Body Slices
+      let currentScrolledDips = fixedStepH
+      let currentCanvasY = stepCanvasHeight
+
+      while (currentScrolledDips < totalBodyHeight) {
+        const remainingDips = totalBodyHeight - currentScrolledDips
+        if (remainingDips <= 0) break
+
+        if (remainingDips >= fixedStepH) {
+          bodyEl.scrollTop = currentScrolledDips
+          await new Promise((resolve) => {
+            requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 140)))
+          })
+
+          const sliceRes = await window.api?.window?.captureRect?.({
+            x: fixedCaptureX,
+            y: fixedCaptureY,
+            width: fixedCaptureW,
+            height: fixedStepH,
+          })
+          if (!sliceRes?.success || !sliceRes?.dataUrl) {
+            throw new Error(sliceRes?.error || 'Failed capturing settings segment')
+          }
+
+          const sliceImg = new Image()
+          sliceImg.src = sliceRes.dataUrl
+          await new Promise((resolve, reject) => {
+            sliceImg.onload = resolve
+            sliceImg.onerror = reject
+          })
+
+          const sliceH = sliceImg.naturalHeight
+          ctx.drawImage(
+            sliceImg,
+            0, 0, sliceImg.naturalWidth, sliceH,
+            cSidebarW, cHeaderH + currentCanvasY, canvas.width - cSidebarW, sliceH
+          )
+
+          currentScrolledDips += fixedStepH
+          currentCanvasY += sliceH
+        } else {
+          // Final slice: bottom-anchored capture
+          const bottomScrollTop = Math.max(0, totalBodyHeight - fixedStepH)
+          bodyEl.scrollTop = bottomScrollTop
+          await new Promise((resolve) => {
+            requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 140)))
+          })
+
+          const lastRes = await window.api?.window?.captureRect?.({
+            x: fixedCaptureX,
+            y: fixedCaptureY,
+            width: fixedCaptureW,
+            height: fixedStepH,
+          })
+          if (!lastRes?.success || !lastRes?.dataUrl) {
+            throw new Error(lastRes?.error || 'Failed capturing final settings segment')
+          }
+
+          const lastImg = new Image()
+          lastImg.src = lastRes.dataUrl
+          await new Promise((resolve, reject) => {
+            lastImg.onload = resolve
+            lastImg.onerror = reject
+          })
+
+          const sourceCropY = totalBodyHeight >= fixedStepH
+            ? Math.round((fixedStepH - remainingDips) * scale)
+            : 0
+          const sourceCropH = lastImg.naturalHeight - sourceCropY
+          const destCropH = (canvas.height - cHeaderH) - currentCanvasY
+
+          ctx.drawImage(
+            lastImg,
+            0, sourceCropY, lastImg.naturalWidth, sourceCropH,
+            cSidebarW, cHeaderH + currentCanvasY, canvas.width - cSidebarW, destCropH
+          )
+
+          currentScrolledDips = totalBodyHeight
+          currentCanvasY = canvas.height - cHeaderH
+          break
+        }
+      }
+
+      // Step 7: Draw Clean Divider Lines & Outer Border
+      // Header bottom border line
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.08)'
+      ctx.fillRect(cSidebarW, cHeaderH - Math.round(1 * scale), canvas.width - cSidebarW, Math.round(1 * scale))
+
+      // Outer modal border
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)'
+      ctx.lineWidth = Math.round(1 * scale)
+      ctx.strokeRect(0, 0, canvas.width, canvas.height)
+
+      cleanup()
+
+      // Step 8: Save PNG & Copy to Clipboard
+      const finalDataUrl = canvas.toDataURL('image/png')
+      const saveRes = await window.api?.window?.saveBragCollage?.(finalDataUrl, prefix)
+      if (saveRes?.success) {
+        const fileName = saveRes.filePath ? saveRes.filePath.split(/[/\\]/).pop() : `${prefix}.png`
+        setSnapNotice(`Snapped: ${fileName} (copied!)`)
+      } else {
+        throw new Error(saveRes?.error || 'Failed to save full page snapshot')
+      }
+    } catch (err) {
+      console.error('[SettingsFullPage] Error:', err)
+      cleanup()
+      setSnapNotice('Capture failed')
+    } finally {
+      cleanup()
+      setSnapBusy(false)
+      setTimeout(() => setSnapNotice(''), 5000)
+    }
+  }
+
+  const handleApplyCustomCss = (code) => {
+    applyCustomCss(code)
+    setCustomCssNotice('Custom CSS applied live across your sanctuary.')
+    setTimeout(() => setCustomCssNotice(''), 3500)
+  }
+
+  const handleResetCustomCss = () => {
+    applyCustomCss('')
+    setCustomCssCode('')
+    setCustomCssNotice('Custom CSS cleared. Restored original theme styling.')
+    setTimeout(() => setCustomCssNotice(''), 3500)
+  }
+
+  const handleSynthesizeTheme = async (promptOverride) => {
+    const text = (promptOverride !== undefined ? promptOverride : cssThemePrompt).trim()
+    if (!text) return
+    setThemeGenerating(true)
+    setCustomCssNotice('Generating theme aesthetic...')
+    try {
+      let resultCss = ''
+      if (window.api?.ai?.generateCssTheme) {
+        const res = await window.api.ai.generateCssTheme(text)
+        if (res?.success && res?.css) {
+          resultCss = res.css
+        }
+      }
+      if (!resultCss) {
+        resultCss = generatePresetThemeCss(text)
+      }
+      setCustomCssCode(resultCss)
+      applyCustomCss(resultCss)
+      setCustomCssNotice('Theme generated and injected live!')
+      setTimeout(() => setCustomCssNotice(''), 4000)
+    } catch (err) {
+      const fallback = generatePresetThemeCss(text)
+      setCustomCssCode(fallback)
+      applyCustomCss(fallback)
+      setCustomCssNotice('Preset theme generated!')
+      setTimeout(() => setCustomCssNotice(''), 4000)
+    } finally {
+      setThemeGenerating(false)
+    }
+  }
+
+  const handleImportCss = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (evt) => {
+      const text = evt.target?.result || ''
+      setCustomCssCode(text)
+      applyCustomCss(text)
+      setCustomCssNotice(`Imported CSS file: ${file.name}`)
+      setTimeout(() => setCustomCssNotice(''), 4000)
+    }
+    reader.readAsText(file)
+  }
+
+  const handleExportCss = () => {
+    const blob = new Blob([customCssCode || '/* Logpile Theme */'], { type: 'text/css' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `logpile-custom-theme.css`
+    a.click()
+    URL.revokeObjectURL(url)
+    setCustomCssNotice('Exported logpile-custom-theme.css')
+    setTimeout(() => setCustomCssNotice(''), 3500)
+  }
+
+  const handleInstallBundledTheme = (theme) => {
+    try {
+      importCustomTheme(theme)
+      setCustomThemes(getCustomThemes())
+      setEnabledAddonIds(getEnabledAddonIds())
+      onLayoutThemeChange?.(theme.id)
+      setAddonNotice(`Installed and activated bundled theme: ${theme.name}`)
+      setTimeout(() => setAddonNotice(''), 4000)
+    } catch {
+      setAddonNotice('Failed to install theme.')
+    }
+  }
   const [introOnThemeChange, setIntroOnThemeChange] = useState(() => {
     try {
       return localStorage.getItem('logpile-intro-on-theme-change') !== 'false'
@@ -1330,7 +1792,7 @@ export function SettingsModal({
 
           <div className="settings-sidebar-footer">
             <span>Logpile Desktop</span>
-            <span className="settings-card-badge">v1.3.5</span>
+            <span className="settings-card-badge">v1.3.7</span>
           </div>
         </aside>
 
@@ -1342,14 +1804,44 @@ export function SettingsModal({
               <h2 className="settings-title">{activeTabObj.label}</h2>
               <p className="settings-desc">{activeTabObj.desc}</p>
             </div>
-            <button
-              type="button"
-              className="modal-close"
-              onClick={onClose}
-              title="Close Settings (Esc)"
-            >
-              <X size={18} />
-            </button>
+            <div className="settings-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {snapNotice && (
+                <span style={{ fontSize: '11px', color: 'var(--accent)', fontWeight: 600, background: 'rgba(255,255,255,0.06)', padding: '5px 10px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                  {snapNotice}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={handleSnapSettings}
+                disabled={snapBusy}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  background: 'rgba(255, 255, 255, 0.06)',
+                  border: '1px solid rgba(255, 255, 255, 0.14)',
+                  color: '#fff',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  cursor: snapBusy ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+                title="Capture entire scrollable settings page from top to bottom into a single high-resolution image (saved to Captures & copied to clipboard)"
+              >
+                <Camera size={13} style={{ color: 'var(--accent)' }} />
+                <span>{snapBusy ? 'Capturing Full Page...' : 'Full Page Snapshot'}</span>
+              </button>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={onClose}
+                title="Close Settings (Esc)"
+              >
+                <X size={18} />
+              </button>
+            </div>
           </div>
 
           {/* Scrollable Body */}
@@ -1620,7 +2112,7 @@ export function SettingsModal({
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(255,255,255,0.5)' }}>Active:</span>
-                      <span style={{ fontSize: '11px', fontWeight: 800, padding: '2px 8px', borderRadius: '4px', background: 'var(--accent, #d6ff4b)', color: '#000' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 800, padding: '2px 8px', borderRadius: '4px', background: 'var(--accent)', color: '#000' }}>
                         {layoutTheme.toUpperCase()}
                       </span>
                     </div>
@@ -1628,11 +2120,11 @@ export function SettingsModal({
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px' }}>
                     {[
-                      { id: 'cinematic', label: '🎬 Cinematic', desc: 'Frosted Glass & Ice-Blue Glow', tag: 'Default' },
-                      { id: 'kinetic', label: '⚡ Kinetic', desc: 'Carbon Fiber & Neon Orange', tag: 'High-Octane' },
-                      { id: 'playful', label: '🪵 Playful', desc: 'Pastel Vinyl & Lime Pops', tag: 'Vibrant' },
-                      { id: 'atmospheric', label: '🕵️ Atmospheric', desc: 'Slate Stone & Emerald Monolith', tag: 'Mystical' },
-                      { id: 'competitive', label: '🏆 Competitive', desc: 'Titanium & Esports Gold', tag: 'Esports' },
+                      { id: 'cinematic', label: '🎬 Cinematic', desc: 'Prestige Dark Slate & Champagne Gold', tag: 'Default', colorDot: '#C6A56B' },
+                      { id: 'kinetic', label: '⚡ Kinetic', desc: 'Asphalt Carbon & Electric Orange', tag: 'Velocity', colorDot: '#F97316' },
+                      { id: 'playful', label: '🪵 Playful', desc: 'Retro Cartridge Charcoal & Neon Lime', tag: 'Arcade', colorDot: '#D6FF4B' },
+                      { id: 'atmospheric', label: '🕵️ Atmospheric', desc: 'Soot Black & Misty Steel-Grey', tag: 'Isolation', colorDot: '#82939A' },
+                      { id: 'competitive', label: '🏆 Competitive', desc: 'Tactical Matte Black & Crimson Alert', tag: 'Ranked', colorDot: '#EF4444' },
                     ].map((t) => {
                       const isCurrent = layoutTheme === t.id
                       return (
@@ -1641,8 +2133,9 @@ export function SettingsModal({
                           style={{
                             padding: '12px',
                             borderRadius: '8px',
-                            background: isCurrent ? 'rgba(214, 255, 75, 0.09)' : 'rgba(255, 255, 255, 0.03)',
-                            border: isCurrent ? '1px solid var(--accent, #d6ff4b)' : '1px solid rgba(255, 255, 255, 0.08)',
+                            background: isCurrent ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.02)',
+                            border: isCurrent ? `1px solid ${t.colorDot}` : '1px solid rgba(255, 255, 255, 0.08)',
+                            boxShadow: isCurrent ? `0 0 14px ${t.colorDot}26` : 'none',
                             display: 'flex',
                             flexDirection: 'column',
                             justifyContent: 'space-between',
@@ -1652,7 +2145,10 @@ export function SettingsModal({
                         >
                           <div>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                              <strong style={{ fontSize: '13px', color: '#fff' }}>{t.label}</strong>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: t.colorDot, boxShadow: `0 0 6px ${t.colorDot}` }} />
+                                <strong style={{ fontSize: '13px', color: '#fff' }}>{t.label}</strong>
+                              </div>
                               <span style={{ fontSize: '9px', fontWeight: 700, padding: '1px 5px', borderRadius: '3px', background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.6)' }}>
                                 {t.tag}
                               </span>
@@ -1671,7 +2167,7 @@ export function SettingsModal({
                               fontSize: '11px',
                               fontWeight: 700,
                               cursor: 'pointer',
-                              background: isCurrent ? 'var(--accent, #d6ff4b)' : 'rgba(255, 255, 255, 0.08)',
+                              background: isCurrent ? t.colorDot : 'rgba(255, 255, 255, 0.08)',
                               border: isCurrent ? 'none' : '1px solid rgba(255,255,255,0.12)',
                               color: isCurrent ? '#000000' : '#ffffff',
                               transition: 'all 0.15s ease'
@@ -1683,9 +2179,453 @@ export function SettingsModal({
                       )
                     })}
                   </div>
+
+                  {/* Universal Color Palette Swatches */}
+                  <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '6px' }}>
+                      <div>
+                        <strong style={{ fontSize: '12.5px', color: '#fff', display: 'block' }}>Accent Color Palette</strong>
+                        <small style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.5)' }}>Pair any custom accent highlight with your chosen layout theme</small>
+                      </div>
+                      <span style={{ fontSize: '10.5px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--accent)' }}>
+                        {COLOR_PALETTES[colorPalette]?.name || 'Theme Default'}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                      {Object.values(COLOR_PALETTES).map((cp) => {
+                        const isSelected = (colorPalette || 'auto') === cp.id
+                        const swatchColor = cp.accent || 'var(--accent)'
+                        return (
+                          <button
+                            key={cp.id}
+                            type="button"
+                            onClick={() => onColorPaletteChange?.(cp.id)}
+                            title={cp.desc}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              padding: '5px 11px',
+                              borderRadius: '6px',
+                              border: isSelected ? `1px solid ${cp.accent || 'var(--accent)'}` : '1px solid rgba(255, 255, 255, 0.10)',
+                              background: isSelected ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.02)',
+                              color: isSelected ? '#ffffff' : 'rgba(255, 255, 255, 0.7)',
+                              fontSize: '11px',
+                              fontWeight: isSelected ? 700 : 400,
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease',
+                              boxShadow: isSelected && cp.accent ? `0 0 10px ${cp.accent}33` : 'none',
+                            }}
+                          >
+                            <span
+                              style={{
+                                width: '8px',
+                                height: '8px',
+                                borderRadius: '50%',
+                                backgroundColor: swatchColor,
+                                boxShadow: isSelected ? `0 0 6px ${swatchColor}` : 'none',
+                              }}
+                            />
+                            <span>{cp.name}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
                 </div>
 
-                {/* 2. Daily Community Theme Drops (GitHub) */}
+                {/* 2. Official Bundled Community Themes (8 Themes) */}
+                <div className="settings-card">
+                  <div className="settings-card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Sparkles size={16} style={{ color: 'var(--accent, #d6ff4b)' }} />
+                        <strong className="settings-card-title">Bundled Community Themes ({bundledThemes.length})</strong>
+                      </div>
+                      <small className="settings-card-subtitle">
+                        Production-grade theme presets pre-packaged and ready to activate with 1 click
+                      </small>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: '10px' }}>
+                    {bundledThemes.map((bt) => {
+                      const isCurrent = layoutTheme === bt.id
+                      const isInstalled = customThemes.some((ct) => ct.id === bt.id)
+                      const p = bt.palette || {}
+
+                      return (
+                        <div
+                          key={bt.id}
+                          style={{
+                            padding: '12px',
+                            borderRadius: '8px',
+                            background: isCurrent ? 'rgba(255, 255, 255, 0.06)' : 'rgba(255, 255, 255, 0.02)',
+                            border: isCurrent ? `1px solid ${p.accent || 'var(--accent)'}` : '1px solid rgba(255, 255, 255, 0.08)',
+                            boxShadow: isCurrent && p.accent ? `0 0 14px ${p.accent}26` : 'none',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'space-between',
+                            gap: '8px',
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                              <strong style={{ fontSize: '13px', color: '#fff' }}>{bt.name}</strong>
+                              <span style={{ fontSize: '9px', fontWeight: 600, padding: '1px 5px', borderRadius: '3px', background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.6)' }}>
+                                {bt.category}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', lineHeight: 1.35, marginBottom: '8px' }}>
+                              {bt.tagline}
+                            </div>
+
+                            {/* Color preview swatches */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '8px' }}>
+                              {[p.base, p.surface, p.accent, p.borderColor, p.badgeText].filter(Boolean).map((color, i) => (
+                                <div
+                                  key={i}
+                                  title={color}
+                                  style={{
+                                    width: '14px',
+                                    height: '14px',
+                                    borderRadius: '3px',
+                                    background: color,
+                                    border: '1px solid rgba(255,255,255,0.15)'
+                                  }}
+                                />
+                              ))}
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!isInstalled) {
+                                handleInstallBundledTheme(bt)
+                              } else {
+                                onLayoutThemeChange?.(bt.id)
+                              }
+                            }}
+                            style={{
+                              padding: '6px 12px',
+                              borderRadius: '4px',
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              background: isCurrent ? (p.accent || 'var(--accent)') : 'rgba(255, 255, 255, 0.08)',
+                              border: isCurrent ? 'none' : '1px solid rgba(255,255,255,0.14)',
+                              color: isCurrent ? '#000000' : '#ffffff',
+                              transition: 'all 0.15s ease',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '6px'
+                            }}
+                          >
+                            {isCurrent ? <Check size={12} /> : null}
+                            <span>{isCurrent ? 'Active Theme' : isInstalled ? 'Apply Theme' : '1-Click Install & Apply'}</span>
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* 3. In-App Theme Studio & Custom CSS Engine */}
+                <div className="settings-card" style={{ border: '1px solid rgba(255, 255, 255, 0.15)', background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, rgba(0, 0, 0, 0.35) 100%)' }}>
+                  <div className="settings-card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <WandSparkles size={16} style={{ color: 'var(--accent, #d6ff4b)' }} />
+                        <strong className="settings-card-title">Theme Studio &amp; Custom CSS Engine</strong>
+                      </div>
+                      <small className="settings-card-subtitle">
+                        Live CSS injector targeting cards, buttons, dossier heroes, and accents. Zero crash risk.
+                      </small>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span
+                        style={{
+                          fontSize: '10px',
+                          fontWeight: 700,
+                          padding: '3px 8px',
+                          borderRadius: '4px',
+                          background: customCssCode ? 'rgba(34, 197, 94, 0.15)' : 'rgba(255, 255, 255, 0.06)',
+                          color: customCssCode ? '#4ade80' : 'rgba(255, 255, 255, 0.6)',
+                          border: customCssCode ? '1px solid rgba(34, 197, 94, 0.3)' : '1px solid rgba(255, 255, 255, 0.12)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px'
+                        }}
+                      >
+                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: customCssCode ? '#22c55e' : 'rgba(255,255,255,0.4)' }} />
+                        {customCssCode ? 'Live Custom CSS Injected' : 'Default CSS Active'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {customCssNotice && (
+                    <div style={{ fontSize: '11px', color: 'var(--accent, #d6ff4b)', padding: '6px 12px', borderRadius: '4px', background: 'rgba(214, 255, 75, 0.08)', border: '1px solid rgba(214, 255, 75, 0.2)', marginBottom: '12px' }}>
+                      {customCssNotice}
+                    </div>
+                  )}
+
+                  {/* AI / Offline Prompt Generator */}
+                  <div style={{ marginBottom: '14px', padding: '12px', borderRadius: '6px', background: 'rgba(0, 0, 0, 0.3)', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 600, color: 'rgba(255, 255, 255, 0.85)', marginBottom: '8px' }}>
+                      AI Theme Synthesizer (Instant Offline Fallback)
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <input
+                        type="text"
+                        value={cssThemePrompt}
+                        onChange={(e) => setCssThemePrompt(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !themeGenerating) {
+                            handleSynthesizeTheme()
+                          }
+                        }}
+                        placeholder="e.g. 'Gothic Vampire with crimson glass cards', 'Nordic frost glass', 'Cyberpunk neon gold'..."
+                        style={{
+                          flex: 1,
+                          minWidth: '220px',
+                          background: 'rgba(255, 255, 255, 0.05)',
+                          border: '1px solid rgba(255, 255, 255, 0.14)',
+                          borderRadius: '6px',
+                          padding: '7px 12px',
+                          color: '#fff',
+                          fontSize: '11px'
+                        }}
+                      />
+                      <button
+                        type="button"
+                        disabled={themeGenerating || !cssThemePrompt.trim()}
+                        onClick={() => handleSynthesizeTheme()}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '7px 14px',
+                          borderRadius: '6px',
+                          background: 'var(--accent, #d6ff4b)',
+                          border: 'none',
+                          color: '#000',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          cursor: themeGenerating || !cssThemePrompt.trim() ? 'not-allowed' : 'pointer',
+                          opacity: themeGenerating || !cssThemePrompt.trim() ? 0.6 : 1
+                        }}
+                      >
+                        <WandSparkles size={12} />
+                        <span>{themeGenerating ? 'Generating...' : 'Synthesize Theme'}</span>
+                      </button>
+                    </div>
+
+                    {/* Quick Preset Chips */}
+                    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px', marginTop: '10px' }}>
+                      <span style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Presets:</span>
+                      {[
+                        { label: '🏰 Gothic Obsidian', key: 'gothic' },
+                        { label: '⚡ Cyber 2077', key: 'cyber' },
+                        { label: '❄️ Nordic Frost', key: 'nord' },
+                        { label: '🌆 Synthwave Outrun', key: 'synth' },
+                        { label: '🌲 Emerald Temple', key: 'emerald' },
+                        { label: '🖤 OLED Noir', key: 'oled' },
+                        { label: '👑 Imperial Gold', key: 'gold' },
+                        { label: '💻 Matrix Operator', key: 'matrix' },
+                      ].map((chip) => (
+                        <button
+                          key={chip.key}
+                          type="button"
+                          onClick={() => {
+                            setCssThemePrompt(chip.label)
+                            handleSynthesizeTheme(chip.key)
+                          }}
+                          style={{
+                            padding: '3px 8px',
+                            borderRadius: '4px',
+                            background: 'rgba(255, 255, 255, 0.05)',
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            color: 'rgba(255, 255, 255, 0.8)',
+                            fontSize: '10px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          {chip.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Live CSS Code Editor Textarea */}
+                  <div style={{ marginBottom: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Code size={13} style={{ color: 'var(--accent, #d6ff4b)' }} />
+                        <span style={{ fontSize: '11px', fontWeight: 600, color: 'rgba(255, 255, 255, 0.8)' }}>
+                          Live Custom CSS Rules
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowCssCheatSheet((prev) => !prev)}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'var(--accent, #d6ff4b)',
+                          fontSize: '10px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          textDecoration: 'underline'
+                        }}
+                      >
+                        {showCssCheatSheet ? 'Hide Target Selectors' : 'View Target Selectors'}
+                      </button>
+                    </div>
+
+                    {showCssCheatSheet && (
+                      <div style={{ marginBottom: '8px', padding: '10px', borderRadius: '6px', background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.08)', fontSize: '10.5px', color: 'rgba(255,255,255,0.7)', lineHeight: 1.5 }}>
+                        <strong style={{ color: '#fff', display: 'block', marginBottom: '4px' }}>Key Selectors You Can Target:</strong>
+                        <div><code style={{ color: 'var(--accent)' }}>.poster-card</code> - Library game card borders, radius, shadows, glassmorphism</div>
+                        <div><code style={{ color: 'var(--accent)' }}>.poster-card:hover</code> - Card hover elevation, border highlight, scale</div>
+                        <div><code style={{ color: 'var(--accent)' }}>.launch-button, .primary-button</code> - Primary Play/Launch action buttons</div>
+                        <div><code style={{ color: 'var(--accent)' }}>.sanctuary-capsule</code> - Top navigation bar dropdown pills</div>
+                        <div><code style={{ color: 'var(--accent)' }}>.dossier-hero</code> - Dossier game hero presentation background</div>
+                        <div><code style={{ color: 'var(--accent)' }}>:root</code> - Global variables (--accent, --accent-glow, --bg-base, --bg-card)</div>
+                      </div>
+                    )}
+
+                    <textarea
+                      value={customCssCode}
+                      onChange={(e) => setCustomCssCode(e.target.value)}
+                      placeholder="/* Write or paste custom CSS rules here... */
+.poster-card {
+  border-radius: 8px !important;
+}
+.launch-button {
+  background: var(--accent) !important;
+}"
+                      rows={9}
+                      spellCheck={false}
+                      style={{
+                        width: '100%',
+                        background: '#090a0d',
+                        border: '1px solid rgba(255, 255, 255, 0.12)',
+                        borderRadius: '6px',
+                        padding: '10px 12px',
+                        color: '#38bdf8',
+                        fontFamily: 'Consolas, monospace',
+                        fontSize: '11px',
+                        lineHeight: 1.45,
+                        resize: 'vertical',
+                        outline: 'none',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
+
+                  {/* Actions Toolbar */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <button
+                        type="button"
+                        onClick={() => handleApplyCustomCss(customCssCode)}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '6px 14px',
+                          borderRadius: '6px',
+                          background: 'var(--accent, #d6ff4b)',
+                          border: 'none',
+                          color: '#000',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <Check size={12} />
+                        <span>Apply Live CSS</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleResetCustomCss}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          background: 'rgba(255, 255, 255, 0.06)',
+                          border: '1px solid rgba(255, 255, 255, 0.12)',
+                          color: 'rgba(255, 255, 255, 0.8)',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <RotateCcw size={12} />
+                        <span>Reset to Default</span>
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <label
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          background: 'rgba(255, 255, 255, 0.06)',
+                          border: '1px solid rgba(255, 255, 255, 0.14)',
+                          color: '#fff',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <Upload size={12} />
+                        <span>Import .css</span>
+                        <input
+                          type="file"
+                          accept=".css"
+                          style={{ display: 'none' }}
+                          onChange={handleImportCss}
+                        />
+                      </label>
+
+                      <button
+                        type="button"
+                        onClick={handleExportCss}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          background: 'rgba(255, 255, 255, 0.06)',
+                          border: '1px solid rgba(255, 255, 255, 0.14)',
+                          color: '#fff',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <Download size={12} />
+                        <span>Export .css</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. Daily Community Theme Drops (GitHub) */}
                 <div className="settings-card" style={{ background: 'linear-gradient(180deg, rgba(214, 255, 75, 0.04) 0%, rgba(0,0,0,0.3) 100%)', borderColor: 'rgba(214, 255, 75, 0.25)' }}>
                   <div className="settings-card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
                     <div>
@@ -1735,37 +2675,6 @@ export function SettingsModal({
                       >
                         <ExternalLink size={13} />
                         <span>Get Daily Themes on GitHub</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          try {
-                            importCustomTheme(SAMPLE_DAILY_THEME)
-                            setCustomThemes(getCustomThemes())
-                            setEnabledAddonIds(getEnabledAddonIds())
-                            onLayoutThemeChange?.(SAMPLE_DAILY_THEME.id)
-                            setAddonNotice("Installed today's drop: Cyberpunk 2077!")
-                          } catch {
-                            setAddonNotice('Failed to install sample theme')
-                          }
-                        }}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          padding: '7px 14px',
-                          borderRadius: '6px',
-                          background: 'rgba(214, 255, 75, 0.12)',
-                          border: '1px solid rgba(214, 255, 75, 0.4)',
-                          color: 'var(--accent, #d6ff4b)',
-                          fontSize: '11px',
-                          fontWeight: 700,
-                          cursor: 'pointer'
-                        }}
-                      >
-                        <Sparkles size={13} />
-                        <span>Try Today's Drop: Cyberpunk 2077 (1-Click Sample)</span>
                       </button>
                     </div>
                   </div>
@@ -2267,20 +3176,24 @@ export function SettingsModal({
                       <span style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#fff', marginTop: '24px' }}>Simulated Game Viewport</span>
                     </div>
 
-                    {fpsEnabled ? (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          ...getFpsPositionStyle(fpsPosition),
-                          opacity: fpsOpacity / 100,
-                          transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
-                          pointerEvents: 'none',
-                          maxWidth: '92%'
-                        }}
-                      >
-                        {renderHudPreview(fpsStyle, fpsMetrics, fpsOrientation, HUD_PREVIEW_TELEMETRY)}
-                      </div>
-                    ) : (
+                    {fpsEnabled ? (() => {
+                      const activeMetricsCount = Object.values(fpsMetrics || {}).filter(Boolean).length;
+                      const previewScale = fpsOrientation === 'horizontal' ? 0.95 : (activeMetricsCount >= 9 ? 0.92 : 1);
+                      return (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            ...getFpsPositionStyle(fpsPosition, previewScale),
+                            opacity: fpsOpacity / 100,
+                            transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+                            pointerEvents: 'none',
+                            maxWidth: '96%'
+                          }}
+                        >
+                          {renderHudPreview(fpsStyle, fpsMetrics, fpsOrientation, HUD_PREVIEW_TELEMETRY)}
+                        </div>
+                      );
+                    })() : (
                       <div style={{ color: 'var(--text-muted, #777)', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <EyeOff size={14} />
                         <span>HUD is currently disabled. Toggle the switch above to preview.</span>
@@ -4382,7 +5295,7 @@ export function SettingsModal({
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <h3 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Logpile Desktop</h3>
-                        <span className="settings-version-tag">v1.3.5</span>
+                        <span className="settings-version-tag">v1.3.7</span>
                       </div>
                       <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '4px 0 0' }}>
                         An offline-first, private personal game sanctuary &amp; library manager.

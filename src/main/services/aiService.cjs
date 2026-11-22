@@ -1704,6 +1704,229 @@ async function generateHudThemeDesign(userPrompt, gameInfo = null, options = {})
   }
 }
 
+function synthesizeOfflineCss(promptText = '') {
+  const k = (promptText || '').toLowerCase()
+  if (k.includes('gothic') || k.includes('vampire') || k.includes('blood') || k.includes('castlevania')) {
+    return `/* Logpile Custom Theme: Gothic Obsidian */
+:root {
+  --accent: #dc2626 !important;
+  --accent-glow: rgba(220, 38, 38, 0.35) !important;
+}
+.poster-card {
+  border-radius: 4px !important;
+  background: #0a0507 !important;
+  border: 1px solid rgba(220, 38, 38, 0.3) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.7) !important;
+}
+.poster-card:hover {
+  border-color: #dc2626 !important;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.85), 0 0 24px rgba(220, 38, 38, 0.35) !important;
+  transform: translateY(-4px) scale(1.02) !important;
+}
+.launch-button, .primary-button {
+  background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%) !important;
+  border-radius: 4px !important;
+  color: #ffffff !important;
+  font-weight: 800 !important;
+  box-shadow: 0 4px 18px rgba(220, 38, 38, 0.4) !important;
+}
+.game-details h3, .hero-title {
+  font-family: Georgia, serif !important;
+  letter-spacing: -0.01em !important;
+}`
+  } else if (k.includes('cyber') || k.includes('neon') || k.includes('2077') || k.includes('yellow')) {
+    return `/* Logpile Custom Theme: Cyber Grid 2077 */
+:root {
+  --accent: #fcee0a !important;
+  --accent-glow: rgba(252, 238, 10, 0.35) !important;
+}
+.poster-card {
+  border-radius: 2px !important;
+  background: #06070a !important;
+  border: 1px solid rgba(252, 238, 10, 0.35) !important;
+  box-shadow: 0 0 16px rgba(0, 0, 0, 0.6) !important;
+}
+.poster-card:hover {
+  border-color: #fcee0a !important;
+  box-shadow: 0 0 24px rgba(252, 238, 10, 0.4) !important;
+  transform: translateY(-4px) scale(1.02) !important;
+}
+.launch-button, .primary-button {
+  background: #fcee0a !important;
+  border-radius: 2px !important;
+  color: #040508 !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+}`
+  } else if (k.includes('nord') || k.includes('frost') || k.includes('ice') || k.includes('glass')) {
+    return `/* Logpile Custom Theme: Nordic Frosted Glass */
+:root {
+  --accent: #88c0d0 !important;
+  --accent-glow: rgba(136, 192, 208, 0.35) !important;
+}
+.poster-card {
+  border-radius: 16px !important;
+  background: rgba(36, 41, 51, 0.88) !important;
+  backdrop-filter: blur(14px) !important;
+  -webkit-backdrop-filter: blur(14px) !important;
+  border: 1px solid rgba(136, 192, 208, 0.25) !important;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5) !important;
+}
+.poster-card:hover {
+  border-color: #88c0d0 !important;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.7), 0 0 24px rgba(136, 192, 208, 0.3) !important;
+  transform: translateY(-5px) scale(1.02) !important;
+}
+.launch-button, .primary-button {
+  background: linear-gradient(135deg, #88c0d0 0%, #81a1c1 100%) !important;
+  border-radius: 9999px !important;
+  color: #242933 !important;
+  font-weight: 800 !important;
+}`
+  } else if (k.includes('synth') || k.includes('80s') || k.includes('outrun') || k.includes('magenta')) {
+    return `/* Logpile Custom Theme: Synthwave Outrun 84 */
+:root {
+  --accent: #ff2a85 !important;
+  --accent-glow: rgba(255, 42, 133, 0.35) !important;
+}
+.poster-card {
+  border-radius: 10px !important;
+  background: #100718 !important;
+  border: 1px solid rgba(255, 42, 133, 0.3) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7) !important;
+}
+.poster-card:hover {
+  border-color: #ff2a85 !important;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8), 0 0 25px rgba(255, 42, 133, 0.35) !important;
+  transform: translateY(-4px) scale(1.025) !important;
+}
+.launch-button, .primary-button {
+  background: linear-gradient(135deg, #ff2a85 0%, #a855f7 100%) !important;
+  border-radius: 8px !important;
+  color: #ffffff !important;
+  font-weight: 800 !important;
+}`
+  } else if (k.includes('oled') || k.includes('noir') || k.includes('monochrome')) {
+    return `/* Logpile Custom Theme: OLED Noir */
+:root {
+  --accent: #f8fafc !important;
+  --accent-glow: rgba(248, 250, 252, 0.25) !important;
+  --bg-base: #000000 !important;
+}
+.poster-card {
+  border-radius: 8px !important;
+  background: #000000 !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+}
+.poster-card:hover {
+  border-color: #ffffff !important;
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.2) !important;
+}
+.launch-button, .primary-button {
+  background: #ffffff !important;
+  color: #000000 !important;
+  font-weight: 800 !important;
+}`
+  } else {
+    return `/* Logpile Custom Theme: Emerald Temple */
+:root {
+  --accent: #10b981 !important;
+  --accent-glow: rgba(16, 185, 129, 0.35) !important;
+}
+.poster-card {
+  border-radius: 12px !important;
+  background: #070b09 !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6) !important;
+}
+.poster-card:hover {
+  border-color: #10b981 !important;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.8), 0 0 24px rgba(16, 185, 129, 0.3) !important;
+  transform: translateY(-4px) scale(1.02) !important;
+}
+.launch-button, .primary-button {
+  background: #10b981 !important;
+  border-radius: 8px !important;
+  color: #050f0b !important;
+  font-weight: 800 !important;
+}`
+  }
+}
+
+async function generateCssThemeDesign(userPrompt, options = {}) {
+  const app = options?.app || null
+  const status = getModelStatus(app)
+  const fallbackCss = synthesizeOfflineCss(userPrompt)
+
+  if (!status.installed || !status.modelPath) {
+    return { success: true, css: fallbackCss, source: 'offline-synthesizer' }
+  }
+
+  let session = null
+  let sequence = null
+  try {
+    isInferring = true
+    if (unloadTimer) {
+      clearTimeout(unloadTimer)
+      unloadTimer = null
+    }
+
+    const loaded = await ensureEngineLoaded(app)
+    sequence = await acquireSequence(loaded.model, loaded.context)
+    const { LlamaChatSession } = await getLlamaModule()
+
+    session = new LlamaChatSession({
+      contextSequence: sequence,
+      systemPrompt: `You are an expert CSS theme architect for the Logpile Windows game launcher.
+Generate valid, clean CSS rules. Available selectors to target:
+- :root (set --accent, --accent-glow, --bg-card, --border-color)
+- .poster-card (card styling, border-radius, background, box-shadow)
+- .poster-card:hover (hover elevation, border color, glow)
+- .launch-button, .primary-button (game launch button background, border-radius, font-weight, color)
+- .hero-title, .game-details h3 (typography)
+Return ONLY raw CSS code inside a \`\`\`css block without explanation.`
+    })
+
+    const query = `Create a custom CSS theme based on this prompt: "${(userPrompt || '').trim() || 'Heroic Dark Theme'}".`
+
+    let rawResponse = ''
+    try {
+      rawResponse = await session.prompt(query, {
+        maxTokens: 380,
+        temperature: 0.3,
+      })
+    } catch (err) {
+      console.warn('[AI CSS Theme] Prompt error:', err?.message)
+    }
+
+    let cssMatch = (rawResponse || '').match(/```css\s*([\s\S]*?)```/i)
+    let extractedCss = cssMatch ? cssMatch[1].trim() : ''
+    if (!extractedCss && rawResponse && rawResponse.includes('{') && rawResponse.includes('}')) {
+      extractedCss = rawResponse.trim()
+    }
+
+    if (extractedCss && extractedCss.length > 20) {
+      return { success: true, css: extractedCss, source: 'local-llm' }
+    }
+
+    return { success: true, css: fallbackCss, source: 'offline-synthesizer' }
+  } catch (err) {
+    console.warn('[AI CSS Theme] Fallback to offline synthesizer:', err?.message)
+    return { success: true, css: fallbackCss, source: 'offline-synthesizer' }
+  } finally {
+    isInferring = false
+    try { if (session) await session.dispose?.() } catch {}
+    try { if (sequence && !sequence.disposed) await sequence.dispose() } catch {}
+    if (unloadPending) {
+      unloadPending = false
+      unloadEngine().catch(() => {})
+    } else {
+      resetUnloadTimer()
+    }
+  }
+}
+
 module.exports = {
   getModelStatus,
   getModelsDirectory,
@@ -1712,6 +1935,7 @@ module.exports = {
   setExecutionMode,
   getExecutionMode,
   generateHudThemeDesign,
+  generateCssThemeDesign,
   askQuestion,
   askGamingAssistant,
   recommendFromLibrary,

@@ -1,53 +1,79 @@
 import { normalizeArtworkUrl } from './artworkUrl'
+import { themeVars, LAYOUT_PALETTES, COLOR_PALETTES } from './themePalettes'
+import { getAddonPalette, getCustomThemes } from './themeAddons'
 
-const THEME_CONFIGS = {
+const THEME_METADATA = {
   cinematic: {
-    name: 'Cinematic',
-    accent: '#818cf8',
-    glow: 'rgba(99, 102, 241, 0.20)',
-    cardRadius: 16,
-    borderColor: 'rgba(255, 255, 255, 0.14)',
-    borderWidth: 2,
-    bgBottom: '#040508',
-  },
-  atmospheric: {
-    name: 'Atmospheric',
-    accent: '#10b981',
-    glow: 'rgba(16, 185, 129, 0.22)',
-    cardRadius: 20,
-    borderColor: 'rgba(16, 185, 129, 0.35)',
-    borderWidth: 2,
-    bgBottom: '#030806',
+    displayName: 'Cinematic',
+    tagline: 'Prestige & Cinema Showcase',
+    cardRadius: 10,
+    borderWidth: 1.5,
   },
   kinetic: {
-    name: 'Kinetic',
-    accent: '#f97316',
-    glow: 'rgba(249, 115, 22, 0.22)',
-    cardRadius: 0,
-    borderColor: 'rgba(249, 115, 22, 0.65)',
-    borderWidth: 2.5,
-    bgBottom: '#060402',
+    displayName: 'Kinetic',
+    tagline: 'Velocity & Telemetry Showcase',
+    cardRadius: 2,
+    borderWidth: 2,
   },
-  playful: {
-    name: 'Playful',
-    accent: '#d6ff4b',
-    glow: 'rgba(214, 255, 75, 0.22)',
-    cardRadius: 24,
-    borderColor: 'rgba(214, 255, 75, 0.55)',
-    borderWidth: 2.5,
-    bgBottom: '#040700',
+  atmospheric: {
+    displayName: 'Atmospheric',
+    tagline: 'Isolation & Dread Showcase',
+    cardRadius: 8,
+    borderWidth: 1.5,
   },
   competitive: {
-    name: 'Competitive',
-    accent: '#f59e0b',
-    glow: 'rgba(245, 158, 11, 0.22)',
-    cardRadius: 6,
-    borderColor: 'rgba(255, 255, 255, 0.16)',
+    displayName: 'Competitive',
+    tagline: 'Ranked Esports Showcase',
+    cardRadius: 4,
     borderWidth: 2,
-    topAccent: '#f59e0b',
-    topAccentHeight: 4.5,
-    bgBottom: '#070501',
+    hasTopAccent: true,
   },
+  playful: {
+    displayName: 'Playful',
+    tagline: 'Arcade & Nostalgia Showcase',
+    cardRadius: 14,
+    borderWidth: 2,
+  },
+}
+
+/**
+ * Resolves full live palette variables and metadata for any core or custom theme
+ */
+function resolveCollageTheme(layoutTheme = 'cinematic', colorPalette = 'auto') {
+  const vars = themeVars(layoutTheme, colorPalette)
+  const meta = THEME_METADATA[layoutTheme] || {
+    displayName: layoutTheme ? (layoutTheme.charAt(0).toUpperCase() + layoutTheme.slice(1)) : 'Custom',
+    tagline: 'Community Custom Showcase',
+    cardRadius: 8,
+    borderWidth: 1.5,
+  }
+
+  // Check if custom addon has special details
+  const customTheme = getCustomThemes().find((t) => t.id === layoutTheme)
+  if (customTheme) {
+    meta.displayName = customTheme.name || meta.displayName
+    meta.tagline = customTheme.tagline || meta.tagline
+  }
+
+  const accent = vars['--accent'] || '#C6A56B'
+  const accentGlow = vars['--accent-glow'] || 'rgba(198, 165, 107, 0.28)'
+  const baseBg = vars['--bg-base'] || '#0B0B0A'
+  const surfaceBg = vars['--bg-surface'] || '#171714'
+  const cardBg = vars['--bg-card'] || '#121210'
+  const borderColor = vars['--border-color'] || 'rgba(255, 255, 255, 0.14)'
+  const badgeText = vars['--badge-text'] || accent
+
+  return {
+    ...meta,
+    accent,
+    accentGlow,
+    baseBg,
+    surfaceBg,
+    cardBg,
+    borderColor,
+    badgeText,
+    fontFamily: '"Outfit", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+  }
 }
 
 /**
@@ -58,9 +84,40 @@ function fitText(ctx, text, maxWidth) {
   if (ctx.measureText(text).width <= maxWidth) return text
   let truncated = text
   while (truncated.length > 0 && ctx.measureText(truncated + '…').width > maxWidth) {
-    truncated = truncated.slice(0, -1)
+    truncated = truncated.slice(0, -1).trim()
   }
-  return truncated + '…'
+  return truncated ? truncated + '…' : ''
+}
+
+/**
+ * Wraps text cleanly across up to maxLines without cutting off words.
+ */
+function wrapText(ctx, text, maxWidth, maxLines = 2) {
+  if (!text) return []
+  const words = text.split(/\s+/)
+  const lines = []
+  let currentLine = words[0] || ''
+
+  for (let i = 1; i < words.length; i++) {
+    const word = words[i]
+    const testLine = currentLine + ' ' + word
+    if (ctx.measureText(testLine).width <= maxWidth) {
+      currentLine = testLine
+    } else {
+      lines.push(currentLine)
+      currentLine = word
+      if (lines.length === maxLines - 1) {
+        // Last line: append remaining words and fit with ellipsis if needed
+        const remaining = words.slice(i).join(' ')
+        lines.push(fitText(ctx, remaining, maxWidth))
+        return lines
+      }
+    }
+  }
+  if (currentLine) {
+    lines.push(currentLine)
+  }
+  return lines.slice(0, maxLines)
 }
 
 /**
@@ -87,19 +144,37 @@ function drawCardShape(ctx, x, y, w, h, r) {
 }
 
 /**
- * Generates a high-resolution, full-fidelity "Brag Grid Showcase" collage.
- * Renders currently filtered games as complete themed cards (Poster + Game Title + Studio).
- * Supports standard social media aspect ratios: 'auto' (Full Grid), '16:9', '9:16', '1:1'.
+ * High-quality aspect-fill image drawing (crisp center-cropped, zero distortion or blur)
+ */
+function drawPosterSharp(ctx, img, x, y, w, h) {
+  if (!img) return
+  const scale = Math.max(w / img.width, h / img.height)
+  const sw = Math.round(w / scale)
+  const sh = Math.round(h / scale)
+  const sx = Math.max(0, Math.round((img.width - sw) / 2))
+  const sy = Math.max(0, Math.round((img.height - sh) / 2))
+
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+  ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h)
+}
+
+/**
+ * Generates an authentic, high-resolution, theme-matched "Brag Grid Showcase" collage.
+ * Renders complete collectible-grade game cards (Poster + Full Wrapped Title + Studio + Platform).
+ * Supports standard formats: 'auto' (Full Grid Gallery), '16:9' (Desktop / Reddit), '9:16' (Story / Reel), '1:1' (Square Post).
  *
  * @param {Array} games - List of currently filtered games
  * @param {Object} stats - Vault statistics
- * @param {Object|string} options - { layoutTheme, viewTitle, aspectRatio }
+ * @param {Object|string} options - { layoutTheme, colorPalette, viewTitle, aspectRatio }
  */
 export async function generateBragCollage(games = [], stats = {}, options = {}) {
   const layoutTheme = (typeof options === 'string' ? options : options?.layoutTheme) || 'cinematic'
-  const theme = THEME_CONFIGS[layoutTheme] || THEME_CONFIGS.cinematic
-  const viewTitle = (typeof options === 'object' && options?.viewTitle) ? options.viewTitle : 'Collection Showcase'
+  const colorPalette = (typeof options === 'object' && options?.colorPalette) ? options.colorPalette : 'auto'
+  const viewTitle = (typeof options === 'object' && options?.viewTitle) ? options.viewTitle : 'Game Sanctuary Showcase'
   const aspectRatio = (typeof options === 'object' && options?.aspectRatio) ? options.aspectRatio : 'auto'
+
+  const theme = resolveCollageTheme(layoutTheme, colorPalette)
 
   const visibleGames = games.filter((g) => !g.is_utility && !g.is_dlc).length > 0
     ? games.filter((g) => !g.is_utility && !g.is_dlc)
@@ -109,7 +184,7 @@ export async function generateBragCollage(games = [], stats = {}, options = {}) 
     throw new Error('No games available in library to showcase.')
   }
 
-  // 1. Setup Canvas Dimensions & Frame Configuration
+  // 1. Setup Canvas Dimensions & Dynamic Grid Packaging
   let width = 3840
   let height = 2160
   let isFixed = false
@@ -127,17 +202,17 @@ export async function generateBragCollage(games = [], stats = {}, options = {}) 
     height = 2560
     isFixed = true
   } else {
-    // 'auto' - Dynamic height full continuous tapestry
+    // 'auto' - Dynamic Gallery Tapestry (balanced widescreen proportions)
     width = 3840
     isFixed = false
   }
 
   const isVertical = width < 2500
   const padX = isVertical ? 60 : 80
-  const headerTop = isVertical ? 70 : 60
-  const headerHeight = isVertical ? 220 : 160
+  const headerTop = isVertical ? 70 : 64
+  const headerHeight = isVertical ? 230 : 170
   const gridTop = headerTop + headerHeight
-  const footerHeight = 80
+  const footerHeight = 84
   const availableWidth = width - padX * 2
   const availableHeight = isFixed ? Math.max(800, height - gridTop - footerHeight - 20) : 0
 
@@ -153,41 +228,41 @@ export async function generateBragCollage(games = [], stats = {}, options = {}) 
   let offsetY = 0
 
   if (!isFixed) {
-    // Auto dynamic grid: adaptive columns based on count so all games are rendered without cutoff
-    if (visibleGames.length <= 16) cols = 5
-    else if (visibleGames.length <= 32) cols = 6
-    else if (visibleGames.length <= 60) cols = 7
-    else if (visibleGames.length <= 130) cols = 8
-    else if (visibleGames.length <= 260) cols = 10
-    else if (visibleGames.length <= 500) cols = 12
-    else if (visibleGames.length <= 800) cols = 14
+    // Adaptive column scaling for balanced gallery aspect ratios (prevents 12,000px tall receipts!)
+    const n = visibleGames.length
+    if (n <= 12) cols = 4
+    else if (n <= 24) cols = 6
+    else if (n <= 48) cols = 8
+    else if (n <= 80) cols = 10
+    else if (n <= 140) cols = 12
+    else if (n <= 220) cols = 14
     else cols = 16
 
     gap = cols >= 12 ? 16 : 22
-    cardWidth = (availableWidth - (cols - 1) * gap) / cols
-    posterHeight = cardWidth * 1.5
-    captionHeight = Math.max(46, Math.round(cardWidth * 0.25))
+    cardWidth = Math.floor((availableWidth - (cols - 1) * gap) / cols)
+    posterHeight = Math.round(cardWidth * 1.48)
+    // Caption area sized generously for 2 lines of title + developer/platform metadata
+    captionHeight = Math.max(62, Math.round(cardWidth * 0.28))
     cardHeight = posterHeight + captionHeight
     rows = Math.ceil(visibleGames.length / cols)
     const gridHeight = rows * cardHeight + (rows - 1) * gap
-    height = Math.max(2160, gridTop + gridHeight + footerHeight)
+    height = Math.max(2160, gridTop + gridHeight + footerHeight + 40)
   } else {
     // Fixed aspect ratio (16:9, 9:16, 1:1): find best column packing to maximize card size
-    const minCardW = isVertical ? 140 : 160
+    const minCardW = isVertical ? 150 : 170
     const targetN = visibleGames.length
 
     let bestCols = null
     let bestCardW = 0
     let bestRows = 0
 
-    // Search for column count where all targetN cards comfortably fit
     for (let c = 2; c <= 24; c++) {
       const g = c >= 12 ? 14 : 18
-      const testCardW = (availableWidth - (c - 1) * g) / c
+      const testCardW = Math.floor((availableWidth - (c - 1) * g) / c)
       if (testCardW < minCardW) break
 
-      const testPosterH = testCardW * 1.5
-      const testCapH = Math.max(46, Math.round(testCardW * 0.25))
+      const testPosterH = Math.round(testCardW * 1.48)
+      const testCapH = Math.max(60, Math.round(testCardW * 0.28))
       const testCardH = testPosterH + testCapH
       const testRows = Math.ceil(targetN / c)
       const testGridH = testRows * testCardH + (testRows - 1) * g
@@ -204,18 +279,18 @@ export async function generateBragCollage(games = [], stats = {}, options = {}) 
     if (bestCols !== null) {
       cols = bestCols
       cardWidth = bestCardW
-      posterHeight = cardWidth * 1.5
-      captionHeight = Math.max(46, Math.round(cardWidth * 0.25))
+      posterHeight = Math.round(cardWidth * 1.48)
+      captionHeight = Math.max(60, Math.round(cardWidth * 0.28))
       cardHeight = posterHeight + captionHeight
       rows = bestRows
       gamesToRender = visibleGames
     } else {
-      // Library has more games than can fit at minCardW - pack maximum readable cards and show overflow card
+      // Library has more games than fit in a single frame: pack maximum readable cards and show overflow card
       const maxCols = Math.max(3, Math.floor((availableWidth + 14) / (minCardW + 14)))
       gap = maxCols >= 12 ? 14 : 18
-      cardWidth = (availableWidth - (maxCols - 1) * gap) / maxCols
-      posterHeight = cardWidth * 1.5
-      captionHeight = Math.max(46, Math.round(cardWidth * 0.25))
+      cardWidth = Math.floor((availableWidth - (maxCols - 1) * gap) / maxCols)
+      posterHeight = Math.round(cardWidth * 1.48)
+      captionHeight = Math.max(60, Math.round(cardWidth * 0.28))
       cardHeight = posterHeight + captionHeight
       const maxRows = Math.max(2, Math.floor((availableHeight + gap) / (cardHeight + gap)))
 
@@ -230,7 +305,6 @@ export async function generateBragCollage(games = [], stats = {}, options = {}) 
       }
     }
 
-    // Center grid vertically within the frame for balanced poster aesthetics
     const actualGridH = rows * cardHeight + (rows - 1) * gap
     if (actualGridH < availableHeight) {
       offsetY = Math.floor((availableHeight - actualGridH) / 2)
@@ -244,38 +318,67 @@ export async function generateBragCollage(games = [], stats = {}, options = {}) 
   canvas.height = height
   const ctx = canvas.getContext('2d')
 
-  // Background gradient
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+
+  // 2. Background Painting with Theme Ambience
+  // Base dark gradient
   const bgGrad = ctx.createLinearGradient(0, 0, width, height)
-  bgGrad.addColorStop(0, '#0a0d14')
-  bgGrad.addColorStop(0.5, '#05070a')
-  bgGrad.addColorStop(1, theme.bgBottom || '#020305')
+  bgGrad.addColorStop(0, theme.baseBg)
+  bgGrad.addColorStop(0.5, '#07080a')
+  bgGrad.addColorStop(1, '#030406')
   ctx.fillStyle = bgGrad
   ctx.fillRect(0, 0, width, height)
 
-  // Background ambient theme glow
-  const glow = ctx.createRadialGradient(width / 2, 0, 50, width / 2, 0, Math.max(1800, height / 2))
-  glow.addColorStop(0, theme.glow)
+  // Radial theme accent ambient glow (spotlight on top center)
+  const glow = ctx.createRadialGradient(width / 2, 80, 80, width / 2, 80, Math.max(1600, width * 0.55))
+  glow.addColorStop(0, theme.accentGlow)
+  glow.addColorStop(0.65, 'rgba(0, 0, 0, 0.2)')
   glow.addColorStop(1, 'rgba(0, 0, 0, 0)')
   ctx.fillStyle = glow
   ctx.fillRect(0, 0, width, height)
 
-  // 2. Header Section
+  // 3. Header Section
   ctx.textBaseline = 'top'
 
-  // Eyebrow
-  ctx.fillStyle = theme.accent
-  ctx.font = 'bold 24px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-  const eyebrowText = `// LOGPILE // ${theme.name.toUpperCase()} THEME`
-  ctx.fillText(eyebrowText, padX, headerTop)
+  // Eyebrow Tag Pill
+  const eyebrowText = `LOGPILE SANCTUARY  •  ${theme.displayName.toUpperCase()} SHOWCASE`
+  ctx.font = `700 15px ${theme.fontFamily}`
+  const eyebrowW = ctx.measureText(eyebrowText).width + 36
+  const eyebrowH = 30
+  const eyebrowX = padX
+  const eyebrowY = headerTop
 
-  // Title
+  ctx.save()
+  drawCardShape(ctx, eyebrowX, eyebrowY, eyebrowW, eyebrowH, 15)
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.05)'
+  ctx.fill()
+  ctx.strokeStyle = theme.accent
+  ctx.lineWidth = 1.2
+  ctx.stroke()
+
+  // Accent Dot
+  ctx.beginPath()
+  ctx.arc(eyebrowX + 16, eyebrowY + 15, 4.5, 0, Math.PI * 2)
+  ctx.fillStyle = theme.accent
+  ctx.fill()
+
   ctx.fillStyle = '#ffffff'
-  ctx.font = `900 ${isVertical ? '52px' : '64px'} -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`
+  ctx.fillText(eyebrowText, eyebrowX + 28, eyebrowY + 7)
+  ctx.restore()
+
+  // Main Showcase Title
+  ctx.fillStyle = '#ffffff'
+  ctx.font = `900 ${isVertical ? '48px' : '60px'} ${theme.fontFamily}`
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.7)'
+  ctx.shadowBlur = 12
+  ctx.shadowOffsetY = 2
   const maxTitleW = isVertical ? availableWidth : availableWidth - 1100
   const renderedTitle = fitText(ctx, viewTitle, maxTitleW)
-  ctx.fillText(renderedTitle, padX, headerTop + 36)
+  ctx.fillText(renderedTitle, padX, headerTop + 44)
+  ctx.shadowColor = 'transparent'
 
-  // Telemetry stats
+  // Telemetry Metrics Ribbon
   const totalVaultTitles = stats.totalGames || games.length
   const totalInstalled = stats.installedGames || games.filter((g) => g.is_installed).length
   const totalPlaytimeHours = Math.round(
@@ -283,56 +386,83 @@ export async function generateBragCollage(games = [], stats = {}, options = {}) 
   )
 
   const statsList = [
-    { label: 'SHOWCASED', value: `${visibleGames.length}` },
-    { label: 'INSTALLED', value: `${totalInstalled}` },
-    { label: 'VAULT TOTAL', value: `${totalVaultTitles}` },
-    { label: 'PLAYTIME', value: `${totalPlaytimeHours} hrs` },
+    { label: 'SHOWCASED', value: `${visibleGames.length} Titles` },
+    { label: 'INSTALLED', value: `${totalInstalled} Games` },
+    { label: 'PLAYTIME', value: `${totalPlaytimeHours} Hours` },
     { label: 'STORAGE', value: `${stats.totalStorageGb ? `${stats.totalStorageGb} GB` : 'Offline'}` },
   ]
 
   if (isVertical) {
-    // 9:16 Story / vertical: render stats in a horizontal chip row under the title
-    const statChipWidth = Math.floor(availableWidth / 4)
+    // Vertical layout (9:16): Stat cards row under title
+    const chipW = Math.floor((availableWidth - 30) / 4)
     for (let i = 0; i < Math.min(4, statsList.length); i++) {
       const s = statsList[i]
-      const chipX = padX + i * statChipWidth
-      ctx.textAlign = 'left'
-      ctx.fillStyle = '#94a3b8'
-      ctx.font = 'bold 16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-      ctx.fillText(s.label, chipX, headerTop + 115)
+      const chipX = padX + i * (chipW + 10)
+      const chipY = headerTop + 125
 
-      ctx.fillStyle = '#ffffff'
-      ctx.font = 'bold 28px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-      ctx.fillText(s.value, chipX, headerTop + 140)
+      ctx.save()
+      drawCardShape(ctx, chipX, chipY, chipW, 64, 8)
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.03)'
+      ctx.fill()
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)'
+      ctx.lineWidth = 1
+      ctx.stroke()
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.5)'
+      ctx.font = `700 11px ${theme.fontFamily}`
+      ctx.fillText(s.label, chipX + 12, chipY + 12)
+
+      ctx.fillStyle = theme.accent
+      ctx.font = `800 18px ${theme.fontFamily}`
+      ctx.fillText(s.value, chipX + 12, chipY + 32)
+      ctx.restore()
     }
   } else {
-    // Landscape / Standard layout: stats right-aligned
-    let badgeRight = width - padX
+    // Landscape layout: Stat cards on right side of header
+    let rightX = width - padX
+    const chipW = 210
+    const chipH = 68
+    const chipY = headerTop + 36
+
     for (let i = statsList.length - 1; i >= 0; i--) {
       const s = statsList[i]
-      ctx.textAlign = 'right'
-      ctx.fillStyle = '#94a3b8'
-      ctx.font = 'bold 18px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-      ctx.fillText(s.label, badgeRight, headerTop + 40)
+      const chipX = rightX - chipW
 
-      ctx.fillStyle = '#ffffff'
-      ctx.font = 'bold 36px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-      ctx.fillText(s.value, badgeRight, headerTop + 66)
-      badgeRight -= 230
+      ctx.save()
+      drawCardShape(ctx, chipX, chipY, chipW, chipH, 8)
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.03)'
+      ctx.fill()
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)'
+      ctx.lineWidth = 1
+      ctx.stroke()
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.5)'
+      ctx.font = `700 11px ${theme.fontFamily}`
+      ctx.fillText(s.label, chipX + 14, chipY + 12)
+
+      ctx.fillStyle = theme.accent
+      ctx.font = `800 22px ${theme.fontFamily}`
+      ctx.fillText(s.value, chipX + 14, chipY + 32)
+      ctx.restore()
+
+      rightX -= chipW + 14
     }
   }
-  ctx.textAlign = 'left'
 
-  // Header Divider
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)'
-  ctx.lineWidth = 2
+  // Header Divider Accent Line
+  const divY = isVertical ? headerTop + 205 : headerTop + 140
+  const divGrad = ctx.createLinearGradient(padX, divY, width - padX, divY)
+  divGrad.addColorStop(0, theme.accent)
+  divGrad.addColorStop(0.35, 'rgba(255, 255, 255, 0.15)')
+  divGrad.addColorStop(1, 'rgba(255, 255, 255, 0.02)')
+  ctx.strokeStyle = divGrad
+  ctx.lineWidth = 1.5
   ctx.beginPath()
-  const divY = isVertical ? headerTop + 195 : headerTop + 130
   ctx.moveTo(padX, divY)
   ctx.lineTo(width - padX, divY)
   ctx.stroke()
 
-  // 3. Preload posters in batches for the rendered titles
+  // 4. Preload artwork posters in parallel batches
   const loadImage = (rawUrl) => {
     return new Promise((resolve) => {
       if (!rawUrl) return resolve(null)
@@ -359,23 +489,24 @@ export async function generateBragCollage(games = [], stats = {}, options = {}) 
     }
   }
 
-  // 4. Draw ALL complete cards (Poster Artwork + Game Title + Developer) matching app card UI
+  // 5. Draw Collectible Game Cards with True Theme Styling & Zero Cuts
   gamesToRender.forEach((game, idx) => {
     const col = idx % cols
     const row = Math.floor(idx / cols)
-    const x = padX + col * (cardWidth + gap)
-    const y = finalGridTop + row * (cardHeight + gap)
+    const x = Math.round(padX + col * (cardWidth + gap))
+    const y = Math.round(finalGridTop + row * (cardHeight + gap))
     const r = theme.cardRadius
-    const pad = Math.max(8, Math.round(cardWidth * 0.04))
+    const padSide = Math.max(10, Math.round(cardWidth * 0.05))
+    const maxTextW = cardWidth - padSide * 2
 
-    // Step 1: Draw Card Container Background
+    // Step 1: Draw Card Body Background
     ctx.save()
     drawCardShape(ctx, x, y, cardWidth, cardHeight, r)
-    ctx.fillStyle = '#0b0e14'
+    ctx.fillStyle = theme.cardBg || '#111318'
     ctx.fill()
     ctx.restore()
 
-    // Step 2: Draw Poster Artwork (clipped to card's top rounded corners)
+    // Step 2: Draw Poster Artwork (clipped to top rounded corners)
     ctx.save()
     ctx.beginPath()
     if (r <= 0) {
@@ -389,69 +520,115 @@ export async function generateBragCollage(games = [], stats = {}, options = {}) 
 
     const img = loadedImages[idx]
     if (img) {
-      ctx.drawImage(img, x, y, cardWidth, posterHeight)
+      drawPosterSharp(ctx, img, x, y, cardWidth, posterHeight)
     } else {
-      ctx.fillStyle = '#1e293b'
+      // High-end fallback poster block with subtle geometric pattern
+      ctx.fillStyle = '#171922'
       ctx.fillRect(x, y, cardWidth, posterHeight)
 
-      ctx.fillStyle = '#ffffff'
-      ctx.font = `bold ${Math.round(cardWidth * 0.07)}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`
+      ctx.fillStyle = theme.accent
+      ctx.font = `bold ${Math.round(cardWidth * 0.16)}px ${theme.fontFamily}`
       ctx.textAlign = 'center'
-      ctx.fillText(game.canonical_title.slice(0, 16), x + cardWidth / 2, y + posterHeight / 2 - 10)
+      ctx.fillText((game.canonical_title || 'G')[0].toUpperCase(), x + cardWidth / 2, y + posterHeight * 0.38)
+
+      ctx.fillStyle = '#ffffff'
+      ctx.font = `700 ${Math.round(cardWidth * 0.065)}px ${theme.fontFamily}`
+      ctx.fillText(fitText(ctx, game.canonical_title || 'Untitled', maxTextW), x + cardWidth / 2, y + posterHeight * 0.6)
       ctx.textAlign = 'left'
     }
+
+    // Poster bottom subtle shadow gradient into caption area
+    const shadeGrad = ctx.createLinearGradient(x, y + posterHeight - 40, x, y + posterHeight)
+    shadeGrad.addColorStop(0, 'rgba(0, 0, 0, 0)')
+    shadeGrad.addColorStop(1, 'rgba(0, 0, 0, 0.65)')
+    ctx.fillStyle = shadeGrad
+    ctx.fillRect(x, y + posterHeight - 40, cardWidth, 40)
+
     ctx.restore()
 
-    // Step 3: Draw Card Caption Footer (Game Title + Developer / Studio)
-    const padSide = Math.max(8, Math.round(cardWidth * 0.05))
-    const maxTextWidth = cardWidth - padSide * 2
+    // Step 3: Draw Card Caption Footer (Multi-line title + developer / platform without cutting off!)
+    const captionTop = y + posterHeight + 8
+    const rawTitle = game.canonical_title || game.name || 'Untitled Game'
 
-    const titleFontSize = Math.max(11, Math.round(cardWidth * 0.052))
+    // Adaptive font sizing based on title length
+    let titleFontSize = Math.max(12, Math.round(cardWidth * 0.054))
+    if (rawTitle.length > 26) titleFontSize = Math.max(11, Math.round(cardWidth * 0.048))
+    if (rawTitle.length > 40) titleFontSize = Math.max(10, Math.round(cardWidth * 0.042))
+
+    ctx.save()
+    ctx.font = `700 ${titleFontSize}px ${theme.fontFamily}`
+    const titleLines = wrapText(ctx, rawTitle, maxTextW, 2)
+
+    // Render title lines
+    ctx.fillStyle = '#ffffff'
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)'
+    ctx.shadowBlur = 4
+    ctx.shadowOffsetY = 1
+
+    const lineHeight = titleFontSize + 3
+    let curTextY = captionTop
+    titleLines.forEach((tl) => {
+      ctx.fillText(tl, x + padSide, curTextY)
+      curTextY += lineHeight
+    })
+    ctx.shadowColor = 'transparent'
+
+    // Subtitle / Developer / Store Platform
     const subFontSize = Math.max(9, Math.round(cardWidth * 0.038))
-    const lineGap = Math.max(3, Math.round(cardWidth * 0.015))
-    const contentHeight = titleFontSize + lineGap + subFontSize
-    const topPad = Math.max(6, Math.round((captionHeight - contentHeight) / 2))
+    ctx.font = `500 ${subFontSize}px ${theme.fontFamily}`
 
-    // Game Title
-    ctx.fillStyle = '#f8fafc'
-    ctx.font = `bold ${titleFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`
-    const titleText = fitText(ctx, game.canonical_title || 'Untitled Game', maxTextWidth)
-    ctx.fillText(titleText, x + padSide, y + posterHeight + topPad)
+    const rawDev = game.developer || game.publisher || (game.is_utility ? 'Utility' : '')
+    const devSnippet = rawDev ? rawDev.slice(0, 20) : ''
+    const platformLabel = (game.sources?.[0]?.platform || (game.is_steam ? 'Steam' : '')).toUpperCase()
+    const metaText = [devSnippet, platformLabel].filter(Boolean).join(' · ') || 'Installed'
 
-    // Developer / Studio
-    ctx.fillStyle = '#94a3b8'
-    ctx.font = `500 ${subFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`
-    const devText = fitText(ctx, game.developer || game.publisher || (game.is_utility ? 'Utility Tool' : 'Studio Unknown'), maxTextWidth)
-    ctx.fillText(devText, x + padSide, y + posterHeight + topPad + titleFontSize + lineGap)
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)'
+    const finalMeta = fitText(ctx, metaText, maxTextW)
+    ctx.fillText(finalMeta, x + padSide, curTextY + 2)
+    ctx.restore()
 
-    // Step 4: Draw Theme Card Border
+    // Step 4: Draw Card Outer Border with Theme Accent
     ctx.save()
     drawCardShape(ctx, x, y, cardWidth, cardHeight, r)
-    ctx.strokeStyle = game.is_favorite ? 'rgba(250, 204, 21, 0.65)' : theme.borderColor
-    ctx.lineWidth = theme.borderWidth
+    ctx.strokeStyle = game.is_favorite ? '#facc15' : theme.borderColor
+    ctx.lineWidth = game.is_favorite ? 2 : theme.borderWidth
     ctx.stroke()
 
-    // Step 5: Draw Theme Signature Accents (e.g. Competitive top amber accent bar)
-    if (theme.topAccent) {
-      ctx.fillStyle = theme.topAccent
+    // Step 5: Draw Theme Signature Accents (e.g. Competitive top crimson bar)
+    if (theme.hasTopAccent) {
+      ctx.fillStyle = '#ef4444'
       ctx.beginPath()
       if (r > 0 && typeof ctx.roundRect === 'function') {
-        ctx.roundRect(x, y, cardWidth, theme.topAccentHeight, [r, r, 0, 0])
+        ctx.roundRect(x, y, cardWidth, 4, [r, r, 0, 0])
       } else {
-        ctx.rect(x, y, cardWidth, theme.topAccentHeight)
+        ctx.rect(x, y, cardWidth, 4)
       }
       ctx.fill()
     }
+
+    // Favorite Gold Star Badge
+    if (game.is_favorite) {
+      const starX = x + cardWidth - 22
+      const starY = y + 8
+      ctx.save()
+      ctx.fillStyle = '#facc15'
+      ctx.font = 'bold 14px sans-serif'
+      ctx.shadowColor = 'rgba(0,0,0,0.8)'
+      ctx.shadowBlur = 6
+      ctx.fillText('★', starX, starY)
+      ctx.restore()
+    }
+
     ctx.restore()
   })
 
-  // 5. Draw Overflow Vault Card (if in fixed frame and titles exceed max readable capacity)
+  // 6. Draw Overflow Vault Card (if titles exceed fixed aspect ratio capacity)
   if (overflowCount > 0) {
     const idx = gamesToRender.length
     const col = idx % cols
     const row = Math.floor(idx / cols)
-    const x = padX + col * (cardWidth + gap)
-    const y = finalGridTop + row * (cardHeight + gap)
+    const x = Math.round(padX + col * (cardWidth + gap))
+    const y = Math.round(finalGridTop + row * (cardHeight + gap))
     const r = theme.cardRadius
 
     ctx.save()
@@ -459,31 +636,37 @@ export async function generateBragCollage(games = [], stats = {}, options = {}) 
     ctx.fillStyle = 'rgba(15, 23, 42, 0.96)'
     ctx.fill()
     ctx.strokeStyle = theme.accent
-    ctx.lineWidth = 2.5
+    ctx.lineWidth = 2
     ctx.stroke()
 
     ctx.fillStyle = theme.accent
     ctx.textAlign = 'center'
-    ctx.font = `900 ${Math.round(cardWidth * 0.16)}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`
+    ctx.font = `900 ${Math.round(cardWidth * 0.16)}px ${theme.fontFamily}`
     ctx.fillText(`+${overflowCount}`, x + cardWidth / 2, y + cardHeight * 0.35)
 
     ctx.fillStyle = '#ffffff'
-    ctx.font = `bold ${Math.round(cardWidth * 0.065)}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`
+    ctx.font = `bold ${Math.round(cardWidth * 0.065)}px ${theme.fontFamily}`
     ctx.fillText('MORE IN VAULT', x + cardWidth / 2, y + cardHeight * 0.52)
 
-    ctx.fillStyle = '#94a3b8'
-    ctx.font = `500 ${Math.round(cardWidth * 0.045)}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)'
+    ctx.font = `500 ${Math.round(cardWidth * 0.045)}px ${theme.fontFamily}`
     ctx.fillText('Select "Full Grid" to brag', x + cardWidth / 2, y + cardHeight * 0.65)
     ctx.fillText('every single title', x + cardWidth / 2, y + cardHeight * 0.72)
     ctx.textAlign = 'left'
     ctx.restore()
   }
 
-  // 6. Footer Branding
-  ctx.fillStyle = '#64748b'
-  ctx.font = '500 20px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-  const ratioTag = aspectRatio === 'auto' ? '' : ` • ${aspectRatio} FORMAT`
-  ctx.fillText(`LOGPILE • 100% Offline Game Sanctuary & Launcher • Open-Source${ratioTag}`, padX, height - 36)
+  // 7. Footer Showcase Branding
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.45)'
+  ctx.font = `500 18px ${theme.fontFamily}`
+  ctx.fillText('LOGPILE  •  100% Offline Game Sanctuary & Launcher  •  Open-Source', padX, height - 42)
+
+  ctx.textAlign = 'right'
+  ctx.fillStyle = theme.accent
+  ctx.font = `700 16px ${theme.fontFamily}`
+  const ratioLabel = aspectRatio === 'auto' ? 'FULL VAULT GALLERY' : `${aspectRatio} ULTRA HD`
+  ctx.fillText(`4K RESOLUTION  •  ${ratioLabel}`, width - padX, height - 42)
+  ctx.textAlign = 'left'
 
   return canvas.toDataURL('image/png', 0.95)
 }

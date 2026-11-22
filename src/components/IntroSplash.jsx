@@ -21,7 +21,7 @@ import logoKinetic from '../assets/themes/logo-kinetic.png'
 import logoPlayful from '../assets/themes/logo-playful.png'
 import logoAtmospheric from '../assets/themes/logo-atmospheric.png'
 import logoCompetitive from '../assets/themes/logo-competitive.png'
-import { getCustomThemes, SAMPLE_DAILY_THEME } from '../utils/themeAddons'
+import { getCustomThemes } from '../utils/themeAddons'
 
 export const THEME_LOGOS = {
   cinematic: logoCinematic,
@@ -406,7 +406,7 @@ export function IntroSplash({ layoutTheme = 'cinematic', isDataLoaded = false, o
   // Look up custom theme if active
   const activeAddon = useMemo(() => {
     const list = getCustomThemes()
-    return list.find((t) => t.id === layoutTheme) || (layoutTheme.includes('cyberpunk') ? SAMPLE_DAILY_THEME : null)
+    return list.find((t) => t.id === layoutTheme) || null
   }, [layoutTheme])
 
   const triggerFinish = useCallback(() => {
@@ -583,9 +583,9 @@ export function IntroSplash({ layoutTheme = 'cinematic', isDataLoaded = false, o
           ctx.closePath()
 
           const auroraGrad = ctx.createLinearGradient(0, cy - 100, 0, height)
-          auroraGrad.addColorStop(0, `rgba(16, 185, 129, ${0.08 / (w + 1)})`)
-          auroraGrad.addColorStop(0.5, `rgba(52, 211, 153, ${0.14 / (w + 1)})`)
-          auroraGrad.addColorStop(1, 'rgba(3, 20, 12, 0)')
+          auroraGrad.addColorStop(0, `rgba(130, 147, 154, ${0.12 / (w + 1)})`)
+          auroraGrad.addColorStop(0.5, `rgba(89, 102, 108, ${0.18 / (w + 1)})`)
+          auroraGrad.addColorStop(1, 'rgba(9, 11, 13, 0)')
 
           ctx.fillStyle = auroraGrad
           ctx.fill()
@@ -602,16 +602,16 @@ export function IntroSplash({ layoutTheme = 'cinematic', isDataLoaded = false, o
         ctx.translate(cx, cy)
         const sweepGrad = ctx.createConicGradient ? ctx.createConicGradient(angle, 0, 0) : null
         if (sweepGrad) {
-          sweepGrad.addColorStop(0, 'rgba(56, 189, 248, 0.25)')
-          sweepGrad.addColorStop(0.12, 'rgba(56, 189, 248, 0)')
-          sweepGrad.addColorStop(1, 'rgba(56, 189, 248, 0)')
+          sweepGrad.addColorStop(0, 'rgba(239, 68, 68, 0.28)')
+          sweepGrad.addColorStop(0.12, 'rgba(239, 68, 68, 0)')
+          sweepGrad.addColorStop(1, 'rgba(239, 68, 68, 0)')
           ctx.fillStyle = sweepGrad
           ctx.beginPath()
           ctx.arc(0, 0, radius, 0, Math.PI * 2)
           ctx.fill()
         }
 
-        ctx.strokeStyle = 'rgba(56, 189, 248, 0.15)'
+        ctx.strokeStyle = 'rgba(239, 68, 68, 0.20)'
         ctx.lineWidth = 1
         ;[radius * 0.35, radius * 0.7, radius].forEach((r) => {
           ctx.beginPath()
@@ -762,7 +762,7 @@ export function IntroSplash({ layoutTheme = 'cinematic', isDataLoaded = false, o
 
           if (px >= 0 && px <= width && py >= 0 && py <= height) {
             const alpha = (1 - p.z / width) * p.opacity
-            ctx.fillStyle = `rgba(56, 189, 248, ${alpha})`
+            ctx.fillStyle = `rgba(198, 165, 107, ${alpha})`
             ctx.fillRect(px, py, p.size * (1 - p.z / width) * 2.2, p.size * (1 - p.z / width) * 2.2)
           }
         })
@@ -880,23 +880,23 @@ export function IntroSplash({ layoutTheme = 'cinematic', isDataLoaded = false, o
             </>
           ) : tKey === 'atmospheric' ? (
             <>
-              <Moon size={12} style={{ color: '#10b981' }} />
+              <Moon size={12} style={{ color: '#82939A' }} />
               <span>THE SANCTUARY ARCHIVE</span>
-              <span className="intro-tagline-dot">·</span>
+              <span className="intro-tagline-dot" style={{ color: '#82939A' }}>·</span>
               <span>100% OFFLINE</span>
             </>
           ) : tKey === 'competitive' ? (
             <>
-              <Trophy size={12} style={{ color: '#38bdf8' }} />
+              <Trophy size={12} style={{ color: '#EF4444' }} />
               <span>COMPETITIVE SANCTUARY</span>
-              <span className="intro-tagline-dot">·</span>
+              <span className="intro-tagline-dot" style={{ color: '#EF4444' }}>·</span>
               <span>ESPORTS CALIBRATED</span>
             </>
           ) : (
             <>
-              <Sparkles size={12} style={{ color: '#38bdf8' }} />
+              <Film size={12} style={{ color: '#C6A56B' }} />
               <span>OFFLINE GAME SANCTUARY</span>
-              <span className="intro-tagline-dot">·</span>
+              <span className="intro-tagline-dot" style={{ color: '#C6A56B' }}>·</span>
               <span>ZERO BLOAT</span>
             </>
           )}

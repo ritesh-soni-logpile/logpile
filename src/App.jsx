@@ -32,7 +32,8 @@ import { speakConfirmation, getVoiceSettings, saveVoiceSettings } from './utils/
 import { useGamepad } from './utils/useGamepad'
 import { generateBragCollage } from './utils/generateBragCollage'
 import { IntroSplash, THEME_LOGOS } from './components/IntroSplash'
-import { getCustomThemes, getEnabledAddonIds } from './utils/themeAddons'
+import { InstallerApp } from './components/InstallerApp'
+import { getCustomThemes, getEnabledAddonIds, getCustomCss, applyCustomCss } from './utils/themeAddons'
 import logoDark from './assets/logo.png'
 import logoLight from './assets/logo-light.png'
 const logo = logoDark
@@ -3338,11 +3339,11 @@ function getRelatedGames(activeGame, allGames = []) {
 }
 
 const LAYOUT_THEMES = [
-  { value: 'cinematic', label: '🎬 Cinematic', icon: Sparkles },
-  { value: 'kinetic', label: '⚡ Kinetic', icon: Activity },
-  { value: 'playful', label: '🪵 Playful', icon: Gamepad2 },
-  { value: 'atmospheric', label: '🕵️ Atmospheric', icon: Moon },
-  { value: 'competitive', label: '🏆 Competitive', icon: Trophy },
+  { value: 'cinematic', label: 'Cinematic', icon: Film, colorDot: '#C6A56B' },
+  { value: 'kinetic', label: 'Kinetic', icon: Activity, colorDot: '#F97316' },
+  { value: 'playful', label: 'Playful', icon: Gamepad2, colorDot: '#D6FF4B' },
+  { value: 'atmospheric', label: 'Atmospheric', icon: Moon, colorDot: '#82939A' },
+  { value: 'competitive', label: 'Competitive', icon: Trophy, colorDot: '#EF4444' },
 ]
 
 function SanctuaryControls({ layoutTheme, setLayoutTheme }) {
@@ -3363,11 +3364,14 @@ function SanctuaryControls({ layoutTheme, setLayoutTheme }) {
       .filter((a) => enabledAddons.includes(a.id))
       .map((a) => ({
         value: a.id,
-        label: `🧩 ${a.name}`,
-        icon: Sparkles,
+        label: a.name,
+        icon: Film,
+        colorDot: a.palette?.accent || '#C6A56B',
       }))
     return [...LAYOUT_THEMES, ...customOptions]
   }, [enabledAddons, customThemes])
+
+  const activeThemeIcon = LAYOUT_THEMES.find((t) => t.value === layoutTheme)?.icon || Film
 
   return (
     <div className="sanctuary-controls-group">
@@ -3376,7 +3380,7 @@ function SanctuaryControls({ layoutTheme, setLayoutTheme }) {
           value={layoutTheme}
           onChange={setLayoutTheme}
           options={currentOptions}
-          icon={Sparkles}
+          icon={activeThemeIcon}
           className="capsule-trigger capsule-layout"
           menuClassName="sanctuary-dropdown-menu"
           title="Select visual layout theme"
@@ -6063,7 +6067,7 @@ function LiveHudOverlayView() {
         display: 'flex',
         ...alignment,
         background: 'transparent',
-        overflow: 'hidden',
+        overflow: 'visible',
         pointerEvents: 'none',
         userSelect: 'none',
         opacity: (hudSettings.fpsOpacity || 80) / 100,
@@ -6075,6 +6079,22 @@ function LiveHudOverlayView() {
 }
 
 function App() {
+  const isInstallerMode = typeof window !== 'undefined' && window.location.hash === '#installer'
+  if (isInstallerMode) {
+    return (
+      <ErrorBoundary
+        fallback={({ error }) => (
+          <div style={{ padding: 24, color: '#f87171', background: '#0a0a0a', border: '1px solid #ef4444', borderRadius: 8 }}>
+            <strong>Installer Error:</strong> {error?.message}
+          </div>
+        )}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'transparent' }}>
+          <InstallerApp />
+        </div>
+      </ErrorBoundary>
+    )
+  }
   const isOverlayMode = typeof window !== 'undefined' && window.location.hash === '#overlay'
   const isHudMode = typeof window !== 'undefined' && window.location.hash === '#hud'
   if (isHudMode) {
@@ -6169,6 +6189,20 @@ function App() {
   }, [toggleSidebar, handleToggleSpotlight, inAppSearchShortcut])
 
   const mainScrollRef = useRef(null); const searchInputRef = useRef(null); const libraryScrollRef = useRef(0); const lastClickedGameIdRef = useRef(null); const navOriginRef = useRef({ view: 'installed', source: 'grid', scrollTop: 0 }); const hasSeededRef = useRef(false); const [restoredGameId, setRestoredGameId] = useState(null); const [games, setGames] = useState([]); const [hiddenGames, setHiddenGames] = useState([]); const [stats, setStats] = useState(() => ({ ...EMPTY_LIBRARY_STATS })); const [query, setQuery] = useState(''); const [debouncedQuery, setDebouncedQuery] = useState(''); const [view, setView] = useState('installed'); const [sourceFilters, setSourceFilters] = useState([]); const [genreFilter, setGenreFilter] = useState('all'); const [backlogFilter, setBacklogFilter] = useState('all'); const [sortKey, setSortKey] = useState('title-asc'); const [viewMode, setViewMode] = useState('grid'); const [activeGame, setActiveGame] = useState(null); const isDetailView = viewMode === 'hero' && Boolean(activeGame);   const [layoutTheme, setLayoutTheme] = useState(() => localStorage.getItem('logpile-layout-theme') || 'cinematic');
+  const [colorPalette, setColorPalette] = useState(() => {
+    try {
+      return localStorage.getItem('logpile-color-palette') || 'auto';
+    } catch {
+      return 'auto';
+    }
+  });
+  const handleColorPaletteChange = (newPalette) => {
+    if (!newPalette) return;
+    setColorPalette(newPalette);
+    try {
+      localStorage.setItem('logpile-color-palette', newPalette);
+    } catch {}
+  };
   const handleLayoutThemeChange = (newTheme) => {
     if (!newTheme) return;
     const isDifferent = newTheme !== layoutTheme;
@@ -7020,6 +7054,7 @@ function App() {
     try {
       const collageDataUrl = await generateBragCollage(filteredGames, stats, {
         layoutTheme,
+        colorPalette,
         viewTitle: title,
         aspectRatio,
       })
@@ -7377,6 +7412,59 @@ function App() {
     { value: '20to50', label: '20 – 50 Hours (Long)' },
     { value: '50plus', label: '50+ Hours (Epic)' },
   ], [])
+  const issueCounts = useMemo(() => {
+    let missingArt = 0
+    let missingId = 0
+    let missingGuide = 0
+    for (const g of games) {
+      if (g.is_utility || g.is_dlc) continue
+      const art = String(g.cover_url ?? '').trim().toLowerCase()
+      if (!art || art === 'null' || art === 'undefined' || failedImageIds.has(g.id)) {
+        missingArt++
+      }
+      const id = String(g.steamgriddb_id ?? '').trim().toLowerCase()
+      if (!id || id === 'null' || id === 'undefined') {
+        missingId++
+      }
+      if (!g.has_guide) {
+        missingGuide++
+      }
+    }
+    const anyIssue = games.filter((g) => {
+      if (g.is_utility || g.is_dlc) return false
+      const art = String(g.cover_url ?? '').trim().toLowerCase()
+      const hasNoArt = !art || art === 'null' || art === 'undefined' || failedImageIds.has(g.id)
+      const id = String(g.steamgriddb_id ?? '').trim().toLowerCase()
+      const hasNoId = !id || id === 'null' || id === 'undefined'
+      return hasNoArt || hasNoId || !g.has_guide
+    }).length
+    return { missingArt, missingId, missingGuide, anyIssue }
+  }, [games, failedImageIds])
+
+  const qualityOptions = useMemo(() => [
+    { value: 'all', label: 'All titles (No filter)', triggerLabel: 'Missing Details' },
+    { value: 'missingArtwork', label: 'Missing Artwork', triggerLabel: 'Missing Artwork', badge: issueCounts.missingArt > 0 ? String(issueCounts.missingArt) : undefined },
+    { value: 'missingIds', label: 'Missing Database IDs', triggerLabel: 'Missing IDs', badge: issueCounts.missingId > 0 ? String(issueCounts.missingId) : undefined },
+    { value: 'missingGuide', label: 'Missing Strategy Guides', triggerLabel: 'Missing Guide', badge: issueCounts.missingGuide > 0 ? String(issueCounts.missingGuide) : undefined },
+    { value: 'anyIssue', label: 'Any Missing Details', triggerLabel: 'Any Missing', badge: issueCounts.anyIssue > 0 ? String(issueCounts.anyIssue) : undefined },
+  ], [issueCounts])
+
+  const currentQualityValue = useMemo(() => {
+    if (!qualityFilters || qualityFilters.length === 0) return 'all'
+    if (qualityFilters.includes('anyIssue')) return 'anyIssue'
+    if (qualityFilters.includes('missingArtwork')) return 'missingArtwork'
+    if (qualityFilters.includes('missingIds')) return 'missingIds'
+    if (qualityFilters.includes('missingGuide')) return 'missingGuide'
+    return 'all'
+  }, [qualityFilters])
+
+  const handleQualityChange = useCallback((val) => {
+    if (!val || val === 'all') {
+      setQualityFilters([])
+    } else {
+      setQualityFilters([val])
+    }
+  }, [])
   const filteredGames = useMemo(() => {
     let result = view === 'hidden' ? strictTitleSearch(hiddenGames, debouncedQuery) : strictTitleSearch(games, debouncedQuery)
     if (view === 'installed') result = result.filter((game) => game.is_installed && !game.is_utility && !game.is_dlc)
@@ -7385,19 +7473,29 @@ function App() {
     if (view === 'utilities') result = result.filter((game) => game.is_utility)
     if (view === 'dlc') result = result.filter((game) => game.is_dlc && !game.is_utility)
     if (view !== 'utilities' && view !== 'dlc' && view !== 'system' && view !== 'hidden') result = result.filter((game) => !game.is_utility && !game.is_dlc)
-    if (qualityFilters.includes('missingArtwork')) {
+    if (qualityFilters.includes('anyIssue')) {
       result = result.filter((game) => {
         const artwork = String(game.cover_url ?? '').trim().toLowerCase()
-        const hasNoArt = !artwork || artwork === 'null' || artwork === 'undefined'
-        return hasNoArt || failedImageIds.has(game.id)
+        const hasNoArt = !artwork || artwork === 'null' || artwork === 'undefined' || failedImageIds.has(game.id)
+        const id = String(game.steamgriddb_id ?? '').trim().toLowerCase()
+        const hasNoId = !id || id === 'null' || id === 'undefined'
+        return hasNoArt || hasNoId || !game.has_guide
       })
-    }
-    if (qualityFilters.includes('missingIds')) result = result.filter((game) => {
-      const id = String(game.steamgriddb_id ?? '').trim().toLowerCase()
-      return !id || id === 'null' || id === 'undefined'
-    })
-    if (qualityFilters.includes('missingGuide')) {
-      result = result.filter((game) => !game.has_guide)
+    } else {
+      if (qualityFilters.includes('missingArtwork')) {
+        result = result.filter((game) => {
+          const artwork = String(game.cover_url ?? '').trim().toLowerCase()
+          const hasNoArt = !artwork || artwork === 'null' || artwork === 'undefined'
+          return hasNoArt || failedImageIds.has(game.id)
+        })
+      }
+      if (qualityFilters.includes('missingIds')) result = result.filter((game) => {
+        const id = String(game.steamgriddb_id ?? '').trim().toLowerCase()
+        return !id || id === 'null' || id === 'undefined'
+      })
+      if (qualityFilters.includes('missingGuide')) {
+        result = result.filter((game) => !game.has_guide)
+      }
     }
     if (sourceFilters.length) result = result.filter((game) => sourceFilters.some((source) => sourceLabelsForGame(game).some((label) => sourceKey(label) === source)))
     if (genreFilter !== 'all') result = result.filter((game) => String(game.genres || game.genre || '').split(',').map((genre) => genre.trim()).includes(genreFilter))
@@ -7681,7 +7779,7 @@ function App() {
     })
   }
   const displayFavoriteGames = useMemo(() => games.filter((g) => g.is_favorite && !g.is_utility && !g.is_dlc).length, [games]);
-  const displayTotalGames = Math.max(0, stats.visibleGames ?? (stats.totalGames - stats.utilityTools - (stats.dlcGames || 0) - (stats.hiddenGames || 0) - (stats.hiddenDlc || 0))); const displayInstalledGames = Math.max(0, stats.visibleInstalledGames ?? (stats.installedGames - (stats.installedUtilities || 0) - (stats.installedDlc || 0) - (stats.hiddenInstalledGames || 0) - (stats.hiddenInstalledDlc || 0))); const displayDlcGames = Math.max(0, stats.dlcGames || 0); const readyToInstallCount = Math.max(0, Number(stats.readyToInstallCount || 0)); const installedPercent = displayTotalGames ? Math.round((displayInstalledGames / displayTotalGames) * 100) : 0; const vars = themeVars(layoutTheme);
+  const displayTotalGames = Math.max(0, stats.visibleGames ?? (stats.totalGames - stats.utilityTools - (stats.dlcGames || 0) - (stats.hiddenGames || 0) - (stats.hiddenDlc || 0))); const displayInstalledGames = Math.max(0, stats.visibleInstalledGames ?? (stats.installedGames - (stats.installedUtilities || 0) - (stats.installedDlc || 0) - (stats.hiddenInstalledGames || 0) - (stats.hiddenInstalledDlc || 0))); const displayDlcGames = Math.max(0, stats.dlcGames || 0); const readyToInstallCount = Math.max(0, Number(stats.readyToInstallCount || 0)); const installedPercent = displayTotalGames ? Math.round((displayInstalledGames / displayTotalGames) * 100) : 0; const vars = themeVars(layoutTheme, colorPalette);
 
   const workspaceItems = useMemo(() => {
     const remaining = [
@@ -7696,7 +7794,28 @@ function App() {
   useEffect(() => {
     document.documentElement.setAttribute('data-mode', 'dark')
     document.documentElement.setAttribute('data-layout', layoutTheme)
-  }, [layoutTheme])
+    document.documentElement.setAttribute('data-palette', colorPalette)
+    document.documentElement.className = `layout-${layoutTheme}`
+    const liveVars = themeVars(layoutTheme, colorPalette)
+    Object.entries(liveVars).forEach(([k, v]) => {
+      document.documentElement.style.setProperty(k, v)
+    })
+    try {
+      window.api?.theme?.save?.({ layoutTheme, colorPalette })
+    } catch {}
+  }, [layoutTheme, colorPalette])
+
+  useEffect(() => {
+    const savedCss = getCustomCss()
+    if (savedCss) {
+      applyCustomCss(savedCss)
+    }
+    const handleCssChange = (e) => {
+      applyCustomCss(e.detail)
+    }
+    window.addEventListener('logpile-custom-css-changed', handleCssChange)
+    return () => window.removeEventListener('logpile-custom-css-changed', handleCssChange)
+  }, [])
   const toggleSource = (source) => setSourceFilters((current) => current.includes(source) ? current.filter((item) => item !== source) : [...current, source])
   const chooseLaunchVariant = (game) => {
     const installed = (game.variants || [game]).filter((variant) => variant.is_installed)
@@ -8940,7 +9059,14 @@ function App() {
     />
   </ErrorBoundary>
 )}<div className="library-top-bar">
-  <div className="library-top-bar-left">
+  <div
+    className="library-top-bar-left"
+    onWheel={(e) => {
+      if (e.deltaY !== 0 && e.currentTarget.scrollWidth > e.currentTarget.clientWidth) {
+        e.currentTarget.scrollLeft += e.deltaY
+      }
+    }}
+  >
     <div className="collection-header-brand">
       <h2 className="collection-title">{collectionHeading}</h2>
       <span className="collection-count">{filteredGames.length} titles</span>
@@ -8978,20 +9104,15 @@ function App() {
         </span>
       )}
     </button>
-    <div className="top-bar-chip-group">
-      <button type="button" className={cn('top-bar-chip top-bar-chip-artwork', qualityFilters.includes('missingArtwork') && 'active')} onClick={() => setQualityFilters((current) => current.includes('missingArtwork') ? current.filter((item) => item !== 'missingArtwork') : [...current, 'missingArtwork'])} title="Filter games missing custom covers or artwork">
-        <span className="chip-full">Missing Artwork</span>
-        <span className="chip-compact">No Art</span>
-      </button>
-      <button type="button" className={cn('top-bar-chip top-bar-chip-ids', qualityFilters.includes('missingIds') && 'active')} onClick={() => setQualityFilters((current) => current.includes('missingIds') ? current.filter((item) => item !== 'missingIds') : [...current, 'missingIds'])} title="Filter games missing database IDs">
-        <span className="chip-full">Missing IDs</span>
-        <span className="chip-compact">No IDs</span>
-      </button>
-      <button type="button" className={cn('top-bar-chip top-bar-chip-guide', qualityFilters.includes('missingGuide') && 'active')} onClick={() => setQualityFilters((current) => current.includes('missingGuide') ? current.filter((item) => item !== 'missingGuide') : [...current, 'missingGuide'])} title="Filter games missing strategy guides">
-        <span className="chip-full">Missing Guide</span>
-        <span className="chip-compact">No Guide</span>
-      </button>
-    </div>
+    <CustomDropdown
+      value={currentQualityValue}
+      onChange={handleQualityChange}
+      options={qualityOptions}
+      icon={Info}
+      className={cn('top-bar-dropdown top-bar-missing-details-dropdown', currentQualityValue !== 'all' && 'filter-active')}
+      title="Filter library by missing details or metadata"
+      placeholder="Missing Details"
+    />
   </div>
   <div className="library-top-bar-right">
     {isHomeView && !isSpotlightCollapsed && (
@@ -9215,8 +9336,8 @@ function App() {
     </div>
   </div>
 )}
-{selectMode ? <div className="bulk-action-bar"><span><Check size={14} /> {selectedIds.length} selected · {filteredRecordIds.length} filtered</span><div className="bulk-action-group"><button className="outline-button" disabled={bulkBusy || !filteredRecordIds.length} onClick={selectAllFiltered}><Check size={14} /> Select All Filtered</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={deselectAll}><X size={14} /> Deselect All</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={() => handleBulkMove('dlc')}><PackageOpen size={14} /> Move to DLC</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleBulkHide}><EyeOff size={14} /> Hide from Library</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleRefetchSelected}><RefreshCw size={14} /> Re-fetch Artwork</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleExportSelected}><FileDown size={14} /> Export Selected to CSV</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={() => setBulkEditOpen(true)}><SlidersHorizontal size={14} /> Edit Selected</button><button className="danger-button" disabled={bulkBusy || !selectedIds.length} onClick={handleDeleteSelected}><Trash2 size={14} /> Delete Selected</button></div></div> : null}{notice ? <div className={cn('notice', noticeTone === 'error' && 'notice-error', noticeTone === 'warning' && 'notice-warning')}>{noticeTone === 'error' ? <X size={14} /> : noticeTone === 'warning' ? <AlertTriangle size={14} /> : <Check size={14} />} {notice}</div> : null}{loading && !filteredGames.length && !showIntro ? <div className="empty-state"><div className="loader" /> Loading and indexing your library…</div> : filteredGames.length ? <ErrorBoundary><VirtualGrid games={filteredGames} familyLocks={familyLocks} onLaunch={handleLaunch} onSelect={handleSelectGame} onHideGame={(game) => updateHiddenState(game, true)} onMoveCategory={moveCategory} onEditGame={setEditorGame} onContextMenu={handleCardContextMenu} onArtworkChanged={handleArtworkChanged} onArtworkError={handleArtworkError} selectMode={selectMode} selectedIds={selectedIds} onToggleSelect={toggleGameSelection} scrollElementRef={mainScrollRef} onImageError={handleImageError} initialScrollTop={activeGame?.id === lastClickedGameIdRef.current ? libraryScrollRef.current : 0} restoreGameId={activeGame?.id || lastClickedGameIdRef.current} restoredGameId={restoredGameId} gamepadFocusIndex={isGamepadMode ? gamepadIndex : -1} onToggleFavorite={handleToggleFavorite} /></ErrorBoundary> : (!games.length && !query && !sourceFilters.length && genreFilter === 'all' && backlogFilter === 'all' && !qualityFilters.length) ? <div className="empty-state"><strong>Your library is empty.</strong><span>Click Scan & import (top right) to add your games.</span></div> : <div className="empty-state"><Search size={21} /><span>No titles match {query ? `"${query}"` : aiFilter ? `AI filter "${aiFilter.originalQuery || 'custom'}"` : 'these filters'}.</span>{aiFilter ? (<button type="button" className="outline-button" style={{ marginTop: '10px', borderColor: 'rgba(239, 68, 68, 0.4)', color: '#f87171', display: 'inline-flex', alignItems: 'center', gap: '6px' }} onClick={handleClearAiFilter}><X size={14} /><span>Clear Smart AI Filter</span></button>) : null}{query ? (<button type="button" className="outline-button" style={{ marginTop: '10px', borderColor: 'var(--accent, #d6ff4b)', color: 'var(--accent, #d6ff4b)', display: 'inline-flex', alignItems: 'center', gap: '6px' }} onClick={() => setAiDrawerOpen(true)}><Sparkles size={14} /><span>Ask AI Companion about "{query}"</span></button>) : null}</div>}</section>}</ErrorBoundary></div><footer className="statusbar"><span className="statusbar-item statusbar-terminal"><TerminalSquare size={13} style={{ color: 'var(--accent, #d6ff4b)', opacity: 0.9 }} /> {scannerStatus ? <span className="inline-flex items-center gap-1.5"><span className="pulse-dot" /> {scannerStatus}</span> : 'Ready'}</span>{globalSyncRunning && (<span className="statusbar-item statusbar-sync-active" title="Artwork & metadata sync in progress"><span className="pulse-dot" /><span>{globalSyncProgress?.gameTitle ? `Syncing: ${globalSyncProgress.gameTitle} (${globalSyncProgress.current}/${globalSyncProgress.total})${globalSyncProgress.formattedTransfer ? ` • ${globalSyncProgress.formattedTransfer}` : ''}` : (globalSyncProgress?.message || `Syncing artwork (${globalSyncProgress?.current || 0}/${globalSyncProgress?.total || 0})...`)}</span><button type="button" onClick={handleCancelGlobalSync} className="statusbar-cancel-btn" title="Cancel sync immediately"><X size={11} /> Cancel</button></span>)}{guideSyncStatus?.running && (<span className="statusbar-item statusbar-sync-active" title="Strategy guides downloading from StrategyWiki in progress"><span className="pulse-dot" /><span>{guideSyncStatus.progress?.title ? `Downloading Guides: ${guideSyncStatus.progress.title} (${guideSyncStatus.progress.current}/${guideSyncStatus.progress.total})` : 'Downloading Guides from StrategyWiki...'}</span><button type="button" onClick={() => window.api?.guides?.cancelBatch?.()} className="statusbar-cancel-btn" title="Cancel guide download"><X size={11} /> Cancel</button></span>)}<span className="statusbar-item statusbar-storage"><HardDrive size={11} style={{ color: 'var(--accent, #d6ff4b)', opacity: 0.85 }} /> Offline · Local storage</span>{isVoiceListening && (<span className="statusbar-item statusbar-voice-listening" style={{ color: 'var(--accent, #d6ff4b)' }}><span className="pulse-dot" style={{ background: 'var(--accent, #d6ff4b)', boxShadow: '0 0 8px var(--accent-glow, rgba(214, 255, 75, 0.6))' }} /> Listening (PTT)...</span>)}{connectedGamepad && (<><span className="statusbar-item statusbar-gamepad" title={`Connected Controller: ${connectedGamepad}`}><Gamepad2 size={12} style={{ color: 'var(--accent, #d6ff4b)' }} /><span>{connectedGamepad}</span></span><span className="statusbar-item statusbar-shortcuts" title="Controller Navigation Shortcuts"><span className="gamepad-key-badge badge-a">A</span> Select<span className="gamepad-key-badge badge-b">B</span> Back<span className="gamepad-key-badge badge-x">X</span> Status<span className="gamepad-key-badge badge-y">Y</span> Fav<span className="gamepad-key-badge">LB/RB</span> Views</span></>)}<span className="statusbar-item statusbar-version">Version 1.3.5</span></footer></main>
-    </div><SettingsModal isOpen={settingsModalOpen} onClose={() => setSettingsModalOpen(false)} initialTab={settingsModalTab} stats={stats} health={libraryHealth} backupsList={backupsList} backupBusy={backupBusy} restoreBusy={restoreBusy} onBackupNow={handleBackupNow} onOpenBackupsFolder={handleOpenBackupsFolder} onOpenBackupsManager={handleOpenBackupsManager} onExport={handleExport} onBackupCache={handleBackupCache} onRestoreCache={handleRestoreCache} onPurge={() => setPurgeOpen(true)} onRefresh={() => loadData({ preserveScroll: true })} connectedGamepad={connectedGamepad} hiddenGames={hiddenGames} onRestoreHidden={(game) => updateHiddenState(game, false)} activityLog={activityLog} activityLoading={activityLoading} onRefreshActivity={fetchSystemHealthAndActivity} layoutTheme={layoutTheme} onLayoutThemeChange={handleLayoutThemeChange} onTriggerIntroPreview={() => { setSettingsModalOpen(false); setShowIntro(true); }} /><AiAssistantDrawer open={aiDrawerOpen} onClose={() => setAiDrawerOpen(false)} activeGame={activeGame} layoutTheme={layoutTheme} games={games} onAction={handleAiAction} isVoiceListening={isVoiceListening} onToggleVoice={toggleVoiceListening} /><ScanImportPanel open={scanOpen} onClose={() => setScanOpen(false)} onRefresh={loadData} /><GameEditorModal game={editorGame} onClose={() => setEditorGame(null)} onSaved={handleEditorSaved} /><PurgeConfirmModal open={purgeOpen} busy={purgeBusy} onClose={() => setPurgeOpen(false)} onConfirm={handlePurge} /><BulkEditModal open={bulkEditOpen} count={selectedIds.length} busy={bulkBusy} onClose={() => setBulkEditOpen(false)} onApply={handleBulkApply} /><ContextMenu menu={contextMenu} menuRef={contextMenuRef} onClose={() => setContextMenu(null)} onMoveCategory={moveCategory} onEditGame={setEditorGame} onHideGame={(game) => updateHiddenState(game, true)} onArtworkChanged={handleArtworkChanged} onArtworkError={handleArtworkError} onToggleFavorite={handleToggleFavorite} /><ConfirmActionModal config={confirmModal} onClose={() => setConfirmModal(null)} />{checkpointPrompt && (
+{selectMode ? <div className="bulk-action-bar"><span><Check size={14} /> {selectedIds.length} selected · {filteredRecordIds.length} filtered</span><div className="bulk-action-group"><button className="outline-button" disabled={bulkBusy || !filteredRecordIds.length} onClick={selectAllFiltered}><Check size={14} /> Select All Filtered</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={deselectAll}><X size={14} /> Deselect All</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={() => handleBulkMove('dlc')}><PackageOpen size={14} /> Move to DLC</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleBulkHide}><EyeOff size={14} /> Hide from Library</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleRefetchSelected}><RefreshCw size={14} /> Re-fetch Artwork</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleExportSelected}><FileDown size={14} /> Export Selected to CSV</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={() => setBulkEditOpen(true)}><SlidersHorizontal size={14} /> Edit Selected</button><button className="danger-button" disabled={bulkBusy || !selectedIds.length} onClick={handleDeleteSelected}><Trash2 size={14} /> Delete Selected</button></div></div> : null}{notice ? <div className={cn('notice', noticeTone === 'error' && 'notice-error', noticeTone === 'warning' && 'notice-warning')}>{noticeTone === 'error' ? <X size={14} /> : noticeTone === 'warning' ? <AlertTriangle size={14} /> : <Check size={14} />} {notice}</div> : null}{loading && !filteredGames.length && !showIntro ? <div className="empty-state"><div className="loader" /> Loading and indexing your library…</div> : filteredGames.length ? <ErrorBoundary><VirtualGrid games={filteredGames} familyLocks={familyLocks} onLaunch={handleLaunch} onSelect={handleSelectGame} onHideGame={(game) => updateHiddenState(game, true)} onMoveCategory={moveCategory} onEditGame={setEditorGame} onContextMenu={handleCardContextMenu} onArtworkChanged={handleArtworkChanged} onArtworkError={handleArtworkError} selectMode={selectMode} selectedIds={selectedIds} onToggleSelect={toggleGameSelection} scrollElementRef={mainScrollRef} onImageError={handleImageError} initialScrollTop={activeGame?.id === lastClickedGameIdRef.current ? libraryScrollRef.current : 0} restoreGameId={activeGame?.id || lastClickedGameIdRef.current} restoredGameId={restoredGameId} gamepadFocusIndex={isGamepadMode ? gamepadIndex : -1} onToggleFavorite={handleToggleFavorite} /></ErrorBoundary> : (!games.length && !query && !sourceFilters.length && genreFilter === 'all' && backlogFilter === 'all' && !qualityFilters.length) ? <div className="empty-state"><strong>Your library is empty.</strong><span>Click Scan & import (top right) to add your games.</span></div> : <div className="empty-state"><Search size={21} /><span>No titles match {query ? `"${query}"` : aiFilter ? `AI filter "${aiFilter.originalQuery || 'custom'}"` : 'these filters'}.</span>{aiFilter ? (<button type="button" className="outline-button" style={{ marginTop: '10px', borderColor: 'rgba(239, 68, 68, 0.4)', color: '#f87171', display: 'inline-flex', alignItems: 'center', gap: '6px' }} onClick={handleClearAiFilter}><X size={14} /><span>Clear Smart AI Filter</span></button>) : null}{query ? (<button type="button" className="outline-button" style={{ marginTop: '10px', borderColor: 'var(--accent, #d6ff4b)', color: 'var(--accent, #d6ff4b)', display: 'inline-flex', alignItems: 'center', gap: '6px' }} onClick={() => setAiDrawerOpen(true)}><Sparkles size={14} /><span>Ask AI Companion about "{query}"</span></button>) : null}</div>}</section>}</ErrorBoundary></div><footer className="statusbar"><span className="statusbar-item statusbar-terminal"><TerminalSquare size={13} style={{ color: 'var(--accent, #d6ff4b)', opacity: 0.9 }} /> {scannerStatus ? <span className="inline-flex items-center gap-1.5"><span className="pulse-dot" /> {scannerStatus}</span> : 'Ready'}</span>{globalSyncRunning && (<span className="statusbar-item statusbar-sync-active" title="Artwork & metadata sync in progress"><span className="pulse-dot" /><span>{globalSyncProgress?.gameTitle ? `Syncing: ${globalSyncProgress.gameTitle} (${globalSyncProgress.current}/${globalSyncProgress.total})${globalSyncProgress.formattedTransfer ? ` • ${globalSyncProgress.formattedTransfer}` : ''}` : (globalSyncProgress?.message || `Syncing artwork (${globalSyncProgress?.current || 0}/${globalSyncProgress?.total || 0})...`)}</span><button type="button" onClick={handleCancelGlobalSync} className="statusbar-cancel-btn" title="Cancel sync immediately"><X size={11} /> Cancel</button></span>)}{guideSyncStatus?.running && (<span className="statusbar-item statusbar-sync-active" title="Strategy guides downloading from StrategyWiki in progress"><span className="pulse-dot" /><span>{guideSyncStatus.progress?.title ? `Downloading Guides: ${guideSyncStatus.progress.title} (${guideSyncStatus.progress.current}/${guideSyncStatus.progress.total})` : 'Downloading Guides from StrategyWiki...'}</span><button type="button" onClick={() => window.api?.guides?.cancelBatch?.()} className="statusbar-cancel-btn" title="Cancel guide download"><X size={11} /> Cancel</button></span>)}<span className="statusbar-item statusbar-storage"><HardDrive size={11} style={{ color: 'var(--accent, #d6ff4b)', opacity: 0.85 }} /> Offline · Local storage</span>{isVoiceListening && (<span className="statusbar-item statusbar-voice-listening" style={{ color: 'var(--accent, #d6ff4b)' }}><span className="pulse-dot" style={{ background: 'var(--accent, #d6ff4b)', boxShadow: '0 0 8px var(--accent-glow, rgba(214, 255, 75, 0.6))' }} /> Listening (PTT)...</span>)}{connectedGamepad && (<><span className="statusbar-item statusbar-gamepad" title={`Connected Controller: ${connectedGamepad}`}><Gamepad2 size={12} style={{ color: 'var(--accent, #d6ff4b)' }} /><span>{connectedGamepad}</span></span><span className="statusbar-item statusbar-shortcuts" title="Controller Navigation Shortcuts"><span className="statusbar-shortcut-item"><span className="gamepad-key-badge badge-a">A</span> Select</span><span className="statusbar-shortcut-item"><span className="gamepad-key-badge badge-b">B</span> Back</span><span className="statusbar-shortcut-item"><span className="gamepad-key-badge badge-x">X</span> Status</span><span className="statusbar-shortcut-item"><span className="gamepad-key-badge badge-y">Y</span> Fav</span><span className="statusbar-shortcut-item"><span className="gamepad-key-badge badge-bumper">LB/RB</span> Views</span></span></>)}<span className="statusbar-item statusbar-version">Version 1.3.7</span></footer></main>
+    </div><SettingsModal isOpen={settingsModalOpen} onClose={() => setSettingsModalOpen(false)} initialTab={settingsModalTab} stats={stats} health={libraryHealth} backupsList={backupsList} backupBusy={backupBusy} restoreBusy={restoreBusy} onBackupNow={handleBackupNow} onOpenBackupsFolder={handleOpenBackupsFolder} onOpenBackupsManager={handleOpenBackupsManager} onExport={handleExport} onBackupCache={handleBackupCache} onRestoreCache={handleRestoreCache} onPurge={() => setPurgeOpen(true)} onRefresh={() => loadData({ preserveScroll: true })} connectedGamepad={connectedGamepad} hiddenGames={hiddenGames} onRestoreHidden={(game) => updateHiddenState(game, false)} activityLog={activityLog} activityLoading={activityLoading} onRefreshActivity={fetchSystemHealthAndActivity} layoutTheme={layoutTheme} onLayoutThemeChange={handleLayoutThemeChange} colorPalette={colorPalette} onColorPaletteChange={handleColorPaletteChange} onTriggerIntroPreview={() => { setSettingsModalOpen(false); setShowIntro(true); }} /><AiAssistantDrawer open={aiDrawerOpen} onClose={() => setAiDrawerOpen(false)} activeGame={activeGame} layoutTheme={layoutTheme} games={games} onAction={handleAiAction} isVoiceListening={isVoiceListening} onToggleVoice={toggleVoiceListening} /><ScanImportPanel open={scanOpen} onClose={() => setScanOpen(false)} onRefresh={loadData} /><GameEditorModal game={editorGame} onClose={() => setEditorGame(null)} onSaved={handleEditorSaved} /><PurgeConfirmModal open={purgeOpen} busy={purgeBusy} onClose={() => setPurgeOpen(false)} onConfirm={handlePurge} /><BulkEditModal open={bulkEditOpen} count={selectedIds.length} busy={bulkBusy} onClose={() => setBulkEditOpen(false)} onApply={handleBulkApply} /><ContextMenu menu={contextMenu} menuRef={contextMenuRef} onClose={() => setContextMenu(null)} onMoveCategory={moveCategory} onEditGame={setEditorGame} onHideGame={(game) => updateHiddenState(game, true)} onArtworkChanged={handleArtworkChanged} onArtworkError={handleArtworkError} onToggleFavorite={handleToggleFavorite} /><ConfirmActionModal config={confirmModal} onClose={() => setConfirmModal(null)} />{checkpointPrompt && (
   <div
     className="checkpoint-note-toast"
     style={{

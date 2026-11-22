@@ -1,6 +1,6 @@
 {
   "name": "logpile",
-  "version": "1.3.6",
+  "version": "1.3.7",
   "private": true,
   "description": "Desktop game library with local storefront scanning and catalog import",
   "author": "Corporate Introvert Gamer (Ritesh Soni)",
@@ -13,6 +13,8 @@
     "preview": "vite preview",
     "electron": "electron electron/main.cjs",
     "electron:dev": "concurrently \"npm run dev\" \"wait-on http://127.0.0.1:5173 && cross-env NODE_ENV=development electron electron/main.cjs --dev\"",
+    "electron:installer": "concurrently \"npm run dev\" \"wait-on http://127.0.0.1:5173 && cross-env NODE_ENV=development electron electron/main.cjs --dev --installer\"",
+    "installer:preview": "electron . --installer",
     "dist": "vite build && electron-builder --win",
     "package": "npm run dist",
     "make": "npm run dist"
@@ -100,7 +102,9 @@
       "warningsAsErrors": false,
       "include": "build/installer.nsh",
       "installerIcon": "build/installer-icon.ico",
-      "installerHeaderIcon": "build/installer-icon.ico"
+      "installerHeaderIcon": "build/installer-icon.ico",
+      "installerSidebar": "build/installerSidebar.bmp",
+      "uninstallerSidebar": "build/uninstallerSidebar.bmp"
     }
   }
 }

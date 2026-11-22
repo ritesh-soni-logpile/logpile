@@ -182,6 +182,7 @@ contextBridge.exposeInMainWorld('api', {
     openFolder: () => ipcRenderer.invoke('ai:openFolder'),
     parseFilter: (text) => ipcRenderer.invoke('ai:parseFilter', text),
     generateHudTheme: (userPrompt, gameInfo, options) => ipcRenderer.invoke('ai:generateHudTheme', userPrompt, gameInfo, options),
+    generateCssTheme: (prompt, options) => ipcRenderer.invoke('ai:generateCssTheme', prompt, options),
     onToken: (callback) => {
       if (typeof callback !== 'function') return () => {}
       const listener = (_event, payload) => callback(payload)
@@ -263,5 +264,23 @@ contextBridge.exposeInMainWorld('api', {
     getMetrics: () => ipcRenderer.invoke('hardware:getMetrics'),
     getEtwStatus: () => ipcRenderer.invoke('telemetry:getEtwStatus'),
     enableEtw: () => ipcRenderer.invoke('telemetry:enableEtw'),
+  },
+  installer: {
+    detect: () => ipcRenderer.invoke('installer:detect'),
+    browse: () => ipcRenderer.invoke('installer:browse'),
+    getDriveSpace: (targetPath) => ipcRenderer.invoke('installer:getDriveSpace', targetPath),
+    install: (options) => ipcRenderer.invoke('installer:install', options),
+    onProgress: (callback) => {
+      if (typeof callback !== 'function') return () => {}
+      const handler = (_event, data) => callback(data)
+      ipcRenderer.on('installer:progress', handler)
+      return () => ipcRenderer.removeListener('installer:progress', handler)
+    },
+    launch: (exePath) => ipcRenderer.invoke('installer:launch', exePath),
+    close: () => ipcRenderer.invoke('installer:close'),
+    minimize: () => ipcRenderer.invoke('installer:minimize'),
+  },
+  theme: {
+    save: (data) => ipcRenderer.invoke('theme:save', data),
   },
 })

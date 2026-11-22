@@ -10,12 +10,12 @@
 [![AlternativeTo](https://img.shields.io/badge/AlternativeTo-Listed-267ecb?style=for-the-badge)](https://alternativeto.net/software/logpile-desktop/about/)
 
 <p align="center">
-  <a href="https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.6/Logpile.Setup.1.3.6.exe">
-    <img src="https://img.shields.io/badge/Download-Installer%20(.exe)%20--%20v1.3.6-2ea44f?style=for-the-badge&logo=windows" alt="Download Installer" />
+  <a href="https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.7/Logpile.Setup.1.3.7.exe">
+    <img src="https://img.shields.io/badge/Download-Installer%20(.exe)%20--%20v1.3.7-2ea44f?style=for-the-badge&logo=windows" alt="Download Installer" />
   </a>
   &nbsp;&nbsp;
-  <a href="https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.6/Logpile-v1.3.6-Portable.zip">
-    <img src="https://img.shields.io/badge/Download-Portable%20(.zip)%20--%20v1.3.6-0969da?style=for-the-badge&logo=zip" alt="Download Portable" />
+  <a href="https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.7/Logpile-v1.3.7-Portable.zip">
+    <img src="https://img.shields.io/badge/Download-Portable%20(.zip)%20--%20v1.3.7-0969da?style=for-the-badge&logo=zip" alt="Download Portable" />
   </a>
 </p>
 
@@ -43,7 +43,7 @@ Logpile is built for gamers who want the best offline PC game launcher, library 
   <img src="docs/assets/comparison-table-v1.3.5.png" alt="Logpile v1.3.5 vs Competitors Comparison Matrix" width="100%" />
 </p>
 
-| Feature | Logpile v1.3.5 | Steam | Playnite | GOG Galaxy | LaunchBox |
+| Feature | Logpile v1.3.7 | Steam | Playnite | GOG Galaxy | LaunchBox |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Local Game Detection** | **Zero logins:** Scans drives & folders directly | Store account login required | Account logins required for library sync | GOG account login required | Account logins or store tokens required |
 | **Bulk Backlog Import** | **Built-in:** Import entire uninstalled library via Excel / CSV | No (Single manual shortcut only) | Plugin required | No | Plugin required |
@@ -52,9 +52,40 @@ Logpile is built for gamers who want the best offline PC game launcher, library 
 | **Automated Save Backups** | **Built-in:** Automatic rolling local ZIP archives | Cloud only (for supported games) | Plugin required (e.g. Ludusavi) | Cloud only (for supported games) | Plugin required |
 | **Offline Strategy Guides** | **Built-in:** Offline guide, map & tip viewer | Community web browser tabs only | External browser links only | External browser links only | External browser links only |
 | **Themed Performance HUD** | **50+ Custom Styles:** Themed in-game overlays (0% idle GPU) | Basic plain text FPS counter | Third-party tools needed (RTSS) | Basic plain text FPS counter | Third-party tools needed |
-| **Custom HUD Theme Studio** | **Built-in:** Create, tweak, and save custom in-game HUDs | No | No | No | No |
+| **Theme Studio & Custom CSS** | **Built-in:** Live CSS injector, natural language synthesis, 8 community themes | No | Third-party skin plugins | No | Themes via community themes |
+| **Full Page & 4K Brag Snaps** | **Built-in:** Continuous vertical settings capture & 4K UHD gallery posters | Basic desktop screenshot | Screenshot plugins | Basic screenshot | Basic screenshot |
 | **Controller Auto-Detect** | **Yes:** Instant Windows plug-and-play detection | Big Picture mode or manual setup | Wake-up button press required | Manual setup / limited | Wake-up button press required |
 | **Privacy & Offline First** | **100% Offline:** MIT open source, zero logins, zero tracking | Closed source, store accounts & tracking | Open source, relies on store logins | Closed source, accounts & telemetry | Closed source, logins for metadata |
+
+---
+
+## What's New in v1.3.7
+
+### 1. Live Custom CSS Theme Studio & Synthesizer
+Fine-tune your sanctuary aesthetics down to the exact CSS selector. Features a real-time `<style>` injector, a natural-language theme synthesizer with instant 0ms offline keyword fallback, 8 inspiration presets (Gothic Obsidian, Cyber 2077, Nordic Frost, Synthwave Outrun, Emerald Temple, OLED Noir, Imperial Gold, Matrix Operator), monospace live editor, and 1-click `.css` file import and export.
+
+### 2. 8 Bundled Community Themes
+Eight production-grade community themes ready to activate in one click:
+- **Cyberpunk 2077:** Night City canary yellow, high-tech cyan, and dark carbon cards.
+- **8-Bit Game Boy:** 1989 dot-matrix spinach LCD green with retro arcade framing.
+- **Matrix Digital Rain:** Terminal phosphor green over pitch-black OLED background.
+- **Nord Arctic Frost:** Arctic deep slate and frosted polar blue styling.
+- **Pure OLED Stealth:** True #000000 pitch-black cards with razor-sharp white accents.
+- **Pip-Boy 3000 Terminal:** Fallout wasteland amber and green scanline styling.
+- **Steam 2004 Nostalgia:** Half-Life 2 launch valve olive khaki and brushed steel.
+- **Synthwave 80s:** Outrun hot neon magenta and cyan grid aesthetic.
+
+### 3. Continuous Full-Page Settings Snapshot
+Capture the entire scrollable Settings modal from top to bottom into a single high-resolution vertical PNG. Programmatically scrolls and stitches cards with 1:1 native pixel alignment, zero horizontal seams, zero drop-shadow bleed, and preserves the full left sidebar navigation (all 12 tabs and version tag) with automatic clipboard copy.
+
+### 4. 4K Ultra-Wide Brag Showcase Collage Engine
+Export your game sanctuary into balanced 4K widescreen gallery posters (3840 × 6172). Features multi-line title wrapping to prevent name cutoffs, dynamic 10–14 column scaling, high-DPI aspect-fill poster rendering, and full theme-variable color resolution across all 5 core sanctuary themes (Cinematic, Atmospheric, Competitive, Kinetic, Playful) and 7 accent palettes.
+
+### 5. In-Game Performance HUD & Telemetry Polish
+Real-time Intel PresentMon graphics telemetry overlay with true 1% lows, frame times, CPU-bound bottleneck indicators (`CPU-LIM`), and full GPU/CPU thermal and clock monitoring across DirectX 11/12 and Vulkan titles with 0% idle desktop GPU draw.
+
+### 6. Modern Setup & In-Place Upgrade Experience
+Upgrading or installing Logpile is effortless: the custom setup wizard automatically detects existing installations, upgrading binaries in-place while keeping your game saves, library databases, and artwork caches 100% intact. Supports any custom internal drive or external SSD path without registry lock-in.
 
 ---
 
@@ -133,10 +164,16 @@ Tracks your true gaming journey: backlog campaign debt (HLTB synced), source dis
 
 ### For Gamers
 1. Grab the latest installer or portable archive from [Releases](../../releases/latest):
-   - **Installer:** [`Logpile.Setup.1.3.6.exe`](https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.6/Logpile.Setup.1.3.6.exe)
-   - **Portable (.zip):** [`Logpile-v1.3.6-Portable.zip`](https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.6/Logpile-v1.3.6-Portable.zip)
+   - **Installer:** [`Logpile.Setup.1.3.7.exe`](https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.7/Logpile.Setup.1.3.7.exe)
+   - **Portable (.zip):** [`Logpile-v1.3.7-Portable.zip`](https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.7/Logpile-v1.3.7-Portable.zip)
 2. Extract or install to any internal drive or portable SSD (`logpile_data/` stores all assets self-contained).
-3. *(Optional)* Drop any quantized `.gguf` model into the `/models` directory to enable conversational backlog guidance.
+3. *(Optional)* Drop any quantized `.gguf` model into the `/models` directory to enable offline conversational backlog guidance.
+
+#### Recommended Offline AI Models (Optional)
+To enable offline natural-language backlog search and theme suggestions, place any compatible quantized `.gguf` model into your local `/models` directory:
+
+<!-- PASTE YOUR HUGGING FACE MODEL LIST AND LINKS HERE -->
+{{PASTE YOUR HUGGING FACE MODEL LIST AND LINKS HERE}}
 
 ### For Developers
 ```bash
@@ -150,7 +187,7 @@ npm run electron:dev
 
 ## Author & License
 
-Logpile is designed, architected, and tested by **Corporate Introvert Gamer (Ritesh Soni)**. Software code generated with AI assistance.
+Logpile is designed, architected, and tested by **Corporate Introvert Gamer (Ritesh Soni)**.
 
 This project is licensed under the [MIT License](LICENSE).
 

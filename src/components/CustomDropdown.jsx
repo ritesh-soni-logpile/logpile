@@ -13,6 +13,7 @@ export function CustomDropdown({
   align = 'left',
   disabled = false,
   title = '',
+  active = false,
 }) {
   const [isOpen, setIsOpen] = useState(false)
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0, width: 0, openUpwards: false })
@@ -116,6 +117,7 @@ export function CustomDropdown({
         {options.map((opt) => {
           const isSelected = opt.value === value
           const Icon = opt.icon
+          const optColor = opt.colorDot || opt.accentColor
           return (
             <button
               key={opt.value}
@@ -126,23 +128,37 @@ export function CustomDropdown({
               className={`custom-dropdown-item ${isSelected ? 'active' : ''} ${
                 opt.disabled ? 'disabled' : ''
               }`}
+              style={isSelected && optColor ? {
+                color: optColor,
+                background: `color-mix(in srgb, ${optColor} 16%, rgba(255, 255, 255, 0.04))`,
+                borderColor: `color-mix(in srgb, ${optColor} 32%, transparent)`,
+              } : undefined}
               onClick={() => handleSelect(opt)}
             >
               <div className="custom-dropdown-item-left">
-                {opt.colorDot ? (
+                {Icon ? (
+                  <Icon
+                    size={14}
+                    className="custom-dropdown-item-icon"
+                    style={{ color: optColor || 'inherit', opacity: isSelected ? 1 : 0.85 }}
+                  />
+                ) : opt.colorDot ? (
                   <span
                     className="custom-dropdown-color-dot"
-                    style={{ backgroundColor: opt.colorDot }}
+                    style={{ backgroundColor: opt.colorDot, color: opt.colorDot, boxShadow: `0 0 6px ${opt.colorDot}` }}
                   />
                 ) : null}
-                {Icon ? <Icon size={14} className="custom-dropdown-item-icon" /> : null}
                 <span className="custom-dropdown-item-label">{opt.label}</span>
               </div>
               <div className="custom-dropdown-item-right">
                 {opt.badge ? (
                   <span className="custom-dropdown-badge">{opt.badge}</span>
                 ) : isSelected ? (
-                  <Check size={13} className="custom-dropdown-check" />
+                  <Check
+                    size={13}
+                    className="custom-dropdown-check"
+                    style={optColor ? { color: optColor } : undefined}
+                  />
                 ) : null}
               </div>
             </button>
@@ -152,12 +168,14 @@ export function CustomDropdown({
     </div>
   ) : null
 
+  const ActiveTriggerIcon = selectedOption?.icon || TriggerIcon
+
   return (
     <>
       <button
         ref={triggerRef}
         type="button"
-        className={`custom-dropdown-trigger ${isOpen ? 'active' : ''} ${className}`}
+        className={`custom-dropdown-trigger ${isOpen ? 'active' : ''} ${active ? 'filter-active' : ''} ${className}`}
         onClick={toggle}
         disabled={disabled}
         title={title}
@@ -165,15 +183,24 @@ export function CustomDropdown({
         aria-expanded={isOpen}
       >
         <span className="custom-dropdown-trigger-content">
-          {selectedOption?.colorDot ? (
+          {ActiveTriggerIcon ? (
+            <ActiveTriggerIcon
+              size={13}
+              className="custom-dropdown-trigger-icon"
+              style={selectedOption?.colorDot || selectedOption?.accentColor ? { color: selectedOption.colorDot || selectedOption.accentColor } : undefined}
+            />
+          ) : selectedOption?.colorDot ? (
             <span
               className="custom-dropdown-color-dot"
-              style={{ backgroundColor: selectedOption.colorDot }}
+              style={{
+                backgroundColor: selectedOption.colorDot,
+                color: selectedOption.colorDot,
+                boxShadow: `0 0 6px ${selectedOption.colorDot}`,
+              }}
             />
           ) : null}
-          {TriggerIcon ? <TriggerIcon size={13} className="custom-dropdown-trigger-icon" /> : null}
           <span className="custom-dropdown-trigger-label">
-            {selectedOption ? selectedOption.label : placeholder}
+            {selectedOption ? (selectedOption.triggerLabel || selectedOption.label) : placeholder}
           </span>
         </span>
         <ChevronDown size={12} className={`custom-dropdown-chevron ${isOpen ? 'open' : ''}`} />
