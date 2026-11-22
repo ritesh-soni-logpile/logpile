@@ -3484,7 +3484,7 @@ function registerIpc() {
       if (process.platform === 'win32') {
         const { execSync } = require('node:child_process')
         try {
-          execSync('taskkill /F /IM Logpile.exe', { stdio: 'ignore' })
+          execSync(`powershell -NoProfile -Command "Get-Process -Name Logpile -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne ${process.pid} } | Stop-Process -Force"`, { stdio: 'ignore' })
         } catch {}
       }
 

@@ -96,15 +96,9 @@
       "icon": "build/icon.ico"
     },
     "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "perMachine": false,
+      "script": "build/installer.nsi",
       "warningsAsErrors": false,
-      "include": "build/installer.nsh",
-      "installerIcon": "build/installer-icon.ico",
-      "installerHeaderIcon": "build/installer-icon.ico",
-      "installerSidebar": "build/installerSidebar.bmp",
-      "uninstallerSidebar": "build/uninstallerSidebar.bmp"
+      "installerIcon": "build/installer-icon.ico"
     }
   }
 }
