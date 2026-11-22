@@ -6,6 +6,12 @@ WindowIcon Off
 AutoCloseWindow True
 RequestExecutionLevel user
 
+!ifdef MUI_ICON
+  Icon "${MUI_ICON}"
+!else
+  Icon "build\installer-icon.ico"
+!endif
+
 Function .onInit
   SetSilent silent
   !insertmacro check64BitAndSetRegView
