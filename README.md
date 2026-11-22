@@ -172,8 +172,50 @@ Tracks your true gaming journey: backlog campaign debt (HLTB synced), source dis
 #### Recommended Offline AI Models (Optional)
 To enable offline natural-language backlog search and theme suggestions, place any compatible quantized `.gguf` model into your local `/models` directory:
 
-<!-- PASTE YOUR HUGGING FACE MODEL LIST AND LINKS HERE -->
-{{PASTE YOUR HUGGING FACE MODEL LIST AND LINKS HERE}}
+---
+
+## Recommended Local Models (GGUF)
+
+Logpile runs local GGUF models via `node-llama-cpp` for conversational backlog guidance, custom HUD/CSS theme synthesis, and offline chat. Download any `.gguf` file and drop it into your `/models` folder.
+
+The picks below are abliterated/uncensored builds so mature game titles, horror themes, and lore don't trigger false refusals. Every repo works on both CPU and GPU systems. Pick the quantization file (`Q4_K_M`, `Q6_K`, `Q8_0`, etc.) that matches your hardware while leaving 1 to 1.5 GB free for Windows and context cache.
+
+| System / VRAM | Best Pick | Quant File | Approx. Size |
+| :--- | :--- | :--- | :--- |
+| **CPU Only (8-16 GB RAM)** | [Qwen3.5-2B EmperoAI Distill](https://huggingface.co/mradermacher/Qwen3.5-2B-EmperoAI-Qwen3.8-Distill-Heretic-Abliterated-i1-GGUF) | `Q4_K_M` or `Q5_K_M` | 1.1 - 1.4 GB |
+| **CPU Only (32 GB+ RAM)** | [Qwen3.5-4B EmperoAI Distill](https://huggingface.co/mradermacher/Qwen3.5-4B-EmperoAI-Qwen3.8-Distill-Heretic-Abliterated-i1-GGUF) | `Q4_K_M` | ~2.7 GB |
+| **4 GB VRAM** | [Qwen3.5-4B EmperoAI Distill](https://huggingface.co/mradermacher/Qwen3.5-4B-EmperoAI-Qwen3.8-Distill-Heretic-Abliterated-i1-GGUF) | `IQ4_XS` or `Q4_K_M` | 2.5 - 2.7 GB |
+| **6 GB VRAM** | [Qwen3.5-4B EmperoAI Distill](https://huggingface.co/mradermacher/Qwen3.5-4B-EmperoAI-Qwen3.8-Distill-Heretic-Abliterated-i1-GGUF) | `Q6_K` or `Q8_0` | 3.5 - 4.5 GB |
+| **8 GB VRAM** | [Qwen3.5-9B Heretic v2](https://huggingface.co/mradermacher/Qwen3.5-9B-heretic-v2-i1-GGUF) | `Q4_K_M` | ~5.5 GB |
+| **12 GB VRAM** | [Qwen3.5-9B Heretic v2](https://huggingface.co/mradermacher/Qwen3.5-9B-heretic-v2-i1-GGUF) | `Q6_K` or `Q8_0` | 7.5 - 9.5 GB |
+| **16 - 32 GB VRAM** | [Qwen3.5-9B Heretic v2](https://huggingface.co/mradermacher/Qwen3.5-9B-heretic-v2-i1-GGUF) | `Q8_0` or `F16` | 9.5 - 18 GB |
+
+> **Hardware Guard Tip:** Enable automatic AI memory purge in Settings to clear loaded models from RAM/VRAM the moment a game launches. If you prefer keeping the AI loaded while playing, stick to a 2B or 4B model with a VRAM cap.
+
+<details>
+<summary><strong>More Compatible Models (1.5B to 9B)</strong></summary>
+
+#### 1.5B - 2B (Ultra-Fast / Low RAM)
+- [Qwen3.5-2B Heretic GGUF](https://huggingface.co/tvall43/Qwen3.5-2B-heretic-gguf) (Clean base 2B)
+- [Qwen2.5-1.5B Instruct Heretic](https://huggingface.co/saidutta69/Qwen2.5-1.5B-Instruct-heretic) (Smallest footprint)
+
+#### 3B - 4B (Fast & Balanced)
+- [Gemma-4-E4B-it Heretic GGUF](https://huggingface.co/igorls/gemma-4-E4B-it-heretic-GGUF) (Natural writing style; supports vision with `mmproj`)
+- [Qwen3-4B Thinking Claude-4.5-Opus Distill](https://huggingface.co/mradermacher/Qwen3-4B-Thinking-2507-Claude-4.5-Opus-High-Reasoning-Distill-Heretic-Abliterated-i1-GGUF) (Reasoning/thinking distill)
+- [Llama-3.2-3B Instruct Heretic](https://huggingface.co/DavidAU/Llama-3.2-3B-Instruct-heretic-ablitered-uncensored) (Lightweight non-thinking fallback)
+
+#### 7B - 8B (Strong General & Reasoning)
+- [Qwen3-8B Hivemind Instruct Heretic](https://huggingface.co/DavidAU/Qwen3-8B-Hivemind-Instruct-Heretic-Abliterated-Uncensored-NEO-Imatrix-GGUF) (General instruct)
+- [DeepSeek-R1-0528 Qwen3-8B Heretic](https://huggingface.co/richardyoung/DeepSeek-R1-0528-Qwen3-8B-heretic-GGUF) (Pure reasoning distill)
+- [Meta-Llama-3.1-8B Instruct Heretic](https://huggingface.co/saidutta69/Meta-Llama-3.1-8B-Instruct-heretic) (Classic Llama formatting)
+
+#### 9B (Max Quality for 8 GB+ VRAM)
+- [DeepSeek-V4-Pro Qwen3.5-9B Heretic](https://huggingface.co/mradermacher/DeepSeek-V4-Pro-Qwen3.5-9B-UNCENSORED-heretic-i1-GGUF) (High-end distilled reasoning)
+- [Qwen3.5-9B The Defiant Fable Heretic](https://huggingface.co/DavidAU/Qwen3.5-9B-The-Defiant-Fable-Uncensored-Heretic-NEO-IMATRIX-MAX-MTP-GGUF) (Creative/descriptive text)
+
+</details>
+
+*Note: Logpile is an independent open-source project and is not affiliated with, endorsed by, or sponsored by Hugging Face or any of the model creators listed above. All models are third-party community suggestions and remain subject to their respective licenses.*
 
 ### For Developers
 ```bash
