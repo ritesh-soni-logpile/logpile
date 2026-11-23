@@ -3346,7 +3346,7 @@ const LAYOUT_THEMES = [
   { value: 'competitive', label: 'Competitive', icon: Trophy, colorDot: '#EF4444' },
 ]
 
-function SanctuaryControls({ layoutTheme, setLayoutTheme }) {
+function SanctuaryControls({ layoutTheme, setLayoutTheme, isFocused = false, isMenuOpen, onOpenChange, themeFocusIndex = -1 }) {
   const [enabledAddons, setEnabledAddons] = useState(() => getEnabledAddonIds())
   const [customThemes, setCustomThemes] = useState(() => getCustomThemes())
 
@@ -3381,9 +3381,12 @@ function SanctuaryControls({ layoutTheme, setLayoutTheme }) {
           onChange={setLayoutTheme}
           options={currentOptions}
           icon={activeThemeIcon}
-          className="capsule-trigger capsule-layout"
+          className={cn("capsule-trigger capsule-layout theme-picker-trigger", isFocused && !isMenuOpen && "gamepad-focused")}
           menuClassName="sanctuary-dropdown-menu"
           title="Select visual layout theme"
+          isOpen={isMenuOpen}
+          onOpenChange={onOpenChange}
+          focusedIndex={isMenuOpen ? themeFocusIndex : -1}
         />
       </div>
     </div>
@@ -8197,9 +8200,25 @@ function App() {
   const [focusZone, setFocusZone] = useState('grid') // 'grid' | 'sidebar' | 'topbar' | 'spotlight' | 'jump_in' | 'dossier' | 'settings'
   const [sidebarFocusIndex, setSidebarFocusIndex] = useState(0)
   const [topbarFocusIndex, setTopbarFocusIndex] = useState(0) // 0: search, 1: brag, 2: theme
+  const [bragFocusIndex, setBragFocusIndex] = useState(0)
+  const [themeMenuOpen, setThemeMenuOpen] = useState(false)
+  const [themeFocusIndex, setThemeFocusIndex] = useState(0)
   const [spotlightFocusIndex, setSpotlightFocusIndex] = useState(0)
   const [jumpInFocusIndex, setJumpInFocusIndex] = useState(0)
   const [gamepadIndex, setGamepadIndex] = useState(0)
+
+  const allThemesList = useMemo(() => {
+    try {
+      const enabled = getEnabledAddonIds()
+      const custom = getCustomThemes().filter((a) => enabled.includes(a.id)).map((a) => ({
+        value: a.id,
+        label: a.name,
+      }))
+      return [...LAYOUT_THEMES, ...custom]
+    } catch {
+      return LAYOUT_THEMES
+    }
+  }, [])
 
   // Sync focusZone when detail view or settings modal opens/closes
   useEffect(() => {
@@ -8296,6 +8315,16 @@ function App() {
     return w >= 1180 ? 5 : w >= 880 ? 4 : w >= 600 ? 3 : 2
   }, [])
 
+  const bragMenuItems = useMemo(() => [
+    { id: 'fullpage', action: handleCaptureFullPage },
+    { id: 'screen', action: handleCaptureScreen },
+    { id: 'showcase_auto', action: () => handleCaptureFilteredShowcase('auto') },
+    { id: 'showcase_16_9', action: () => handleCaptureFilteredShowcase('16:9') },
+    { id: 'showcase_9_16', action: () => handleCaptureFilteredShowcase('9:16') },
+    { id: 'showcase_1_1', action: () => handleCaptureFilteredShowcase('1:1') },
+    { id: 'open_folder', action: handleOpenCapturesFolder },
+  ], [handleCaptureFullPage, handleCaptureScreen, handleCaptureFilteredShowcase, handleOpenCapturesFolder])
+
   const handleGamepadNavigate = useCallback((direction) => {
     if (settingsModalOpen || isDetailView) {
       return
@@ -8319,10 +8348,33 @@ function App() {
 
     // Zone: Top Header Bar Navigation
     if (focusZone === 'topbar') {
+      if (screenshotMenuOpen) {
+        if (direction === 'up') {
+          setBragFocusIndex((prev) => Math.max(0, prev - 1))
+        } else if (direction === 'down') {
+          setBragFocusIndex((prev) => Math.min(bragMenuItems.length - 1, prev + 1))
+        }
+        return
+      }
+      if (themeMenuOpen) {
+        if (direction === 'up') {
+          setThemeFocusIndex((prev) => Math.max(0, prev - 1))
+        } else if (direction === 'down') {
+          setThemeFocusIndex((prev) => Math.min(allThemesList.length - 1, prev + 1))
+        }
+        return
+      }
+
       if (direction === 'left') {
-        setTopbarFocusIndex((prev) => Math.max(0, prev - 1))
+        if (topbarFocusIndex === 0) {
+          setFocusZone('sidebar')
+        } else {
+          setTopbarFocusIndex((prev) => Math.max(0, prev - 1))
+        }
       } else if (direction === 'right') {
         setTopbarFocusIndex((prev) => Math.min(2, prev + 1))
+      } else if (direction === 'down') {
+        setFocusZone('grid')
       }
       return
     }
@@ -8352,7 +8404,7 @@ function App() {
     } else if (direction === 'down') {
       setGamepadIndex((prev) => Math.min(total - 1, prev + cols))
     }
-  }, [settingsModalOpen, isDetailView, focusZone, allSidebarNavItems.length, getGridColumns, filteredGames.length, gamepadIndex])
+  }, [settingsModalOpen, isDetailView, focusZone, allSidebarNavItems.length, getGridColumns, filteredGames.length, gamepadIndex, screenshotMenuOpen, themeMenuOpen, bragMenuItems.length, allThemesList.length, topbarFocusIndex])
 
   const handleGamepadAction = useCallback((code) => {
     const MAIN_VIEWS = ['installed', 'favorites', 'ready', 'all', 'today', 'system']
@@ -8384,6 +8436,14 @@ function App() {
         setScreenshotMenuOpen(false)
         return
       }
+      if (themeMenuOpen) {
+        setThemeMenuOpen(false)
+        return
+      }
+      if (document.activeElement === searchInputRef.current) {
+        searchInputRef.current?.blur()
+        return
+      }
       if (focusZone !== 'grid') {
         setFocusZone('grid')
         return
@@ -8413,15 +8473,27 @@ function App() {
         return
       }
       if (focusZone === 'topbar') {
+        if (screenshotMenuOpen) {
+          const item = bragMenuItems[bragFocusIndex]
+          if (item) item.action()
+          return
+        }
+        if (themeMenuOpen) {
+          const selected = allThemesList[themeFocusIndex]
+          if (selected) handleLayoutThemeChange(selected.value)
+          setThemeMenuOpen(false)
+          return
+        }
+
         if (topbarFocusIndex === 0) {
           searchInputRef.current?.focus()
         } else if (topbarFocusIndex === 1) {
+          setBragFocusIndex(0)
           toggleBragMenu()
         } else if (topbarFocusIndex === 2) {
-          const themes = ['cinematic', 'kinetic', 'atmospheric', 'competitive', 'playful']
-          const curIdx = themes.indexOf(layoutTheme)
-          const nextTheme = themes[(curIdx + 1) % themes.length]
-          handleLayoutThemeChange(nextTheme)
+          const currentIdx = allThemesList.findIndex((t) => t.value === layoutTheme)
+          setThemeFocusIndex(currentIdx >= 0 ? currentIdx : 0)
+          setThemeMenuOpen((prev) => !prev)
         }
         return
       }
@@ -8456,6 +8528,13 @@ function App() {
       }
     } else {
       if (code === 'X') {
+        if (focusZone === 'topbar' && topbarFocusIndex === 0) {
+          if (query) {
+            setQuery('')
+            setDebouncedQuery('')
+          }
+          return
+        }
         const currentGame = filteredGames[gamepadIndex] || activeGame
         if (currentGame) {
           cycleGameStatus(currentGame)
@@ -8463,6 +8542,12 @@ function App() {
         return
       }
       if (code === 'Y') {
+        if (focusZone === 'topbar' && topbarFocusIndex === 2) {
+          const curIdx = allThemesList.findIndex((t) => t.value === layoutTheme)
+          const nextIdx = (curIdx + 1) % allThemesList.length
+          handleLayoutThemeChange(allThemesList[nextIdx].value)
+          return
+        }
         const currentGame = filteredGames[gamepadIndex] || activeGame
         if (currentGame) {
           handleToggleFavorite(currentGame)
@@ -8492,7 +8577,7 @@ function App() {
         return
       }
     }
-  }, [settingsModalOpen, isDetailView, screenshotMenuOpen, focusZone, allSidebarNavItems, sidebarFocusIndex, topbarFocusIndex, layoutTheme, handleLayoutThemeChange, filteredGames, gamepadIndex, activeGame, handleSelectGame, cycleGameStatus, handleToggleFavorite, toggleBragMenu, handleBackToLibrary, selectMode, query, view, toggleVoiceListening])
+  }, [settingsModalOpen, isDetailView, screenshotMenuOpen, themeMenuOpen, focusZone, allSidebarNavItems, sidebarFocusIndex, topbarFocusIndex, bragFocusIndex, themeFocusIndex, bragMenuItems, allThemesList, layoutTheme, handleLayoutThemeChange, filteredGames, gamepadIndex, activeGame, handleSelectGame, cycleGameStatus, handleToggleFavorite, toggleBragMenu, handleBackToLibrary, selectMode, query, view, toggleVoiceListening])
 
   const { connectedGamepad, isGamepadMode } = useGamepad({
     enabled: !isGameRunning,
@@ -8515,7 +8600,7 @@ function App() {
       }
     }, 45)
     return () => clearTimeout(timer)
-  }, [focusZone, gamepadIndex, sidebarFocusIndex, topbarFocusIndex, spotlightFocusIndex, jumpInFocusIndex, isGamepadMode])
+  }, [focusZone, gamepadIndex, sidebarFocusIndex, topbarFocusIndex, bragFocusIndex, themeFocusIndex, spotlightFocusIndex, jumpInFocusIndex, isGamepadMode, screenshotMenuOpen, themeMenuOpen])
   const detailHero = activeGame?.hero_url ? normalizeArtworkUrl(activeGame.hero_url) : null
   const detailCover = activeGame?.cover_url ? normalizeArtworkUrl(activeGame.cover_url) : null
   const isAmbientCoverFallback = !detailHero && Boolean(detailCover)
@@ -8684,7 +8769,7 @@ function App() {
       </div>
       <div className="titlebar-center">
         {!isDetailView && (
-          <div className="titlebar-search">
+          <div className={cn("titlebar-search", isGamepadMode && focusZone === 'topbar' && topbarFocusIndex === 0 && "gamepad-focused")}>
             <Search size={13} />
             <input
               ref={searchInputRef}
@@ -8763,7 +8848,7 @@ function App() {
         >
           <button
             type="button"
-            className="outline-button brag-screenshot-btn titlebar-brag-btn"
+            className={cn("outline-button brag-screenshot-btn titlebar-brag-btn", isGamepadMode && focusZone === 'topbar' && topbarFocusIndex === 1 && !screenshotMenuOpen && "gamepad-focused")}
             onClick={toggleBragMenu}
             disabled={screenshotBusy}
             title="Capture current view screenshot or 4K Brag Showcase"
@@ -8788,7 +8873,7 @@ function App() {
             >
               <button
                 type="button"
-                className="brag-dropdown-item"
+                className={cn("brag-dropdown-item", isGamepadMode && screenshotMenuOpen && bragFocusIndex === 0 && "gamepad-focused")}
                 onClick={handleCaptureFullPage}
                 title="Capture entire scrollable page from top to bottom"
               >
@@ -8800,7 +8885,7 @@ function App() {
               </button>
               <button
                 type="button"
-                className="brag-dropdown-item"
+                className={cn("brag-dropdown-item", isGamepadMode && screenshotMenuOpen && bragFocusIndex === 1 && "gamepad-focused")}
                 onClick={handleCaptureScreen}
                 title="Capture current visible window snapshot"
               >
@@ -8818,7 +8903,7 @@ function App() {
               <div className="brag-ratio-grid">
                 <button
                   type="button"
-                  className="brag-ratio-btn"
+                  className={cn("brag-ratio-btn", isGamepadMode && screenshotMenuOpen && bragFocusIndex === 2 && "gamepad-focused")}
                   onClick={() => handleCaptureFilteredShowcase('auto')}
                   title="Continuous full tapestry showing every game without cutoff"
                 >
@@ -8830,7 +8915,7 @@ function App() {
                 </button>
                 <button
                   type="button"
-                  className="brag-ratio-btn"
+                  className={cn("brag-ratio-btn", isGamepadMode && screenshotMenuOpen && bragFocusIndex === 3 && "gamepad-focused")}
                   onClick={() => handleCaptureFilteredShowcase('16:9')}
                   title="16:9 landscape 4K UHD - ideal for PC monitors, Reddit, and X"
                 >
@@ -8842,7 +8927,7 @@ function App() {
                 </button>
                 <button
                   type="button"
-                  className="brag-ratio-btn"
+                  className={cn("brag-ratio-btn", isGamepadMode && screenshotMenuOpen && bragFocusIndex === 4 && "gamepad-focused")}
                   onClick={() => handleCaptureFilteredShowcase('9:16')}
                   title="9:16 vertical 4K - ideal for Instagram Stories, Reels, and Mobile"
                 >
@@ -8854,7 +8939,7 @@ function App() {
                 </button>
                 <button
                   type="button"
-                  className="brag-ratio-btn"
+                  className={cn("brag-ratio-btn", isGamepadMode && screenshotMenuOpen && bragFocusIndex === 5 && "gamepad-focused")}
                   onClick={() => handleCaptureFilteredShowcase('1:1')}
                   title="1:1 square 4K - ideal for Instagram feed posts and Discord"
                 >
@@ -8868,7 +8953,7 @@ function App() {
               <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.08)', margin: '4px 2px' }} />
               <button
                 type="button"
-                className="brag-dropdown-item"
+                className={cn("brag-dropdown-item", isGamepadMode && screenshotMenuOpen && bragFocusIndex === 6 && "gamepad-focused")}
                 onClick={handleOpenCapturesFolder}
               >
                 <FolderOpen size={13} style={{ color: '#94a3b8' }} />
@@ -8881,7 +8966,14 @@ function App() {
             document.body
           )}
         </div>
-        <SanctuaryControls layoutTheme={layoutTheme} setLayoutTheme={handleLayoutThemeChange} />
+        <SanctuaryControls
+          layoutTheme={layoutTheme}
+          setLayoutTheme={handleLayoutThemeChange}
+          isFocused={isGamepadMode && focusZone === 'topbar' && topbarFocusIndex === 2}
+          isMenuOpen={themeMenuOpen}
+          onOpenChange={setThemeMenuOpen}
+          themeFocusIndex={themeFocusIndex}
+        />
         <WindowControls />
       </div>
     </header>

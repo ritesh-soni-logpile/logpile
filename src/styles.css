@@ -11679,6 +11679,15 @@ body.user-is-gamepad select {
   box-shadow: 0 0 20px -2px var(--accent-glow, rgba(99, 102, 241, 0.45)) !important;
 }
 
+.brag-dropdown-item.gamepad-focused,
+.brag-ratio-btn.gamepad-focused,
+.custom-dropdown-item.gamepad-focused {
+  outline: 2px solid var(--accent, #6366f1) !important;
+  outline-offset: -1px !important;
+  background: color-mix(in srgb, var(--accent, #6366f1) 25%, rgba(255, 255, 255, 0.08)) !important;
+  box-shadow: 0 0 16px -2px var(--accent-glow, rgba(99, 102, 241, 0.5)) !important;
+}
+
 .spotlight-hero-btn.gamepad-focused,
 .home-spotlight-queue-card.gamepad-focused {
   outline: 2px solid var(--accent, #6366f1) !important;

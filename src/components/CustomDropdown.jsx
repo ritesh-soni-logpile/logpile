@@ -14,8 +14,22 @@ export function CustomDropdown({
   disabled = false,
   title = '',
   active = false,
+  isOpen: controlledIsOpen,
+  onOpenChange,
+  focusedIndex = -1,
 }) {
-  const [isOpen, setIsOpen] = useState(false)
+  const [internalIsOpen, setInternalIsOpen] = useState(false)
+  const isControlled = controlledIsOpen !== undefined
+  const isOpen = isControlled ? controlledIsOpen : internalIsOpen
+
+  const setIsOpen = (next) => {
+    const val = typeof next === 'function' ? next(isOpen) : next
+    if (!isControlled) {
+      setInternalIsOpen(val)
+    }
+    onOpenChange?.(val)
+  }
+
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0, width: 0, openUpwards: false })
   const triggerRef = useRef(null)
   const menuRef = useRef(null)
@@ -39,6 +53,12 @@ export function CustomDropdown({
       openUpwards,
     })
   }
+
+  useEffect(() => {
+    if (isOpen) {
+      updatePosition()
+    }
+  }, [isOpen])
 
   const toggle = () => {
     if (disabled) return
@@ -97,6 +117,15 @@ export function CustomDropdown({
     triggerRef.current?.focus()
   }
 
+  useEffect(() => {
+    if (isOpen && focusedIndex >= 0 && menuRef.current) {
+      const items = menuRef.current.querySelectorAll('.custom-dropdown-item')
+      if (items[focusedIndex]) {
+        items[focusedIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      }
+    }
+  }, [isOpen, focusedIndex])
+
   const menu = isOpen ? (
     <div
       ref={menuRef}
@@ -114,8 +143,9 @@ export function CustomDropdown({
       role="listbox"
     >
       <div className="custom-dropdown-menu-inner">
-        {options.map((opt) => {
+        {options.map((opt, idx) => {
           const isSelected = opt.value === value
+          const isFocused = idx === focusedIndex
           const Icon = opt.icon
           const optColor = opt.colorDot || opt.accentColor
           return (
@@ -127,7 +157,7 @@ export function CustomDropdown({
               disabled={opt.disabled}
               className={`custom-dropdown-item ${isSelected ? 'active' : ''} ${
                 opt.disabled ? 'disabled' : ''
-              }`}
+              } ${isFocused ? 'gamepad-focused' : ''}`}
               style={isSelected && optColor ? {
                 color: optColor,
                 background: `color-mix(in srgb, ${optColor} 16%, rgba(255, 255, 255, 0.04))`,
