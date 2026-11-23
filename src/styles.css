@@ -1062,7 +1062,15 @@ body.is-fullpage-capturing .titlebar::before,
 .statusbar .gamepad-key-badge.badge-a,
 .statusbar .gamepad-key-badge.badge-b,
 .statusbar .gamepad-key-badge.badge-x,
-.statusbar .gamepad-key-badge.badge-y {
+.statusbar .gamepad-key-badge.badge-y,
+.statusbar .gamepad-key-badge.badge-ps-cross,
+.statusbar .gamepad-key-badge.badge-ps-circle,
+.statusbar .gamepad-key-badge.badge-ps-square,
+.statusbar .gamepad-key-badge.badge-ps-triangle,
+.statusbar .gamepad-key-badge.badge-switch-a,
+.statusbar .gamepad-key-badge.badge-switch-b,
+.statusbar .gamepad-key-badge.badge-switch-x,
+.statusbar .gamepad-key-badge.badge-switch-y {
   width: 13px !important;
   height: 13px !important;
   min-width: 13px !important;
@@ -1071,8 +1079,17 @@ body.is-fullpage-capturing .titlebar::before,
   padding: 0 !important;
 }
 
+.statusbar .gamepad-key-badge.badge-ps-cross svg,
+.statusbar .gamepad-key-badge.badge-ps-circle svg,
+.statusbar .gamepad-key-badge.badge-ps-square svg,
+.statusbar .gamepad-key-badge.badge-ps-triangle svg {
+  width: 7.5px !important;
+  height: 7.5px !important;
+  display: block !important;
+}
+
 .statusbar .gamepad-key-badge.badge-bumper,
-.statusbar .gamepad-key-badge:not(.badge-a):not(.badge-b):not(.badge-x):not(.badge-y) {
+.statusbar .gamepad-key-badge:not(.badge-a):not(.badge-b):not(.badge-x):not(.badge-y):not(.badge-ps-cross):not(.badge-ps-circle):not(.badge-ps-square):not(.badge-ps-triangle):not(.badge-switch-a):not(.badge-switch-b):not(.badge-switch-x):not(.badge-switch-y) {
   min-width: unset !important;
   width: auto !important;
   max-width: none !important;
@@ -11792,7 +11809,15 @@ body.user-is-gamepad select {
 .gamepad-key-badge.badge-a,
 .gamepad-key-badge.badge-b,
 .gamepad-key-badge.badge-x,
-.gamepad-key-badge.badge-y {
+.gamepad-key-badge.badge-y,
+.gamepad-key-badge.badge-ps-cross,
+.gamepad-key-badge.badge-ps-circle,
+.gamepad-key-badge.badge-ps-square,
+.gamepad-key-badge.badge-ps-triangle,
+.gamepad-key-badge.badge-switch-a,
+.gamepad-key-badge.badge-switch-b,
+.gamepad-key-badge.badge-switch-x,
+.gamepad-key-badge.badge-switch-y {
   width: 21px;
   height: 21px;
   min-width: 21px;
@@ -11800,6 +11825,10 @@ body.user-is-gamepad select {
   border-radius: 50%;
   font-size: 10.5px;
   font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 /* A: Primary Action / Launch button - uses the active Theme Accent! */
@@ -11832,6 +11861,89 @@ body.user-is-gamepad select {
   border: 1px solid rgba(245, 158, 11, 0.4);
   color: #fde68a;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 0 8px rgba(245, 158, 11, 0.2);
+}
+
+/* PlayStation Cross: Cyan/Blue or Accent Glow */
+.gamepad-key-badge.badge-ps-cross {
+  background: color-mix(in srgb, var(--accent, #6366f1) 20%, rgba(56, 189, 248, 0.12));
+  border: 1px solid color-mix(in srgb, var(--accent, #6366f1) 55%, rgba(56, 189, 248, 0.45));
+  color: var(--accent, #6366f1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 0 10px color-mix(in srgb, var(--accent, #6366f1) 25%, transparent);
+}
+
+/* PlayStation Circle: Vivid Coral / Rose */
+.gamepad-key-badge.badge-ps-circle {
+  background: rgba(244, 63, 94, 0.16);
+  border: 1px solid rgba(244, 63, 94, 0.5);
+  color: #fb7185;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 0 8px rgba(244, 63, 94, 0.25);
+}
+
+/* PlayStation Square: Vibrant Magenta / Pink */
+.gamepad-key-badge.badge-ps-square {
+  background: rgba(236, 72, 153, 0.16);
+  border: 1px solid rgba(236, 72, 153, 0.45);
+  color: #f472b6;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 0 8px rgba(236, 72, 153, 0.22);
+}
+
+/* PlayStation Triangle: Emerald Green */
+.gamepad-key-badge.badge-ps-triangle {
+  background: rgba(16, 185, 129, 0.16);
+  border: 1px solid rgba(16, 185, 129, 0.45);
+  color: #34d399;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 0 8px rgba(16, 185, 129, 0.22);
+}
+
+/* Nintendo Switch Glyphs */
+.gamepad-key-badge.badge-switch-a {
+  background: rgba(239, 68, 68, 0.16);
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  color: #fca5a5;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 0 8px rgba(239, 68, 68, 0.22);
+}
+.gamepad-key-badge.badge-switch-b {
+  background: rgba(245, 158, 11, 0.16);
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  color: #fde68a;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 0 8px rgba(245, 158, 11, 0.22);
+}
+.gamepad-key-badge.badge-switch-x {
+  background: rgba(56, 189, 248, 0.16);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  color: #7dd3fc;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 0 8px rgba(56, 189, 248, 0.22);
+}
+.gamepad-key-badge.badge-switch-y {
+  background: rgba(16, 185, 129, 0.16);
+  border: 1px solid rgba(16, 185, 129, 0.45);
+  color: #6ee7b7;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 0 8px rgba(16, 185, 129, 0.22);
+}
+
+/* Controller Layout Preview Panel */
+.settings-glyph-preview-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+  padding: 14px;
+  margin-top: 14px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+}
+
+.settings-glyph-preview-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-primary, #ffffff);
+}
+
+.settings-glyph-preview-item small {
+  color: var(--text-muted, #94a3b8);
+  font-size: 11px;
 }
 
 /* R3: Push-to-Talk AI voice button - themed interactive highlight */

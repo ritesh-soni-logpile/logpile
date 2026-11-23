@@ -156,6 +156,7 @@ import {
   THEME_RAG_DATABASE
 } from '../utils/themePresetsRag'
 import { LAYOUT_PALETTES, COLOR_PALETTES } from '../utils/themePalettes'
+import { GamepadGlyph, getResolvedGlyphStyle, getDetectedHardwareLabel } from './GamepadGlyph'
 
 function formatGb(value) {
   return `${Number(value || 0).toFixed(value < 10 ? 2 : 1)} GB`
@@ -439,6 +440,8 @@ export function SettingsModal({
   settingsCategoryIndex = 0,
   settingsContentIndex = 0,
   onSettingsTabChange = null,
+  gamepadGlyphStyle = 'auto',
+  onGamepadGlyphStyleChange = null,
 }) {
   const [activeTab, setActiveTab] = useState(initialTab)
 
@@ -4722,6 +4725,76 @@ export function SettingsModal({
                   </div>
                 </div>
 
+                {/* Controller Layout & Adaptive Glyphs Card */}
+                <div className="settings-card">
+                  <div className="settings-card-header">
+                    <div>
+                      <strong className="settings-card-title">Controller Button Prompts &amp; Glyphs</strong>
+                      <small className="settings-card-subtitle">
+                        Choose which button style (Xbox, PlayStation, or Nintendo Switch) is displayed on screen
+                      </small>
+                    </div>
+                    <div className="settings-select-wrap">
+                      <select
+                        value={gamepadGlyphStyle}
+                        onChange={(e) => onGamepadGlyphStyleChange?.(e.target.value)}
+                        className="settings-select"
+                        aria-label="Controller Button Prompts Layout"
+                      >
+                        <option value="auto">Auto-detect ({getDetectedHardwareLabel(activeGamepad)})</option>
+                        <option value="xbox">Xbox Layout (A, B, X, Y, LB, RB)</option>
+                        <option value="playstation">PlayStation Layout (✕, ○, ▢, △, L1, R1)</option>
+                        <option value="nintendo">Nintendo Switch Layout (A, B, X, Y, L, R)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="settings-glyph-preview-panel">
+                    <div className="settings-glyph-preview-item">
+                      <GamepadGlyph button="A" glyphStyle={gamepadGlyphStyle} connectedGamepad={activeGamepad} />
+                      <div>
+                        <strong>Select / Confirm</strong>
+                        <small>Primary action button</small>
+                      </div>
+                    </div>
+                    <div className="settings-glyph-preview-item">
+                      <GamepadGlyph button="B" glyphStyle={gamepadGlyphStyle} connectedGamepad={activeGamepad} />
+                      <div>
+                        <strong>Back / Cancel</strong>
+                        <small>Universal dismiss rule</small>
+                      </div>
+                    </div>
+                    <div className="settings-glyph-preview-item">
+                      <GamepadGlyph button="X" glyphStyle={gamepadGlyphStyle} connectedGamepad={activeGamepad} />
+                      <div>
+                        <strong>Action / Status</strong>
+                        <small>Launch or cycle status</small>
+                      </div>
+                    </div>
+                    <div className="settings-glyph-preview-item">
+                      <GamepadGlyph button="Y" glyphStyle={gamepadGlyphStyle} connectedGamepad={activeGamepad} />
+                      <div>
+                        <strong>Favorite / Toggle</strong>
+                        <small>Toggle favorite flag</small>
+                      </div>
+                    </div>
+                    <div className="settings-glyph-preview-item">
+                      <GamepadGlyph button="LB/RB" glyphStyle={gamepadGlyphStyle} connectedGamepad={activeGamepad} />
+                      <div>
+                        <strong>Shoulder Bumpers</strong>
+                        <small>Cycle views &amp; dossier tabs</small>
+                      </div>
+                    </div>
+                    <div className="settings-glyph-preview-item">
+                      <GamepadGlyph button="LT/RT" glyphStyle={gamepadGlyphStyle} connectedGamepad={activeGamepad} />
+                      <div>
+                        <strong>Analog Triggers</strong>
+                        <small>Cycle games in dossier</small>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Where Gamepad Works Everywhere Card */}
                 <div className="settings-card">
                   <div className="settings-card-header">
@@ -4744,23 +4817,23 @@ export function SettingsModal({
                           <span>Move card focus smoothly across the game grid</span>
                         </div>
                         <div className="settings-legend-row">
-                          <kbd className="gamepad-key-badge badge-a">A</kbd>
+                          <GamepadGlyph button="A" glyphStyle={gamepadGlyphStyle} connectedGamepad={activeGamepad} />
                           <span>Open selected Game Dossier / Launch game</span>
                         </div>
                         <div className="settings-legend-row">
-                          <kbd className="gamepad-key-badge badge-x">X</kbd>
+                          <GamepadGlyph button="X" glyphStyle={gamepadGlyphStyle} connectedGamepad={activeGamepad} />
                           <span>Cycle Backlog Status (Unplayed → Playing → Completed)</span>
                         </div>
                         <div className="settings-legend-row">
-                          <kbd className="gamepad-key-badge badge-y">Y</kbd>
+                          <GamepadGlyph button="Y" glyphStyle={gamepadGlyphStyle} connectedGamepad={activeGamepad} />
                           <span>Toggle Favorite on selected game</span>
                         </div>
                         <div className="settings-legend-row">
-                          <kbd className="gamepad-key-badge">LB / RB</kbd>
+                          <GamepadGlyph button="LB/RB" glyphStyle={gamepadGlyphStyle} connectedGamepad={activeGamepad} />
                           <span>Cycle sidebar views (Installed, Favorites, Ready, All)</span>
                         </div>
                         <div className="settings-legend-row">
-                          <kbd className="gamepad-key-badge">Menu / Start</kbd>
+                          <GamepadGlyph button="START" glyphStyle={gamepadGlyphStyle} connectedGamepad={activeGamepad} />
                           <span>Open Game Quick Actions context menu</span>
                         </div>
                       </div>
@@ -4774,11 +4847,11 @@ export function SettingsModal({
                       </div>
                       <div className="settings-legend-list">
                         <div className="settings-legend-row">
-                          <kbd className="gamepad-key-badge badge-a">A</kbd>
+                          <GamepadGlyph button="A" glyphStyle={gamepadGlyphStyle} connectedGamepad={activeGamepad} />
                           <span>Launch Game instantly</span>
                         </div>
                         <div className="settings-legend-row">
-                          <kbd className="gamepad-key-badge badge-b">B</kbd>
+                          <GamepadGlyph button="B" glyphStyle={gamepadGlyphStyle} connectedGamepad={activeGamepad} />
                           <span>Back to Library Grid</span>
                         </div>
                         <div className="settings-legend-row">
@@ -4786,7 +4859,7 @@ export function SettingsModal({
                           <span>Smooth scroll through storyline, achievements, and strategy guides</span>
                         </div>
                         <div className="settings-legend-row">
-                          <kbd className="gamepad-key-badge badge-r3">R3</kbd>
+                          <GamepadGlyph button="R3" glyphStyle={gamepadGlyphStyle} connectedGamepad={activeGamepad} />
                           <span>Push-to-Talk voice prompt to AI Companion</span>
                         </div>
                       </div>
@@ -4804,15 +4877,15 @@ export function SettingsModal({
                           <span>Navigate guides, questions, and walkthrough tips</span>
                         </div>
                         <div className="settings-legend-row">
-                          <kbd className="gamepad-key-badge badge-a">A</kbd>
+                          <GamepadGlyph button="A" glyphStyle={gamepadGlyphStyle} connectedGamepad={activeGamepad} />
                           <span>Select guide option or ask question</span>
                         </div>
                         <div className="settings-legend-row">
-                          <kbd className="gamepad-key-badge badge-r3">R3</kbd>
+                          <GamepadGlyph button="R3" glyphStyle={gamepadGlyphStyle} connectedGamepad={activeGamepad} />
                           <span>Push-to-Talk voice recognition (Talk to AI while in-game)</span>
                         </div>
                         <div className="settings-legend-row">
-                          <kbd className="gamepad-key-badge badge-b">B</kbd>
+                          <GamepadGlyph button="B" glyphStyle={gamepadGlyphStyle} connectedGamepad={activeGamepad} />
                           <span>Dismiss Overlay and return to game</span>
                         </div>
                       </div>
