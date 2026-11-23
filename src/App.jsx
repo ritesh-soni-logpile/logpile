@@ -8872,9 +8872,15 @@ function App() {
         if (isSpotlightVisible) {
           setFocusZone('spotlight')
           setSpotlightFocusIndex(0)
+          if (mainScrollRef.current) {
+            mainScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' })
+          }
         } else {
           setFocusZone('topbar')
           setTopbarFocusIndex(0)
+          if (mainScrollRef.current) {
+            mainScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' })
+          }
         }
       } else if (direction === 'down') {
         setFocusZone('grid')
@@ -8893,9 +8899,15 @@ function App() {
         } else if (isSpotlightVisible) {
           setFocusZone('spotlight')
           setSpotlightFocusIndex(0)
+          if (mainScrollRef.current) {
+            mainScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' })
+          }
         } else {
           setFocusZone('topbar')
           setTopbarFocusIndex(0)
+          if (mainScrollRef.current) {
+            mainScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' })
+          }
         }
       }
       return
@@ -8917,9 +8929,15 @@ function App() {
         } else if (isSpotlightVisible) {
           setFocusZone('spotlight')
           setSpotlightFocusIndex(0)
+          if (mainScrollRef.current) {
+            mainScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' })
+          }
         } else {
           setFocusZone('topbar')
           setTopbarFocusIndex(0)
+          if (mainScrollRef.current) {
+            mainScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' })
+          }
         }
       } else {
         setGamepadIndex((prev) => Math.max(0, prev - cols))
@@ -9406,6 +9424,17 @@ function App() {
   useEffect(() => {
     if (!isGamepadMode) return
     const timer = setTimeout(() => {
+      if (focusZone === 'spotlight' || (focusZone === 'topbar' && !isDetailView)) {
+        if (mainScrollRef.current) {
+          mainScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' })
+        }
+        const spotlightEl = document.querySelector('.home-hero-container') || document.querySelector('.home-spotlight')
+        if (spotlightEl) {
+          spotlightEl.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }
+        return
+      }
+
       const activeEl = document.querySelector('.gamepad-focused')
       if (activeEl) {
         activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' })
