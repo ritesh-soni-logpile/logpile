@@ -8212,30 +8212,41 @@ function App() {
     }
   }, [settingsModalOpen, isDetailView])
 
+  // Automatically uncollapse sidebar if navigated into with controller
+  useEffect(() => {
+    if (focusZone === 'sidebar' && sidebarCollapsed) {
+      setSidebarCollapsed(false)
+    }
+  }, [focusZone, sidebarCollapsed])
+
   const allSidebarNavItems = useMemo(() => {
     const list = [
-      { id: 'installed', key: 'installed', action: () => setSidebarView('installed') },
-      { id: 'favorites', key: 'favorites', action: () => setSidebarView('favorites') },
-      { id: 'all', key: 'all', action: () => setSidebarView('all') },
+      { id: 'installed', key: 'installed', action: () => { setSidebarView('installed'); setFocusZone('grid'); setGamepadIndex(0); } },
+      { id: 'favorites', key: 'favorites', action: () => { setSidebarView('favorites'); setFocusZone('grid'); setGamepadIndex(0); } },
+      { id: 'all', key: 'all', action: () => { setSidebarView('all'); setFocusZone('grid'); setGamepadIndex(0); } },
     ]
     if (workspaceItems && workspaceItems.length) {
       workspaceItems.forEach((w) => {
-        list.push({ id: w.key, key: w.key, action: () => setSidebarView(w.key) })
+        list.push({ id: w.key, key: w.key, action: () => { setSidebarView(w.key); setFocusZone('grid'); setGamepadIndex(0); } })
       })
     }
-    list.push({ id: 'today', key: 'today', action: () => setSidebarView('today') })
-    list.push({ id: 'dashboard', key: 'dashboard', action: () => setSidebarView('dashboard') })
+    list.push({ id: 'today', key: 'today', action: () => { setSidebarView('today'); setFocusZone('grid'); setGamepadIndex(0); } })
+    list.push({ id: 'dashboard', key: 'dashboard', action: () => { setSidebarView('dashboard'); setFocusZone('grid'); setGamepadIndex(0); } })
     list.push({ id: 'ai_companion', key: 'ai_companion', action: () => setAiDrawerOpen((prev) => !prev) })
 
-    list.push({ id: 'source_all', key: 'source_all', action: () => { setSourceFilters([]); setViewMode('grid'); if (view === 'system' || view === 'today') setSidebarView('all') } })
+    list.push({ id: 'source_all', key: 'source_all', action: () => { setSourceFilters([]); setViewMode('grid'); if (view === 'system' || view === 'today') setSidebarView('all'); setFocusZone('grid'); setGamepadIndex(0); } })
     if (sourceOptions && sourceOptions.length) {
       sourceOptions.forEach((s) => {
-        list.push({ id: `source_${s.key}`, key: s.key, action: () => { toggleSource(s.key); setViewMode('grid'); if (view === 'system' || view === 'today') setSidebarView('all') } })
+        list.push({ id: `source_${s.key}`, key: s.key, action: () => { toggleSource(s.key); setViewMode('grid'); if (view === 'system' || view === 'today') setSidebarView('all'); setFocusZone('grid'); setGamepadIndex(0); } })
       })
     }
     list.push({ id: 'settings', key: 'settings', action: () => { setSettingsModalTab('general'); setSettingsModalOpen(true); } })
     return list
   }, [workspaceItems, sourceOptions, view, toggleSource, setSidebarView, setAiDrawerOpen, setSettingsModalTab, setSettingsModalOpen])
+
+  const isSidebarItemFocused = useCallback((id) => {
+    return isGamepadMode && focusZone === 'sidebar' && allSidebarNavItems[sidebarFocusIndex]?.id === id
+  }, [isGamepadMode, focusZone, allSidebarNavItems, sidebarFocusIndex])
 
   useEffect(() => {
     if (gamepadIndex >= filteredGames.length && filteredGames.length > 0) {
@@ -8900,7 +8911,7 @@ function App() {
           <div className="nav-group nav-group-workspace">
             <p className="nav-label">Workspace</p>
             <button
-              className={cn('nav-item', view === 'installed' && 'active')}
+              className={cn('nav-item', view === 'installed' && 'active', isSidebarItemFocused('installed') && 'gamepad-focused')}
               onClick={() => setSidebarView('installed')}
               title="Installed"
             >
@@ -8909,7 +8920,7 @@ function App() {
               <em>{displayInstalledGames}</em>
             </button>
             <button
-              className={cn('nav-item', view === 'favorites' && 'active')}
+              className={cn('nav-item', view === 'favorites' && 'active', isSidebarItemFocused('favorites') && 'gamepad-focused')}
               onClick={() => setSidebarView('favorites')}
               title="Favorites"
             >
@@ -8918,7 +8929,7 @@ function App() {
               <em>{displayFavoriteGames}</em>
             </button>
             <button
-              className={cn('nav-item', view === 'all' && 'active')}
+              className={cn('nav-item', view === 'all' && 'active', isSidebarItemFocused('all') && 'gamepad-focused')}
               onClick={() => setSidebarView('all')}
               title="All games"
             >
@@ -8931,7 +8942,7 @@ function App() {
               return (
                 <button
                   key={item.key}
-                  className={cn('nav-item', view === item.key && 'active')}
+                  className={cn('nav-item', view === item.key && 'active', isSidebarItemFocused(item.key) && 'gamepad-focused')}
                   onClick={() => setSidebarView(item.key)}
                   title={item.label}
                 >
@@ -8942,7 +8953,7 @@ function App() {
               )
             })}
             <button
-              className={cn('nav-item', view === 'today' && 'active')}
+              className={cn('nav-item', view === 'today' && 'active', isSidebarItemFocused('today') && 'gamepad-focused')}
               onClick={() => setSidebarView('today')}
               title="Today’s Pick"
             >
@@ -8950,7 +8961,7 @@ function App() {
               <span>Today’s Pick</span>
             </button>
             <button
-              className={cn('nav-item', view === 'dashboard' && 'active')}
+              className={cn('nav-item', view === 'dashboard' && 'active', isSidebarItemFocused('dashboard') && 'gamepad-focused')}
               onClick={() => setSidebarView('dashboard')}
               title="Library Intelligence & Backlog Dashboard"
             >
@@ -8958,7 +8969,7 @@ function App() {
               <span>Dashboard</span>
             </button>
             <button
-              className={cn('nav-item nav-item-ai', aiDrawerOpen && 'active')}
+              className={cn('nav-item nav-item-ai', aiDrawerOpen && 'active', isSidebarItemFocused('ai_companion') && 'gamepad-focused')}
               onClick={() => setAiDrawerOpen((prev) => !prev)}
               title="Gaming AI Companion (Ctrl+J)"
             >
@@ -8972,7 +8983,7 @@ function App() {
           <div className="nav-group nav-group-sources">
             <p className="nav-label nav-label-spaced">Sources</p>
             <button
-              className={cn('nav-item nav-item-source nav-item-all-sources', !sourceFilters.length && 'active')}
+              className={cn('nav-item nav-item-source nav-item-all-sources', !sourceFilters.length && 'active', isSidebarItemFocused('source_all') && 'gamepad-focused')}
               onClick={() => { setSourceFilters([]); setViewMode('grid'); if (view === 'system' || view === 'today') setSidebarView('all') }}
               title="All sources"
             >
@@ -8983,7 +8994,7 @@ function App() {
             {sourceOptions.map((source) => (
               <button
                 key={source.key}
-                className={cn('nav-item nav-item-source', sourceFilters.includes(source.key) && 'active')}
+                className={cn('nav-item nav-item-source', sourceFilters.includes(source.key) && 'active', isSidebarItemFocused(`source_${source.key}`) && 'gamepad-focused')}
                 onClick={() => { toggleSource(source.key); setViewMode('grid'); if (view === 'system' || view === 'today') setSidebarView('all') }}
                 title={source.label}
               >
@@ -8998,7 +9009,7 @@ function App() {
         <div className="sidebar-bottom-dock">
           <button
             type="button"
-            className={cn('sidebar-dock-btn', settingsModalOpen && 'active')}
+            className={cn('sidebar-dock-btn', settingsModalOpen && 'active', isSidebarItemFocused('settings') && 'gamepad-focused')}
             onClick={() => { setSettingsModalTab('general'); setSettingsModalOpen(true); }}
             title="Settings & Preferences"
           >
