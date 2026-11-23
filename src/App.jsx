@@ -31,6 +31,7 @@ import { AiAssistantDrawer, parseAiResponse } from './components/AiAssistantDraw
 import { speakConfirmation, getVoiceSettings, saveVoiceSettings } from './utils/voiceService'
 import { useGamepad } from './utils/useGamepad'
 import { GamepadGlyph } from './components/GamepadGlyph'
+import { VirtualKeyboard, KEYBOARD_LAYOUT } from './components/VirtualKeyboard'
 import { generateBragCollage } from './utils/generateBragCollage'
 import { IntroSplash, THEME_LOGOS } from './components/IntroSplash'
 import { InstallerApp } from './components/InstallerApp'
@@ -8344,6 +8345,10 @@ function App() {
     } catch {}
   }, [])
 
+  const [oskOpen, setOskOpen] = useState(false)
+  const [oskRow, setOskRow] = useState(1) // Row 1: QWERTY
+  const [oskCol, setOskCol] = useState(0) // 'Q'
+
   const [spotlightState, setSpotlightState] = useState({
     featured: null,
     candidates: [],
@@ -8471,6 +8476,59 @@ function App() {
   ], [handleCaptureFullPage, handleCaptureScreen, handleCaptureFilteredShowcase, handleOpenCapturesFolder])
 
   const handleGamepadNavigate = useCallback((direction) => {
+    // Zone: On-Screen Virtual Couch Keyboard Navigation
+    if (oskOpen) {
+      const totalRows = KEYBOARD_LAYOUT.length
+      const currentRowLength = KEYBOARD_LAYOUT[oskRow].length
+
+      if (direction === 'up') {
+        if (oskRow > 0) {
+          const prevRow = oskRow - 1
+          const prevRowLength = KEYBOARD_LAYOUT[prevRow].length
+          let nextCol = oskCol
+          if (oskRow === 4) {
+            const mapping = [2, 5, 7, 9]
+            nextCol = mapping[oskCol] || 0
+          } else {
+            nextCol = Math.min(prevRowLength - 1, oskCol)
+          }
+          setOskRow(prevRow)
+          setOskCol(nextCol)
+        }
+        return
+      }
+
+      if (direction === 'down') {
+        if (oskRow < totalRows - 1) {
+          const nextRow = oskRow + 1
+          let nextCol = oskCol
+          if (nextRow === 4) {
+            if (oskCol <= 3) nextCol = 0
+            else if (oskCol <= 6) nextCol = 1
+            else if (oskCol <= 8) nextCol = 2
+            else nextCol = 3
+          } else {
+            const nextRowLength = KEYBOARD_LAYOUT[nextRow].length
+            nextCol = Math.min(nextRowLength - 1, oskCol)
+          }
+          setOskRow(nextRow)
+          setOskCol(nextCol)
+        }
+        return
+      }
+
+      if (direction === 'left') {
+        setOskCol((prev) => (prev > 0 ? prev - 1 : currentRowLength - 1))
+        return
+      }
+
+      if (direction === 'right') {
+        setOskCol((prev) => (prev < currentRowLength - 1 ? prev + 1 : 0))
+        return
+      }
+      return
+    }
+
     // Zone: Settings Modal Navigation
     if (settingsModalOpen) {
       if (settingsSection === 'categories') {
@@ -8861,13 +8919,20 @@ function App() {
     allThemesList.length, topbarFocusIndex, isHomeView, isSpotlightCollapsed, spotlightState,
     spotlightFocusIndex, jumpInFocusIndex, dossierSection, dossierActionIndex, dossierTabIndex,
     dossierActiveTab, dossierContentRow, dossierContentIndex, dossierLightboxIndex,
-    settingsSection, settingsCategoryIndex, settingsContentIndex, SETTINGS_TAB_IDS
+    settingsSection, settingsCategoryIndex, settingsContentIndex, SETTINGS_TAB_IDS,
+    oskOpen, oskRow, oskCol
   ])
 
   const handleGamepadAction = useCallback((code) => {
     const MAIN_VIEWS = ['installed', 'favorites', 'ready', 'all', 'today', 'system']
 
     if (code === 'START' || code === 'GUIDE') {
+      if (oskOpen) {
+        setOskOpen(false)
+        setFocusZone('grid')
+        setGamepadIndex(0)
+        return
+      }
       if (api?.window?.toggleFullScreen) {
         api.window.toggleFullScreen()
       } else if (document.fullscreenElement) {
@@ -8880,6 +8945,12 @@ function App() {
 
     // Universal Back Rule: B / Circle strictly returns
     if (code === 'B') {
+      if (oskOpen) {
+        setOskOpen(false)
+        setFocusZone('topbar')
+        setTopbarFocusIndex(0)
+        return
+      }
       if (settingsModalOpen) {
         if (settingsSection === 'content') {
           setSettingsSection('categories')
@@ -8937,6 +9008,32 @@ function App() {
 
     // Primary Action: A / Cross
     if (code === 'A') {
+      if (oskOpen) {
+        const currentKey = KEYBOARD_LAYOUT[oskRow]?.[oskCol]
+        if (typeof currentKey === 'string') {
+          const nextQ = query + currentKey
+          setQuery(nextQ)
+          setDebouncedQuery(nextQ)
+          if (view === 'system' || view === 'today' || view === 'about') setSidebarView('all')
+        } else if (currentKey?.id === 'SPACE') {
+          const nextQ = query + ' '
+          setQuery(nextQ)
+          setDebouncedQuery(nextQ)
+        } else if (currentKey?.id === 'BACKSPACE') {
+          const nextQ = query.slice(0, -1)
+          setQuery(nextQ)
+          setDebouncedQuery(nextQ)
+        } else if (currentKey?.id === 'CLEAR') {
+          setQuery('')
+          setDebouncedQuery('')
+        } else if (currentKey?.id === 'DONE') {
+          setOskOpen(false)
+          setFocusZone('grid')
+          setGamepadIndex(0)
+        }
+        return
+      }
+
       if (settingsModalOpen) {
         if (settingsSection === 'categories') {
           setSettingsSection('content')
@@ -9073,7 +9170,14 @@ function App() {
         }
 
         if (topbarFocusIndex === 0) {
-          searchInputRef.current?.focus()
+          if (isGamepadMode) {
+            setOskOpen(true)
+            setOskRow(1)
+            setOskCol(0)
+            setFocusZone('osk')
+          } else {
+            searchInputRef.current?.focus()
+          }
         } else if (topbarFocusIndex === 1) {
           setBragFocusIndex(0)
           toggleBragMenu()
@@ -9126,6 +9230,22 @@ function App() {
         }
         return
       }
+    }
+
+    if (oskOpen) {
+      if (code === 'X') {
+        const nextQ = query.slice(0, -1)
+        setQuery(nextQ)
+        setDebouncedQuery(nextQ)
+        return
+      }
+      if (code === 'Y') {
+        const nextQ = query + ' '
+        setQuery(nextQ)
+        setDebouncedQuery(nextQ)
+        return
+      }
+      return
     }
 
     if (settingsModalOpen) {
@@ -9261,7 +9381,8 @@ function App() {
     spotlightFocusIndex, jumpInFocusIndex, dossierSection, dossierActionIndex, dossierTabIndex,
     dossierActiveTab, dossierContentRow, dossierContentIndex, dossierLightboxIndex,
     handleSnapHero, setAiDrawerOpen, setEditorGame,
-    settingsSection, settingsCategoryIndex, settingsContentIndex, SETTINGS_TAB_IDS
+    settingsSection, settingsCategoryIndex, settingsContentIndex, SETTINGS_TAB_IDS,
+    oskOpen, oskRow, oskCol
   ])
 
   const { connectedGamepad, isGamepadMode } = useGamepad({
@@ -9497,6 +9618,35 @@ function App() {
               title={isVoiceListening ? 'Listening for voice command... (Click to stop)' : 'Push to talk (Voice Command / Gamepad R3)'}
             >
               {isVoiceListening ? <Mic size={13} /> : <MicOff size={13} />}
+            </button>
+            <button
+              type="button"
+              className="titlebar-osk-btn"
+              aria-label="Open On-Screen Couch Keyboard"
+              title="Open On-Screen Couch Keyboard (Gamepad Search)"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setOskOpen(true)
+                setOskRow(1)
+                setOskCol(0)
+                setFocusZone('osk')
+              }}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '20px',
+                height: '20px',
+                borderRadius: '4px',
+                background: oskOpen ? 'color-mix(in srgb, var(--accent, #6366f1) 20%, transparent)' : 'transparent',
+                color: oskOpen ? 'var(--accent, #6366f1)' : 'var(--text-muted, #94a3b8)',
+                border: 'none',
+                cursor: 'pointer',
+                padding: 0
+              }}
+            >
+              <Keyboard size={12} />
             </button>
             {query ? (
               <button
@@ -10294,7 +10444,7 @@ onDossierInfo={(info) => {
   </div>
 )}
 {selectMode ? <div className="bulk-action-bar"><span><Check size={14} /> {selectedIds.length} selected · {filteredRecordIds.length} filtered</span><div className="bulk-action-group"><button className="outline-button" disabled={bulkBusy || !filteredRecordIds.length} onClick={selectAllFiltered}><Check size={14} /> Select All Filtered</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={deselectAll}><X size={14} /> Deselect All</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={() => handleBulkMove('dlc')}><PackageOpen size={14} /> Move to DLC</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleBulkHide}><EyeOff size={14} /> Hide from Library</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleRefetchSelected}><RefreshCw size={14} /> Re-fetch Artwork</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleExportSelected}><FileDown size={14} /> Export Selected to CSV</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={() => setBulkEditOpen(true)}><SlidersHorizontal size={14} /> Edit Selected</button><button className="danger-button" disabled={bulkBusy || !selectedIds.length} onClick={handleDeleteSelected}><Trash2 size={14} /> Delete Selected</button></div></div> : null}{notice ? <div className={cn('notice', noticeTone === 'error' && 'notice-error', noticeTone === 'warning' && 'notice-warning')}>{noticeTone === 'error' ? <X size={14} /> : noticeTone === 'warning' ? <AlertTriangle size={14} /> : <Check size={14} />} {notice}</div> : null}{loading && !filteredGames.length && !showIntro ? <div className="empty-state"><div className="loader" /> Loading and indexing your library…</div> : filteredGames.length ? <ErrorBoundary><VirtualGrid games={filteredGames} familyLocks={familyLocks} onLaunch={handleLaunch} onSelect={handleSelectGame} onHideGame={(game) => updateHiddenState(game, true)} onMoveCategory={moveCategory} onEditGame={setEditorGame} onContextMenu={handleCardContextMenu} onArtworkChanged={handleArtworkChanged} onArtworkError={handleArtworkError} selectMode={selectMode} selectedIds={selectedIds} onToggleSelect={toggleGameSelection} scrollElementRef={mainScrollRef} onImageError={handleImageError} initialScrollTop={activeGame?.id === lastClickedGameIdRef.current ? libraryScrollRef.current : 0} restoreGameId={activeGame?.id || lastClickedGameIdRef.current} restoredGameId={restoredGameId} gamepadFocusIndex={isGamepadMode && focusZone === 'grid' ? gamepadIndex : -1} onToggleFavorite={handleToggleFavorite} /></ErrorBoundary> : (!games.length && !query && !sourceFilters.length && genreFilter === 'all' && backlogFilter === 'all' && !qualityFilters.length) ? <div className="empty-state"><strong>Your library is empty.</strong><span>Click Scan & import (top right) to add your games.</span></div> : <div className="empty-state"><Search size={21} /><span>No titles match {query ? `"${query}"` : aiFilter ? `AI filter "${aiFilter.originalQuery || 'custom'}"` : 'these filters'}.</span>{aiFilter ? (<button type="button" className="outline-button" style={{ marginTop: '10px', borderColor: 'rgba(239, 68, 68, 0.4)', color: '#f87171', display: 'inline-flex', alignItems: 'center', gap: '6px' }} onClick={handleClearAiFilter}><X size={14} /><span>Clear Smart AI Filter</span></button>) : null}{query ? (<button type="button" className="outline-button" style={{ marginTop: '10px', borderColor: 'var(--accent, #d6ff4b)', color: 'var(--accent, #d6ff4b)', display: 'inline-flex', alignItems: 'center', gap: '6px' }} onClick={() => setAiDrawerOpen(true)}><Sparkles size={14} /><span>Ask AI Companion about "{query}"</span></button>) : null}</div>}</section>}</ErrorBoundary></div><footer className="statusbar"><span className="statusbar-item statusbar-terminal"><TerminalSquare size={13} style={{ color: 'var(--accent, #d6ff4b)', opacity: 0.9 }} /> {scannerStatus ? <span className="inline-flex items-center gap-1.5"><span className="pulse-dot" /> {scannerStatus}</span> : 'Ready'}</span>{globalSyncRunning && (<span className="statusbar-item statusbar-sync-active" title="Artwork & metadata sync in progress"><span className="pulse-dot" /><span>{globalSyncProgress?.gameTitle ? `Syncing: ${globalSyncProgress.gameTitle} (${globalSyncProgress.current}/${globalSyncProgress.total})${globalSyncProgress.formattedTransfer ? ` • ${globalSyncProgress.formattedTransfer}` : ''}` : (globalSyncProgress?.message || `Syncing artwork (${globalSyncProgress?.current || 0}/${globalSyncProgress?.total || 0})...`)}</span><button type="button" onClick={handleCancelGlobalSync} className="statusbar-cancel-btn" title="Cancel sync immediately"><X size={11} /> Cancel</button></span>)}{guideSyncStatus?.running && (<span className="statusbar-item statusbar-sync-active" title="Strategy guides downloading from StrategyWiki in progress"><span className="pulse-dot" /><span>{guideSyncStatus.progress?.title ? `Downloading Guides: ${guideSyncStatus.progress.title} (${guideSyncStatus.progress.current}/${guideSyncStatus.progress.total})` : 'Downloading Guides from StrategyWiki...'}</span><button type="button" onClick={() => window.api?.guides?.cancelBatch?.()} className="statusbar-cancel-btn" title="Cancel guide download"><X size={11} /> Cancel</button></span>)}<span className="statusbar-item statusbar-storage"><HardDrive size={11} style={{ color: 'var(--accent, #d6ff4b)', opacity: 0.85 }} /> Offline · Local storage</span>{isVoiceListening && (<span className="statusbar-item statusbar-voice-listening" style={{ color: 'var(--accent, #d6ff4b)' }}><span className="pulse-dot" style={{ background: 'var(--accent, #d6ff4b)', boxShadow: '0 0 8px var(--accent-glow, rgba(214, 255, 75, 0.6))' }} /> Listening (PTT)...</span>)}{connectedGamepad && (<><span className="statusbar-item statusbar-gamepad" title={`Connected Controller: ${connectedGamepad}`}><Gamepad2 size={12} style={{ color: 'var(--accent, #d6ff4b)' }} /><span>{connectedGamepad}</span></span><span className="statusbar-item statusbar-shortcuts" title="Controller Navigation Shortcuts"><span className="statusbar-shortcut-item"><GamepadGlyph button="A" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> Select</span><span className="statusbar-shortcut-item"><GamepadGlyph button="B" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> {isDetailView ? 'Library' : 'Back'}</span><span className="statusbar-shortcut-item"><GamepadGlyph button="X" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> {isDetailView ? 'Launch' : 'Status'}</span><span className="statusbar-shortcut-item"><GamepadGlyph button="Y" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> Fav</span><span className="statusbar-shortcut-item"><GamepadGlyph button="LB/RB" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> {isDetailView ? 'Tabs' : 'Views'}</span>{isDetailView && <span className="statusbar-shortcut-item"><GamepadGlyph button="LT/RT" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> Games</span>}</span></>)}<span className="statusbar-item statusbar-version">Version 1.3.7</span></footer></main>
-    </div><SettingsModal isOpen={settingsModalOpen} onClose={() => setSettingsModalOpen(false)} initialTab={settingsModalTab} isGamepadMode={isGamepadMode} settingsSection={settingsSection} settingsCategoryIndex={settingsCategoryIndex} settingsContentIndex={settingsContentIndex} onSettingsTabChange={(tabId) => { setSettingsModalTab(tabId); const idx = SETTINGS_TAB_IDS.indexOf(tabId); if (idx >= 0) setSettingsCategoryIndex(idx); }} gamepadGlyphStyle={gamepadGlyphStyle} onGamepadGlyphStyleChange={handleGamepadGlyphStyleChange} stats={stats} health={libraryHealth} backupsList={backupsList} backupBusy={backupBusy} restoreBusy={restoreBusy} onBackupNow={handleBackupNow} onOpenBackupsFolder={handleOpenBackupsFolder} onOpenBackupsManager={handleOpenBackupsManager} onExport={handleExport} onBackupCache={handleBackupCache} onRestoreCache={handleRestoreCache} onPurge={() => setPurgeOpen(true)} onRefresh={() => loadData({ preserveScroll: true })} connectedGamepad={connectedGamepad} hiddenGames={hiddenGames} onRestoreHidden={(game) => updateHiddenState(game, false)} activityLog={activityLog} activityLoading={activityLoading} onRefreshActivity={fetchSystemHealthAndActivity} layoutTheme={layoutTheme} onLayoutThemeChange={handleLayoutThemeChange} colorPalette={colorPalette} onColorPaletteChange={handleColorPaletteChange} onTriggerIntroPreview={() => { setSettingsModalOpen(false); setShowIntro(true); }} /><AiAssistantDrawer open={aiDrawerOpen} onClose={() => setAiDrawerOpen(false)} activeGame={activeGame} layoutTheme={layoutTheme} games={games} onAction={handleAiAction} isVoiceListening={isVoiceListening} onToggleVoice={toggleVoiceListening} /><ScanImportPanel open={scanOpen} onClose={() => setScanOpen(false)} onRefresh={loadData} /><GameEditorModal game={editorGame} onClose={() => setEditorGame(null)} onSaved={handleEditorSaved} /><PurgeConfirmModal open={purgeOpen} busy={purgeBusy} onClose={() => setPurgeOpen(false)} onConfirm={handlePurge} /><BulkEditModal open={bulkEditOpen} count={selectedIds.length} busy={bulkBusy} onClose={() => setBulkEditOpen(false)} onApply={handleBulkApply} /><ContextMenu menu={contextMenu} menuRef={contextMenuRef} onClose={() => setContextMenu(null)} onMoveCategory={moveCategory} onEditGame={setEditorGame} onHideGame={(game) => updateHiddenState(game, true)} onArtworkChanged={handleArtworkChanged} onArtworkError={handleArtworkError} onToggleFavorite={handleToggleFavorite} /><ConfirmActionModal config={confirmModal} onClose={() => setConfirmModal(null)} />{checkpointPrompt && (
+    </div><VirtualKeyboard isOpen={oskOpen} value={query} onChange={(val) => { setQuery(val); setDebouncedQuery(val); if (view === 'system' || view === 'today' || view === 'about') setSidebarView('all'); }} onDone={() => { setOskOpen(false); setFocusZone('grid'); setGamepadIndex(0); }} onClose={() => { setOskOpen(false); setFocusZone('topbar'); setTopbarFocusIndex(0); }} activeRow={oskRow} activeCol={oskCol} matchCount={filteredGames.length} isGamepadMode={isGamepadMode} gamepadGlyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /><SettingsModal isOpen={settingsModalOpen} onClose={() => setSettingsModalOpen(false)} initialTab={settingsModalTab} isGamepadMode={isGamepadMode} settingsSection={settingsSection} settingsCategoryIndex={settingsCategoryIndex} settingsContentIndex={settingsContentIndex} onSettingsTabChange={(tabId) => { setSettingsModalTab(tabId); const idx = SETTINGS_TAB_IDS.indexOf(tabId); if (idx >= 0) setSettingsCategoryIndex(idx); }} gamepadGlyphStyle={gamepadGlyphStyle} onGamepadGlyphStyleChange={handleGamepadGlyphStyleChange} stats={stats} health={libraryHealth} backupsList={backupsList} backupBusy={backupBusy} restoreBusy={restoreBusy} onBackupNow={handleBackupNow} onOpenBackupsFolder={handleOpenBackupsFolder} onOpenBackupsManager={handleOpenBackupsManager} onExport={handleExport} onBackupCache={handleBackupCache} onRestoreCache={handleRestoreCache} onPurge={() => setPurgeOpen(true)} onRefresh={() => loadData({ preserveScroll: true })} connectedGamepad={connectedGamepad} hiddenGames={hiddenGames} onRestoreHidden={(game) => updateHiddenState(game, false)} activityLog={activityLog} activityLoading={activityLoading} onRefreshActivity={fetchSystemHealthAndActivity} layoutTheme={layoutTheme} onLayoutThemeChange={handleLayoutThemeChange} colorPalette={colorPalette} onColorPaletteChange={handleColorPaletteChange} onTriggerIntroPreview={() => { setSettingsModalOpen(false); setShowIntro(true); }} /><AiAssistantDrawer open={aiDrawerOpen} onClose={() => setAiDrawerOpen(false)} activeGame={activeGame} layoutTheme={layoutTheme} games={games} onAction={handleAiAction} isVoiceListening={isVoiceListening} onToggleVoice={toggleVoiceListening} /><ScanImportPanel open={scanOpen} onClose={() => setScanOpen(false)} onRefresh={loadData} /><GameEditorModal game={editorGame} onClose={() => setEditorGame(null)} onSaved={handleEditorSaved} /><PurgeConfirmModal open={purgeOpen} busy={purgeBusy} onClose={() => setPurgeOpen(false)} onConfirm={handlePurge} /><BulkEditModal open={bulkEditOpen} count={selectedIds.length} busy={bulkBusy} onClose={() => setBulkEditOpen(false)} onApply={handleBulkApply} /><ContextMenu menu={contextMenu} menuRef={contextMenuRef} onClose={() => setContextMenu(null)} onMoveCategory={moveCategory} onEditGame={setEditorGame} onHideGame={(game) => updateHiddenState(game, true)} onArtworkChanged={handleArtworkChanged} onArtworkError={handleArtworkError} onToggleFavorite={handleToggleFavorite} /><ConfirmActionModal config={confirmModal} onClose={() => setConfirmModal(null)} />{checkpointPrompt && (
   <div
     className="checkpoint-note-toast"
     style={{
