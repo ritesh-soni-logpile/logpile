@@ -434,8 +434,57 @@ export function SettingsModal({
   colorPalette = 'auto',
   onColorPaletteChange,
   onTriggerIntroPreview,
+  isGamepadMode = false,
+  settingsSection = 'categories',
+  settingsCategoryIndex = 0,
+  settingsContentIndex = 0,
+  onSettingsTabChange = null,
 }) {
   const [activeTab, setActiveTab] = useState(initialTab)
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab)
+    }
+  }, [initialTab])
+
+  useEffect(() => {
+    if (!isOpen || !isGamepadMode || settingsSection !== 'content') {
+      document.querySelectorAll('.settings-main .gamepad-focused').forEach((el) => {
+        el.classList.remove('gamepad-focused')
+      })
+      return
+    }
+
+    const timer = setTimeout(() => {
+      const pane = document.querySelector('.settings-body .settings-tab-pane')
+      if (!pane) return
+
+      const items = Array.from(pane.querySelectorAll(`
+        .settings-toggle-row,
+        button:not([disabled]):not(.settings-tab-btn):not(.settings-toggle-row button),
+        input:not([disabled]),
+        select:not([disabled]),
+        textarea:not([disabled])
+      `))
+
+      document.querySelectorAll('.settings-main .gamepad-focused').forEach((el) => {
+        el.classList.remove('gamepad-focused')
+      })
+
+      if (items.length > 0) {
+        const safeIdx = Math.min(items.length - 1, Math.max(0, settingsContentIndex))
+        const target = items[safeIdx]
+        if (target) {
+          target.classList.add('gamepad-focused')
+          target.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+        }
+      }
+    }, 40)
+
+    return () => clearTimeout(timer)
+  }, [isOpen, isGamepadMode, settingsSection, settingsContentIndex, activeTab])
+
   const [copiedKey, setCopiedKey] = useState(null)
 
   // Settings state
@@ -1772,15 +1821,19 @@ export function SettingsModal({
             </div>
 
             <nav className="settings-nav">
-              {TABS.map((tab) => {
+              {TABS.map((tab, idx) => {
                 const IconComponent = tab.icon
                 const isActive = activeTab === tab.id
+                const isFocused = isGamepadMode && settingsSection === 'categories' && settingsCategoryIndex === idx
                 return (
                   <button
                     key={tab.id}
                     type="button"
-                    className={`settings-tab-btn ${isActive ? 'active' : ''}`}
-                    onClick={() => setActiveTab(tab.id)}
+                    className={`settings-tab-btn ${isActive ? 'active' : ''} ${isFocused ? 'gamepad-focused' : ''}`}
+                    onClick={() => {
+                      setActiveTab(tab.id)
+                      onSettingsTabChange?.(tab.id)
+                    }}
                   >
                     <IconComponent size={16} className="settings-tab-icon" />
                     <span>{tab.label}</span>

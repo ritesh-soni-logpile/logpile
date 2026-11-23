@@ -11715,7 +11715,15 @@ body.user-is-gamepad select {
 .cinematic-tab-nav-btn.gamepad-focused,
 .dossier-jump-back-in-btn.gamepad-focused,
 .franchise-card.gamepad-focused,
-.cinematic-media-card.gamepad-focused {
+.cinematic-media-card.gamepad-focused,
+.settings-tab-btn.gamepad-focused,
+.settings-toggle-row.gamepad-focused,
+.settings-card .primary-button.gamepad-focused,
+.settings-card .outline-button.gamepad-focused,
+.settings-card select.gamepad-focused,
+.settings-card input.gamepad-focused,
+.settings-card textarea.gamepad-focused,
+.settings-header-actions button.gamepad-focused {
   outline: 2px solid var(--accent, #6366f1) !important;
   outline-offset: 2px !important;
   box-shadow: 0 0 25px -2px var(--accent-glow, rgba(99, 102, 241, 0.5)) !important;
@@ -11727,6 +11735,19 @@ body.user-is-gamepad select {
   outline-offset: -1px !important;
   background: color-mix(in srgb, var(--accent, #6366f1) 22%, rgba(255, 255, 255, 0.08)) !important;
   transform: none !important;
+}
+
+.settings-tab-btn.gamepad-focused {
+  outline-offset: -1px !important;
+  background: color-mix(in srgb, var(--accent, #6366f1) 22%, rgba(255, 255, 255, 0.08)) !important;
+  color: #ffffff !important;
+  transform: translateX(4px) !important;
+}
+
+.settings-toggle-row.gamepad-focused {
+  background: color-mix(in srgb, var(--accent, #6366f1) 14%, rgba(255, 255, 255, 0.04)) !important;
+  border-color: var(--accent, #6366f1) !important;
+  transform: scale(1.01) !important;
 }
 
 .gamepad-hud-bar {
