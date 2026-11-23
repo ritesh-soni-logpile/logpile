@@ -11710,6 +11710,25 @@ body.user-is-gamepad select {
   z-index: 10 !important;
 }
 
+.hero-action-primary.gamepad-focused,
+.hero-ghost-btn.gamepad-focused,
+.cinematic-tab-nav-btn.gamepad-focused,
+.dossier-jump-back-in-btn.gamepad-focused,
+.franchise-card.gamepad-focused,
+.cinematic-media-card.gamepad-focused {
+  outline: 2px solid var(--accent, #6366f1) !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 25px -2px var(--accent-glow, rgba(99, 102, 241, 0.5)) !important;
+  transform: scale(1.04) !important;
+  z-index: 20 !important;
+}
+
+.cinematic-tab-nav-btn.gamepad-focused {
+  outline-offset: -1px !important;
+  background: color-mix(in srgb, var(--accent, #6366f1) 22%, rgba(255, 255, 255, 0.08)) !important;
+  transform: none !important;
+}
+
 .gamepad-hud-bar {
   display: inline-flex;
   align-items: center;

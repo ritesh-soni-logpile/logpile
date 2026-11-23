@@ -674,7 +674,7 @@ export function ModProfilePanel({ game, onGameUpdated }) {
   )
 }
 
-export function JumpBackInCard({ game, onPlay }) {
+export function JumpBackInCard({ game, onPlay, isFocused = false }) {
   const [captures, setCaptures] = useState([])
   const [cheatSheet, setCheatSheet] = useState([])
 
@@ -786,7 +786,7 @@ export function JumpBackInCard({ game, onPlay }) {
         {onPlay && game?.is_installed && (
           <button
             type="button"
-            className="primary-button"
+            className={`primary-button dossier-jump-back-in-btn ${isFocused ? 'gamepad-focused' : ''}`}
             style={{
               padding: '6px 14px',
               fontSize: '11px',
