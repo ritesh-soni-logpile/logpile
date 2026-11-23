@@ -3516,12 +3516,25 @@ function registerIpc() {
       if (process.platform === 'win32') {
         const { execSync } = require('node:child_process')
         try {
-          const targetExe = path.join(targetPath, 'Logpile.exe').toLowerCase()
-          if (fs.existsSync(targetExe)) {
-            const cleanTarget = targetExe.replace(/'/g, "''")
-            execSync(`powershell -NoProfile -Command "try { Get-Process Logpile -ErrorAction SilentlyContinue | Where-Object { \\$_.Path -and (\\$_.Path.ToLower() -eq '${cleanTarget}') } | Stop-Process -Force } catch {}; exit 0"`, { stdio: 'ignore' })
+          const myPids = new Set(app.getAppMetrics().map(m => m.pid))
+          myPids.add(process.pid)
+
+          const tasklistOut = execSync('tasklist /FI "IMAGENAME eq Logpile.exe" /FO CSV /NH', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+          const lines = tasklistOut.split('\n')
+          for (const line of lines) {
+            const parts = line.split(',')
+            if (parts.length >= 2) {
+              const pidStr = parts[1].replace(/"/g, '').trim()
+              const pidNum = parseInt(pidStr, 10)
+              if (!isNaN(pidNum) && !myPids.has(pidNum)) {
+                try {
+                  execSync(`taskkill /F /T /PID ${pidNum}`, { stdio: 'ignore' })
+                } catch {}
+              }
+            }
           }
         } catch {}
+        await new Promise(r => setTimeout(r, 600))
       }
 
       sendProgress(45, 'Extracting Logpile binaries and assets...')
@@ -3614,12 +3627,16 @@ function registerIpc() {
     try {
       const exePath = path.join(targetPath, 'Logpile.exe')
       if (fs.existsSync(exePath)) {
-        spawn(exePath, [], { detached: true, stdio: 'ignore' }).unref()
+        try {
+          await shell.openPath(exePath)
+        } catch {
+          spawn(exePath, [], { detached: true, stdio: 'ignore' }).unref()
+        }
       }
     } catch (launchErr) {
       console.error('[Installer] Launch failed:', launchErr)
     }
-    app.quit()
+    setTimeout(() => app.quit(), 400)
   })
 
   ipcMain.handle('installer:close', () => {

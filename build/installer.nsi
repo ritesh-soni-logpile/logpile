@@ -4,7 +4,7 @@
 CRCCheck off
 WindowIcon Off
 AutoCloseWindow True
-RequestExecutionLevel user
+RequestExecutionLevel admin
 
 !ifdef MUI_ICON
   Icon "${MUI_ICON}"
