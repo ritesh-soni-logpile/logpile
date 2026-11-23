@@ -271,7 +271,8 @@ export function InstallerApp() {
     if (window.api?.installer?.minimize) window.api.installer.minimize()
   }
 
-  const ActiveSlideIcon = CAROUSEL_SLIDES[carouselIndex].icon
+  const activeSlide = CAROUSEL_SLIDES[carouselIndex] || CAROUSEL_SLIDES[0]
+  const ActiveSlideIcon = activeSlide?.icon || Gauge
 
   return (
     <div
@@ -688,14 +689,14 @@ export function InstallerApp() {
                   height: '72px',
                   borderRadius: '16px',
                   background: 'rgba(8, 10, 15, 0.8)',
-                  border: `1px solid ${CAROUSEL_SLIDES[carouselIndex].accent}44`,
+                  border: `1px solid ${activeSlide.accent}44`,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  boxShadow: `0 8px 28px rgba(0, 0, 0, 0.6), 0 0 20px ${CAROUSEL_SLIDES[carouselIndex].accent}33`
+                  boxShadow: `0 8px 28px rgba(0, 0, 0, 0.6), 0 0 20px ${activeSlide.accent}33`
                 }}
               >
-                <ActiveSlideIcon size={36} color={CAROUSEL_SLIDES[carouselIndex].accent} />
+                <ActiveSlideIcon size={36} color={activeSlide.accent} />
               </div>
 
               <div style={{ flex: 1 }}>
@@ -704,16 +705,16 @@ export function InstallerApp() {
                     fontSize: '10px',
                     fontWeight: 800,
                     letterSpacing: '0.1em',
-                    color: CAROUSEL_SLIDES[carouselIndex].accent
+                    color: activeSlide.accent
                   }}
                 >
-                  {CAROUSEL_SLIDES[carouselIndex].tag}
+                  {activeSlide.tag}
                 </span>
                 <h3 style={{ fontSize: '19px', fontWeight: 800, margin: '4px 0 6px', color: '#f8fafc' }}>
-                  {CAROUSEL_SLIDES[carouselIndex].title}
+                  {activeSlide.title}
                 </h3>
                 <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8', lineHeight: 1.45, maxWidth: '380px' }}>
-                  {CAROUSEL_SLIDES[carouselIndex].desc}
+                  {activeSlide.desc}
                 </p>
               </div>
 

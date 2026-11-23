@@ -3516,7 +3516,11 @@ function registerIpc() {
       if (process.platform === 'win32') {
         const { execSync } = require('node:child_process')
         try {
-          execSync(`powershell -NoProfile -Command "Get-Process -Name Logpile -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne ${process.pid} } | Stop-Process -Force"`, { stdio: 'ignore' })
+          const targetExe = path.join(targetPath, 'Logpile.exe').toLowerCase()
+          if (fs.existsSync(targetExe)) {
+            const cleanTarget = targetExe.replace(/'/g, "''")
+            execSync(`powershell -NoProfile -Command "try { Get-Process Logpile -ErrorAction SilentlyContinue | Where-Object { \\$_.Path -and (\\$_.Path.ToLower() -eq '${cleanTarget}') } | Stop-Process -Force } catch {}; exit 0"`, { stdio: 'ignore' })
+          }
         } catch {}
       }
 
@@ -3524,25 +3528,25 @@ function registerIpc() {
       const sourceDir = app.isPackaged ? path.dirname(process.execPath) : path.join(__dirname, '..', 'dist', 'win-unpacked')
       
       if (fs.existsSync(sourceDir)) {
-        const copyDirRecursive = (src, dest) => {
-          if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true })
-          const entries = fs.readdirSync(src, { withFileTypes: true })
+        const copyDirRecursive = async (src, dest) => {
+          await fs.promises.mkdir(dest, { recursive: true })
+          const entries = await fs.promises.readdir(src, { withFileTypes: true })
           for (const entry of entries) {
             if (entry.name === 'logpile_data') continue
             const srcPath = path.join(src, entry.name)
             const destPath = path.join(dest, entry.name)
             if (entry.isDirectory()) {
-              copyDirRecursive(srcPath, destPath)
+              await copyDirRecursive(srcPath, destPath)
             } else {
               try {
-                fs.copyFileSync(srcPath, destPath)
+                await fs.promises.copyFile(srcPath, destPath)
               } catch (cpErr) {
                 console.warn(`[Installer] Copy note for ${entry.name}:`, cpErr?.message)
               }
             }
           }
         }
-        copyDirRecursive(sourceDir, targetPath)
+        await copyDirRecursive(sourceDir, targetPath)
       }
 
       sendProgress(75, 'Configuring Windows shortcuts...')
