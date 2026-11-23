@@ -8193,7 +8193,49 @@ function App() {
     }
   }, [isVoiceListening])
 
+  // --- 2D Spatial Focus Engine State ---
+  const [focusZone, setFocusZone] = useState('grid') // 'grid' | 'sidebar' | 'topbar' | 'spotlight' | 'jump_in' | 'dossier' | 'settings'
+  const [sidebarFocusIndex, setSidebarFocusIndex] = useState(0)
+  const [topbarFocusIndex, setTopbarFocusIndex] = useState(0) // 0: search, 1: brag, 2: theme
+  const [spotlightFocusIndex, setSpotlightFocusIndex] = useState(0)
+  const [jumpInFocusIndex, setJumpInFocusIndex] = useState(0)
   const [gamepadIndex, setGamepadIndex] = useState(0)
+
+  // Sync focusZone when detail view or settings modal opens/closes
+  useEffect(() => {
+    if (settingsModalOpen) {
+      setFocusZone('settings')
+    } else if (isDetailView) {
+      setFocusZone('dossier')
+    } else {
+      setFocusZone((prev) => (prev === 'dossier' || prev === 'settings' ? 'grid' : prev))
+    }
+  }, [settingsModalOpen, isDetailView])
+
+  const allSidebarNavItems = useMemo(() => {
+    const list = [
+      { id: 'installed', key: 'installed', action: () => setSidebarView('installed') },
+      { id: 'favorites', key: 'favorites', action: () => setSidebarView('favorites') },
+      { id: 'all', key: 'all', action: () => setSidebarView('all') },
+    ]
+    if (workspaceItems && workspaceItems.length) {
+      workspaceItems.forEach((w) => {
+        list.push({ id: w.key, key: w.key, action: () => setSidebarView(w.key) })
+      })
+    }
+    list.push({ id: 'today', key: 'today', action: () => setSidebarView('today') })
+    list.push({ id: 'dashboard', key: 'dashboard', action: () => setSidebarView('dashboard') })
+    list.push({ id: 'ai_companion', key: 'ai_companion', action: () => setAiDrawerOpen((prev) => !prev) })
+
+    list.push({ id: 'source_all', key: 'source_all', action: () => { setSourceFilters([]); setViewMode('grid'); if (view === 'system' || view === 'today') setSidebarView('all') } })
+    if (sourceOptions && sourceOptions.length) {
+      sourceOptions.forEach((s) => {
+        list.push({ id: `source_${s.key}`, key: s.key, action: () => { toggleSource(s.key); setViewMode('grid'); if (view === 'system' || view === 'today') setSidebarView('all') } })
+      })
+    }
+    list.push({ id: 'settings', key: 'settings', action: () => { setSettingsModalTab('general'); setSettingsModalOpen(true); } })
+    return list
+  }, [workspaceItems, sourceOptions, view, toggleSource, setSidebarView, setAiDrawerOpen, setSettingsModalTab, setSettingsModalOpen])
 
   useEffect(() => {
     if (gamepadIndex >= filteredGames.length && filteredGames.length > 0) {
@@ -8244,24 +8286,65 @@ function App() {
   }, [])
 
   const handleGamepadNavigate = useCallback((direction) => {
-    if (isDetailView) return
+    if (settingsModalOpen || isDetailView) {
+      return
+    }
+
     const cols = getGridColumns()
     const total = filteredGames.length
-    if (total === 0) return
 
-    setGamepadIndex((prev) => {
-      let next = prev
-      if (direction === 'left') next = Math.max(0, prev - 1)
-      else if (direction === 'right') next = Math.min(total - 1, prev + 1)
-      else if (direction === 'up') next = Math.max(0, prev - cols)
-      else if (direction === 'down') next = Math.min(total - 1, prev + cols)
-      return next
-    })
-  }, [isDetailView, getGridColumns, filteredGames.length])
+    // Zone: Sidebar Navigation
+    if (focusZone === 'sidebar') {
+      const totalItems = allSidebarNavItems.length
+      if (direction === 'up') {
+        setSidebarFocusIndex((prev) => Math.max(0, prev - 1))
+      } else if (direction === 'down') {
+        setSidebarFocusIndex((prev) => Math.min(totalItems - 1, prev + 1))
+      } else if (direction === 'right') {
+        setFocusZone('grid')
+      }
+      return
+    }
+
+    // Zone: Top Header Bar Navigation
+    if (focusZone === 'topbar') {
+      if (direction === 'left') {
+        setTopbarFocusIndex((prev) => Math.max(0, prev - 1))
+      } else if (direction === 'right') {
+        setTopbarFocusIndex((prev) => Math.min(2, prev + 1))
+      }
+      return
+    }
+
+    // Zone: Grid Navigation
+    if (total === 0) {
+      if (direction === 'left') setFocusZone('sidebar')
+      else if (direction === 'up') setFocusZone('topbar')
+      return
+    }
+
+    if (direction === 'left') {
+      if (gamepadIndex % cols === 0) {
+        setFocusZone('sidebar')
+      } else {
+        setGamepadIndex((prev) => Math.max(0, prev - 1))
+      }
+    } else if (direction === 'right') {
+      setGamepadIndex((prev) => Math.min(total - 1, prev + 1))
+    } else if (direction === 'up') {
+      if (gamepadIndex < cols) {
+        setFocusZone('topbar')
+        setTopbarFocusIndex(0)
+      } else {
+        setGamepadIndex((prev) => Math.max(0, prev - cols))
+      }
+    } else if (direction === 'down') {
+      setGamepadIndex((prev) => Math.min(total - 1, prev + cols))
+    }
+  }, [settingsModalOpen, isDetailView, focusZone, allSidebarNavItems.length, getGridColumns, filteredGames.length, gamepadIndex])
 
   const handleGamepadAction = useCallback((code) => {
     const MAIN_VIEWS = ['installed', 'favorites', 'ready', 'all', 'today', 'system']
-    const currentGame = filteredGames[gamepadIndex] || activeGame
 
     if (code === 'START' || code === 'GUIDE') {
       if (api?.window?.toggleFullScreen) {
@@ -8274,17 +8357,73 @@ function App() {
       return
     }
 
-    if (isDetailView) {
-      if (code === 'B') {
-        handleBackToLibrary()
+    // Universal Back Rule: B / Circle strictly returns
+    if (code === 'B') {
+      if (settingsModalOpen) {
+        setSettingsModalOpen(false)
+        setFocusZone('grid')
         return
       }
-      if (code === 'A' && activeGame) {
-        if (activeGame.is_installed) {
-          handleLaunch(activeGame)
+      if (isDetailView) {
+        handleBackToLibrary()
+        setFocusZone('grid')
+        return
+      }
+      if (screenshotMenuOpen) {
+        setScreenshotMenuOpen(false)
+        return
+      }
+      if (focusZone !== 'grid') {
+        setFocusZone('grid')
+        return
+      }
+      if (selectMode) {
+        setSelectMode(false)
+        setSelectedIds([])
+        return
+      }
+      if (query) {
+        setQuery('')
+        setDebouncedQuery('')
+        return
+      }
+      if (view !== 'installed') {
+        setView('installed')
+        return
+      }
+      return
+    }
+
+    // Primary Action: A / Cross
+    if (code === 'A') {
+      if (focusZone === 'sidebar') {
+        const item = allSidebarNavItems[sidebarFocusIndex]
+        if (item) item.action()
+        return
+      }
+      if (focusZone === 'topbar') {
+        if (topbarFocusIndex === 0) {
+          searchInputRef.current?.focus()
+        } else if (topbarFocusIndex === 1) {
+          toggleBragMenu()
+        } else if (topbarFocusIndex === 2) {
+          const themes = ['cinematic', 'kinetic', 'atmospheric', 'competitive', 'playful']
+          const curIdx = themes.indexOf(layoutTheme)
+          const nextTheme = themes[(curIdx + 1) % themes.length]
+          handleLayoutThemeChange(nextTheme)
         }
         return
       }
+      if (focusZone === 'grid') {
+        const currentGame = filteredGames[gamepadIndex] || activeGame
+        if (currentGame) {
+          handleSelectGame(currentGame)
+        }
+        return
+      }
+    }
+
+    if (isDetailView) {
       if (code === 'X' && activeGame) {
         cycleGameStatus(activeGame)
         return
@@ -8305,31 +8444,15 @@ function App() {
         return
       }
     } else {
-      if (code === 'A') {
-        if (currentGame) {
-          handleSelectGame(currentGame)
-        }
-        return
-      }
-      if (code === 'B') {
-        if (selectMode) {
-          setSelectMode(false)
-          setSelectedIds([])
-        } else if (query) {
-          setQuery('')
-          setDebouncedQuery('')
-        } else if (view !== 'installed') {
-          setView('installed')
-        }
-        return
-      }
       if (code === 'X') {
+        const currentGame = filteredGames[gamepadIndex] || activeGame
         if (currentGame) {
           cycleGameStatus(currentGame)
         }
         return
       }
       if (code === 'Y') {
+        const currentGame = filteredGames[gamepadIndex] || activeGame
         if (currentGame) {
           handleToggleFavorite(currentGame)
         }
@@ -8358,7 +8481,7 @@ function App() {
         return
       }
     }
-  }, [isDetailView, activeGame, filteredGames, gamepadIndex, handleBackToLibrary, handleLaunch, handleSelectGame, cycleGameStatus, handleToggleFavorite, selectMode, query, view, toggleVoiceListening])
+  }, [settingsModalOpen, isDetailView, screenshotMenuOpen, focusZone, allSidebarNavItems, sidebarFocusIndex, topbarFocusIndex, layoutTheme, handleLayoutThemeChange, filteredGames, gamepadIndex, activeGame, handleSelectGame, cycleGameStatus, handleToggleFavorite, toggleBragMenu, handleBackToLibrary, selectMode, query, view, toggleVoiceListening])
 
   const { connectedGamepad, isGamepadMode } = useGamepad({
     enabled: !isGameRunning,
@@ -8370,6 +8493,18 @@ function App() {
       setTimeout(() => setNotice(''), 3000)
     },
   })
+
+  // 2D Spatial Focus Auto-Scroll Coordinator
+  useEffect(() => {
+    if (!isGamepadMode) return
+    const timer = setTimeout(() => {
+      const activeEl = document.querySelector('.gamepad-focused')
+      if (activeEl) {
+        activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' })
+      }
+    }, 45)
+    return () => clearTimeout(timer)
+  }, [focusZone, gamepadIndex, sidebarFocusIndex, topbarFocusIndex, spotlightFocusIndex, jumpInFocusIndex, isGamepadMode])
   const detailHero = activeGame?.hero_url ? normalizeArtworkUrl(activeGame.hero_url) : null
   const detailCover = activeGame?.cover_url ? normalizeArtworkUrl(activeGame.cover_url) : null
   const isAmbientCoverFallback = !detailHero && Boolean(detailCover)
@@ -9340,7 +9475,7 @@ function App() {
     </div>
   </div>
 )}
-{selectMode ? <div className="bulk-action-bar"><span><Check size={14} /> {selectedIds.length} selected · {filteredRecordIds.length} filtered</span><div className="bulk-action-group"><button className="outline-button" disabled={bulkBusy || !filteredRecordIds.length} onClick={selectAllFiltered}><Check size={14} /> Select All Filtered</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={deselectAll}><X size={14} /> Deselect All</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={() => handleBulkMove('dlc')}><PackageOpen size={14} /> Move to DLC</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleBulkHide}><EyeOff size={14} /> Hide from Library</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleRefetchSelected}><RefreshCw size={14} /> Re-fetch Artwork</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleExportSelected}><FileDown size={14} /> Export Selected to CSV</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={() => setBulkEditOpen(true)}><SlidersHorizontal size={14} /> Edit Selected</button><button className="danger-button" disabled={bulkBusy || !selectedIds.length} onClick={handleDeleteSelected}><Trash2 size={14} /> Delete Selected</button></div></div> : null}{notice ? <div className={cn('notice', noticeTone === 'error' && 'notice-error', noticeTone === 'warning' && 'notice-warning')}>{noticeTone === 'error' ? <X size={14} /> : noticeTone === 'warning' ? <AlertTriangle size={14} /> : <Check size={14} />} {notice}</div> : null}{loading && !filteredGames.length && !showIntro ? <div className="empty-state"><div className="loader" /> Loading and indexing your library…</div> : filteredGames.length ? <ErrorBoundary><VirtualGrid games={filteredGames} familyLocks={familyLocks} onLaunch={handleLaunch} onSelect={handleSelectGame} onHideGame={(game) => updateHiddenState(game, true)} onMoveCategory={moveCategory} onEditGame={setEditorGame} onContextMenu={handleCardContextMenu} onArtworkChanged={handleArtworkChanged} onArtworkError={handleArtworkError} selectMode={selectMode} selectedIds={selectedIds} onToggleSelect={toggleGameSelection} scrollElementRef={mainScrollRef} onImageError={handleImageError} initialScrollTop={activeGame?.id === lastClickedGameIdRef.current ? libraryScrollRef.current : 0} restoreGameId={activeGame?.id || lastClickedGameIdRef.current} restoredGameId={restoredGameId} gamepadFocusIndex={isGamepadMode ? gamepadIndex : -1} onToggleFavorite={handleToggleFavorite} /></ErrorBoundary> : (!games.length && !query && !sourceFilters.length && genreFilter === 'all' && backlogFilter === 'all' && !qualityFilters.length) ? <div className="empty-state"><strong>Your library is empty.</strong><span>Click Scan & import (top right) to add your games.</span></div> : <div className="empty-state"><Search size={21} /><span>No titles match {query ? `"${query}"` : aiFilter ? `AI filter "${aiFilter.originalQuery || 'custom'}"` : 'these filters'}.</span>{aiFilter ? (<button type="button" className="outline-button" style={{ marginTop: '10px', borderColor: 'rgba(239, 68, 68, 0.4)', color: '#f87171', display: 'inline-flex', alignItems: 'center', gap: '6px' }} onClick={handleClearAiFilter}><X size={14} /><span>Clear Smart AI Filter</span></button>) : null}{query ? (<button type="button" className="outline-button" style={{ marginTop: '10px', borderColor: 'var(--accent, #d6ff4b)', color: 'var(--accent, #d6ff4b)', display: 'inline-flex', alignItems: 'center', gap: '6px' }} onClick={() => setAiDrawerOpen(true)}><Sparkles size={14} /><span>Ask AI Companion about "{query}"</span></button>) : null}</div>}</section>}</ErrorBoundary></div><footer className="statusbar"><span className="statusbar-item statusbar-terminal"><TerminalSquare size={13} style={{ color: 'var(--accent, #d6ff4b)', opacity: 0.9 }} /> {scannerStatus ? <span className="inline-flex items-center gap-1.5"><span className="pulse-dot" /> {scannerStatus}</span> : 'Ready'}</span>{globalSyncRunning && (<span className="statusbar-item statusbar-sync-active" title="Artwork & metadata sync in progress"><span className="pulse-dot" /><span>{globalSyncProgress?.gameTitle ? `Syncing: ${globalSyncProgress.gameTitle} (${globalSyncProgress.current}/${globalSyncProgress.total})${globalSyncProgress.formattedTransfer ? ` • ${globalSyncProgress.formattedTransfer}` : ''}` : (globalSyncProgress?.message || `Syncing artwork (${globalSyncProgress?.current || 0}/${globalSyncProgress?.total || 0})...`)}</span><button type="button" onClick={handleCancelGlobalSync} className="statusbar-cancel-btn" title="Cancel sync immediately"><X size={11} /> Cancel</button></span>)}{guideSyncStatus?.running && (<span className="statusbar-item statusbar-sync-active" title="Strategy guides downloading from StrategyWiki in progress"><span className="pulse-dot" /><span>{guideSyncStatus.progress?.title ? `Downloading Guides: ${guideSyncStatus.progress.title} (${guideSyncStatus.progress.current}/${guideSyncStatus.progress.total})` : 'Downloading Guides from StrategyWiki...'}</span><button type="button" onClick={() => window.api?.guides?.cancelBatch?.()} className="statusbar-cancel-btn" title="Cancel guide download"><X size={11} /> Cancel</button></span>)}<span className="statusbar-item statusbar-storage"><HardDrive size={11} style={{ color: 'var(--accent, #d6ff4b)', opacity: 0.85 }} /> Offline · Local storage</span>{isVoiceListening && (<span className="statusbar-item statusbar-voice-listening" style={{ color: 'var(--accent, #d6ff4b)' }}><span className="pulse-dot" style={{ background: 'var(--accent, #d6ff4b)', boxShadow: '0 0 8px var(--accent-glow, rgba(214, 255, 75, 0.6))' }} /> Listening (PTT)...</span>)}{connectedGamepad && (<><span className="statusbar-item statusbar-gamepad" title={`Connected Controller: ${connectedGamepad}`}><Gamepad2 size={12} style={{ color: 'var(--accent, #d6ff4b)' }} /><span>{connectedGamepad}</span></span><span className="statusbar-item statusbar-shortcuts" title="Controller Navigation Shortcuts"><span className="statusbar-shortcut-item"><span className="gamepad-key-badge badge-a">A</span> Select</span><span className="statusbar-shortcut-item"><span className="gamepad-key-badge badge-b">B</span> Back</span><span className="statusbar-shortcut-item"><span className="gamepad-key-badge badge-x">X</span> Status</span><span className="statusbar-shortcut-item"><span className="gamepad-key-badge badge-y">Y</span> Fav</span><span className="statusbar-shortcut-item"><span className="gamepad-key-badge badge-bumper">LB/RB</span> Views</span></span></>)}<span className="statusbar-item statusbar-version">Version 1.3.7</span></footer></main>
+{selectMode ? <div className="bulk-action-bar"><span><Check size={14} /> {selectedIds.length} selected · {filteredRecordIds.length} filtered</span><div className="bulk-action-group"><button className="outline-button" disabled={bulkBusy || !filteredRecordIds.length} onClick={selectAllFiltered}><Check size={14} /> Select All Filtered</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={deselectAll}><X size={14} /> Deselect All</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={() => handleBulkMove('dlc')}><PackageOpen size={14} /> Move to DLC</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleBulkHide}><EyeOff size={14} /> Hide from Library</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleRefetchSelected}><RefreshCw size={14} /> Re-fetch Artwork</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleExportSelected}><FileDown size={14} /> Export Selected to CSV</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={() => setBulkEditOpen(true)}><SlidersHorizontal size={14} /> Edit Selected</button><button className="danger-button" disabled={bulkBusy || !selectedIds.length} onClick={handleDeleteSelected}><Trash2 size={14} /> Delete Selected</button></div></div> : null}{notice ? <div className={cn('notice', noticeTone === 'error' && 'notice-error', noticeTone === 'warning' && 'notice-warning')}>{noticeTone === 'error' ? <X size={14} /> : noticeTone === 'warning' ? <AlertTriangle size={14} /> : <Check size={14} />} {notice}</div> : null}{loading && !filteredGames.length && !showIntro ? <div className="empty-state"><div className="loader" /> Loading and indexing your library…</div> : filteredGames.length ? <ErrorBoundary><VirtualGrid games={filteredGames} familyLocks={familyLocks} onLaunch={handleLaunch} onSelect={handleSelectGame} onHideGame={(game) => updateHiddenState(game, true)} onMoveCategory={moveCategory} onEditGame={setEditorGame} onContextMenu={handleCardContextMenu} onArtworkChanged={handleArtworkChanged} onArtworkError={handleArtworkError} selectMode={selectMode} selectedIds={selectedIds} onToggleSelect={toggleGameSelection} scrollElementRef={mainScrollRef} onImageError={handleImageError} initialScrollTop={activeGame?.id === lastClickedGameIdRef.current ? libraryScrollRef.current : 0} restoreGameId={activeGame?.id || lastClickedGameIdRef.current} restoredGameId={restoredGameId} gamepadFocusIndex={isGamepadMode && focusZone === 'grid' ? gamepadIndex : -1} onToggleFavorite={handleToggleFavorite} /></ErrorBoundary> : (!games.length && !query && !sourceFilters.length && genreFilter === 'all' && backlogFilter === 'all' && !qualityFilters.length) ? <div className="empty-state"><strong>Your library is empty.</strong><span>Click Scan & import (top right) to add your games.</span></div> : <div className="empty-state"><Search size={21} /><span>No titles match {query ? `"${query}"` : aiFilter ? `AI filter "${aiFilter.originalQuery || 'custom'}"` : 'these filters'}.</span>{aiFilter ? (<button type="button" className="outline-button" style={{ marginTop: '10px', borderColor: 'rgba(239, 68, 68, 0.4)', color: '#f87171', display: 'inline-flex', alignItems: 'center', gap: '6px' }} onClick={handleClearAiFilter}><X size={14} /><span>Clear Smart AI Filter</span></button>) : null}{query ? (<button type="button" className="outline-button" style={{ marginTop: '10px', borderColor: 'var(--accent, #d6ff4b)', color: 'var(--accent, #d6ff4b)', display: 'inline-flex', alignItems: 'center', gap: '6px' }} onClick={() => setAiDrawerOpen(true)}><Sparkles size={14} /><span>Ask AI Companion about "{query}"</span></button>) : null}</div>}</section>}</ErrorBoundary></div><footer className="statusbar"><span className="statusbar-item statusbar-terminal"><TerminalSquare size={13} style={{ color: 'var(--accent, #d6ff4b)', opacity: 0.9 }} /> {scannerStatus ? <span className="inline-flex items-center gap-1.5"><span className="pulse-dot" /> {scannerStatus}</span> : 'Ready'}</span>{globalSyncRunning && (<span className="statusbar-item statusbar-sync-active" title="Artwork & metadata sync in progress"><span className="pulse-dot" /><span>{globalSyncProgress?.gameTitle ? `Syncing: ${globalSyncProgress.gameTitle} (${globalSyncProgress.current}/${globalSyncProgress.total})${globalSyncProgress.formattedTransfer ? ` • ${globalSyncProgress.formattedTransfer}` : ''}` : (globalSyncProgress?.message || `Syncing artwork (${globalSyncProgress?.current || 0}/${globalSyncProgress?.total || 0})...`)}</span><button type="button" onClick={handleCancelGlobalSync} className="statusbar-cancel-btn" title="Cancel sync immediately"><X size={11} /> Cancel</button></span>)}{guideSyncStatus?.running && (<span className="statusbar-item statusbar-sync-active" title="Strategy guides downloading from StrategyWiki in progress"><span className="pulse-dot" /><span>{guideSyncStatus.progress?.title ? `Downloading Guides: ${guideSyncStatus.progress.title} (${guideSyncStatus.progress.current}/${guideSyncStatus.progress.total})` : 'Downloading Guides from StrategyWiki...'}</span><button type="button" onClick={() => window.api?.guides?.cancelBatch?.()} className="statusbar-cancel-btn" title="Cancel guide download"><X size={11} /> Cancel</button></span>)}<span className="statusbar-item statusbar-storage"><HardDrive size={11} style={{ color: 'var(--accent, #d6ff4b)', opacity: 0.85 }} /> Offline · Local storage</span>{isVoiceListening && (<span className="statusbar-item statusbar-voice-listening" style={{ color: 'var(--accent, #d6ff4b)' }}><span className="pulse-dot" style={{ background: 'var(--accent, #d6ff4b)', boxShadow: '0 0 8px var(--accent-glow, rgba(214, 255, 75, 0.6))' }} /> Listening (PTT)...</span>)}{connectedGamepad && (<><span className="statusbar-item statusbar-gamepad" title={`Connected Controller: ${connectedGamepad}`}><Gamepad2 size={12} style={{ color: 'var(--accent, #d6ff4b)' }} /><span>{connectedGamepad}</span></span><span className="statusbar-item statusbar-shortcuts" title="Controller Navigation Shortcuts"><span className="statusbar-shortcut-item"><span className="gamepad-key-badge badge-a">A</span> Select</span><span className="statusbar-shortcut-item"><span className="gamepad-key-badge badge-b">B</span> Back</span><span className="statusbar-shortcut-item"><span className="gamepad-key-badge badge-x">X</span> Status</span><span className="statusbar-shortcut-item"><span className="gamepad-key-badge badge-y">Y</span> Fav</span><span className="statusbar-shortcut-item"><span className="gamepad-key-badge badge-bumper">LB/RB</span> Views</span></span></>)}<span className="statusbar-item statusbar-version">Version 1.3.7</span></footer></main>
     </div><SettingsModal isOpen={settingsModalOpen} onClose={() => setSettingsModalOpen(false)} initialTab={settingsModalTab} stats={stats} health={libraryHealth} backupsList={backupsList} backupBusy={backupBusy} restoreBusy={restoreBusy} onBackupNow={handleBackupNow} onOpenBackupsFolder={handleOpenBackupsFolder} onOpenBackupsManager={handleOpenBackupsManager} onExport={handleExport} onBackupCache={handleBackupCache} onRestoreCache={handleRestoreCache} onPurge={() => setPurgeOpen(true)} onRefresh={() => loadData({ preserveScroll: true })} connectedGamepad={connectedGamepad} hiddenGames={hiddenGames} onRestoreHidden={(game) => updateHiddenState(game, false)} activityLog={activityLog} activityLoading={activityLoading} onRefreshActivity={fetchSystemHealthAndActivity} layoutTheme={layoutTheme} onLayoutThemeChange={handleLayoutThemeChange} colorPalette={colorPalette} onColorPaletteChange={handleColorPaletteChange} onTriggerIntroPreview={() => { setSettingsModalOpen(false); setShowIntro(true); }} /><AiAssistantDrawer open={aiDrawerOpen} onClose={() => setAiDrawerOpen(false)} activeGame={activeGame} layoutTheme={layoutTheme} games={games} onAction={handleAiAction} isVoiceListening={isVoiceListening} onToggleVoice={toggleVoiceListening} /><ScanImportPanel open={scanOpen} onClose={() => setScanOpen(false)} onRefresh={loadData} /><GameEditorModal game={editorGame} onClose={() => setEditorGame(null)} onSaved={handleEditorSaved} /><PurgeConfirmModal open={purgeOpen} busy={purgeBusy} onClose={() => setPurgeOpen(false)} onConfirm={handlePurge} /><BulkEditModal open={bulkEditOpen} count={selectedIds.length} busy={bulkBusy} onClose={() => setBulkEditOpen(false)} onApply={handleBulkApply} /><ContextMenu menu={contextMenu} menuRef={contextMenuRef} onClose={() => setContextMenu(null)} onMoveCategory={moveCategory} onEditGame={setEditorGame} onHideGame={(game) => updateHiddenState(game, true)} onArtworkChanged={handleArtworkChanged} onArtworkError={handleArtworkError} onToggleFavorite={handleToggleFavorite} /><ConfirmActionModal config={confirmModal} onClose={() => setConfirmModal(null)} />{checkpointPrompt && (
   <div
     className="checkpoint-note-toast"
