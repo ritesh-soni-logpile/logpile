@@ -865,7 +865,7 @@ export function InstallerApp() {
                 e.currentTarget.style.boxShadow = `0 6px 26px ${activeTheme.accentGlow}, inset 0 1px 1px rgba(255, 255, 255, 0.5)`
               }}
             >
-              LAUNCH LOGPILE
+              {launchOnFinish ? 'LAUNCH LOGPILE' : 'FINISH'}
             </button>
           </div>
         )}

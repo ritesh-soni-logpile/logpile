@@ -3507,14 +3507,22 @@ function registerIpc() {
     }
 
     try {
-      sendProgress(10, 'Initializing destination folder...')
-      if (!fs.existsSync(targetPath)) {
-        fs.mkdirSync(targetPath, { recursive: true })
+      sendProgress(5, 'Initializing destination folder...')
+      const origFs = process.versions.electron ? require('original-fs') : require('node:fs')
+      if (!origFs.existsSync(targetPath)) {
+        await origFs.promises.mkdir(targetPath, { recursive: true })
       }
 
-      sendProgress(25, 'Closing any running Logpile processes...')
+      sendProgress(15, 'Closing any running Logpile processes...')
       if (process.platform === 'win32') {
         const { execSync } = require('node:child_process')
+        try {
+          execSync('taskkill /F /IM HwInfoReader.exe /T', { stdio: 'ignore' })
+        } catch {}
+        try {
+          execSync('taskkill /F /IM PresentMon-x64.exe /T', { stdio: 'ignore' })
+        } catch {}
+
         try {
           const myPids = new Set(app.getAppMetrics().map(m => m.pid))
           myPids.add(process.pid)
@@ -3534,35 +3542,61 @@ function registerIpc() {
             }
           }
         } catch {}
-        await new Promise(r => setTimeout(r, 600))
+        await new Promise(r => setTimeout(r, 800))
       }
 
-      sendProgress(45, 'Extracting Logpile binaries and assets...')
+      sendProgress(30, 'Scanning files to install...')
       const sourceDir = app.isPackaged ? path.dirname(process.execPath) : path.join(__dirname, '..', 'dist', 'win-unpacked')
       
-      if (fs.existsSync(sourceDir)) {
-        const copyDirRecursive = async (src, dest) => {
-          await fs.promises.mkdir(dest, { recursive: true })
-          const entries = await fs.promises.readdir(src, { withFileTypes: true })
-          for (const entry of entries) {
-            if (entry.name === 'logpile_data') continue
-            const srcPath = path.join(src, entry.name)
-            const destPath = path.join(dest, entry.name)
-            if (entry.isDirectory()) {
-              await copyDirRecursive(srcPath, destPath)
-            } else {
-              try {
-                await fs.promises.copyFile(srcPath, destPath)
-              } catch (cpErr) {
-                console.warn(`[Installer] Copy note for ${entry.name}:`, cpErr?.message)
-              }
-            }
-          }
-        }
-        await copyDirRecursive(sourceDir, targetPath)
+      if (!origFs.existsSync(sourceDir)) {
+        throw new Error(`Source installation files not found at: ${sourceDir}`)
       }
 
-      sendProgress(75, 'Configuring Windows shortcuts...')
+      const allFiles = []
+      const scanDir = async (dir) => {
+        const entries = await origFs.promises.readdir(dir, { withFileTypes: true })
+        for (const entry of entries) {
+          if (entry.name === 'logpile_data') continue
+          const fullPath = path.join(dir, entry.name)
+          if (entry.isDirectory()) {
+            await scanDir(fullPath)
+          } else {
+            allFiles.push(fullPath)
+          }
+        }
+      }
+      await scanDir(sourceDir)
+
+      const copyFileWithRetry = async (src, dest, retries = 5) => {
+        const destDir = path.dirname(dest)
+        await origFs.promises.mkdir(destDir, { recursive: true })
+        for (let attempt = 1; attempt <= retries; attempt++) {
+          try {
+            if (origFs.existsSync(dest)) {
+              try { origFs.chmodSync(dest, 0o666) } catch {}
+            }
+            await origFs.promises.copyFile(src, dest)
+            return
+          } catch (err) {
+            if (attempt === retries) {
+              throw new Error(`Failed to copy ${path.basename(src)}: ${err.message}`)
+            }
+            await new Promise(r => setTimeout(r, 200 * attempt))
+          }
+        }
+      }
+
+      let copiedCount = 0
+      for (const srcFile of allFiles) {
+        const relPath = path.relative(sourceDir, srcFile)
+        const destFile = path.join(targetPath, relPath)
+        await copyFileWithRetry(srcFile, destFile)
+        copiedCount++
+        const progressVal = Math.floor(35 + (copiedCount / allFiles.length) * 45)
+        sendProgress(progressVal, `Installing ${path.basename(srcFile)}...`)
+      }
+
+      sendProgress(82, 'Configuring Windows shortcuts...')
       const exePath = path.join(targetPath, 'Logpile.exe')
 
       if (process.platform === 'win32') {
@@ -3584,7 +3618,7 @@ function registerIpc() {
         if (createStartMenuShortcut) {
           try {
             const startMenuDir = path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs')
-            if (fs.existsSync(startMenuDir)) {
+            if (origFs.existsSync(startMenuDir)) {
               const startLnk = path.join(startMenuDir, 'Logpile.lnk')
               shell.writeShortcutLink(startLnk, {
                 target: exePath,
@@ -3599,18 +3633,18 @@ function registerIpc() {
           }
         }
 
-        sendProgress(88, 'Registering Windows application entry...')
-        const { exec } = require('node:child_process')
+        sendProgress(90, 'Registering Windows application entry...')
+        const { execSync } = require('node:child_process')
         try {
           const regBase = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\com.logpile.app'
-          exec(`reg add "${regBase}" /v DisplayName /d "Logpile" /f && reg add "${regBase}" /v DisplayVersion /d "1.3.7" /f && reg add "${regBase}" /v Publisher /d "Corporate Introvert Gamer" /f && reg add "${regBase}" /v InstallLocation /d "${targetPath}" /f && reg add "${regBase}" /v DisplayIcon /d "${targetPath}\\Logpile.exe,0" /f`)
+          execSync(`reg add "${regBase}" /v DisplayName /d "Logpile" /f && reg add "${regBase}" /v DisplayVersion /d "1.3.7" /f && reg add "${regBase}" /v Publisher /d "Corporate Introvert Gamer" /f && reg add "${regBase}" /v InstallLocation /d "${targetPath}" /f && reg add "${regBase}" /v DisplayIcon /d "${targetPath}\\Logpile.exe,0" /f`, { stdio: 'ignore' })
         } catch (regErr) {
           console.warn('[Installer] Registry note:', regErr?.message)
         }
 
-        sendProgress(95, 'Configuring performance telemetry access...')
+        sendProgress(96, 'Configuring performance telemetry access...')
         try {
-          exec(`net localgroup "Performance Log Users" "${process.env.USERNAME}" /add`)
+          execSync(`net localgroup "Performance Log Users" "${process.env.USERNAME}" /add`, { stdio: 'ignore' })
         } catch {}
       }
 
@@ -3626,17 +3660,20 @@ function registerIpc() {
   ipcMain.handle('installer:launch', async (_event, targetPath) => {
     try {
       const exePath = path.join(targetPath, 'Logpile.exe')
-      if (fs.existsSync(exePath)) {
-        try {
-          await shell.openPath(exePath)
-        } catch {
-          spawn(exePath, [], { detached: true, stdio: 'ignore' }).unref()
+      const origFs = process.versions.electron ? require('original-fs') : require('node:fs')
+      if (origFs.existsSync(exePath)) {
+        const errorMsg = await shell.openPath(exePath)
+        if (errorMsg) {
+          console.warn('[Installer] shell.openPath notice:', errorMsg)
+          const child = spawn(exePath, [], { detached: true, stdio: 'ignore' })
+          child.on('error', (err) => console.error('[Installer] Fallback spawn error:', err))
+          child.unref()
         }
       }
     } catch (launchErr) {
       console.error('[Installer] Launch failed:', launchErr)
     }
-    setTimeout(() => app.quit(), 400)
+    setTimeout(() => app.quit(), 500)
   })
 
   ipcMain.handle('installer:close', () => {
