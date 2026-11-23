@@ -8304,6 +8304,20 @@ function App() {
   const [spotlightFocusIndex, setSpotlightFocusIndex] = useState(0)
   const [jumpInFocusIndex, setJumpInFocusIndex] = useState(0)
   const [gamepadIndex, setGamepadIndex] = useState(0)
+
+  const handleGamepadNavigateRef = useRef(null)
+  const handleGamepadActionRef = useRef(null)
+
+  const { connectedGamepad, isGamepadMode } = useGamepad({
+    enabled: !isGameRunning,
+    onNavigate: (dir) => handleGamepadNavigateRef.current?.(dir),
+    onAction: (code) => handleGamepadActionRef.current?.(code),
+    onStatusChange: (statusMsg) => {
+      setNoticeTone('info')
+      setNotice(statusMsg)
+      setTimeout(() => setNotice(''), 3000)
+    },
+  })
   const [dossierSection, setDossierSection] = useState('actions') // 'actions' | 'tabs' | 'content'
   const [dossierActionIndex, setDossierActionIndex] = useState(0)
   const [dossierTabIndex, setDossierTabIndex] = useState(0)
@@ -9385,16 +9399,8 @@ function App() {
     oskOpen, oskRow, oskCol
   ])
 
-  const { connectedGamepad, isGamepadMode } = useGamepad({
-    enabled: !isGameRunning,
-    onNavigate: handleGamepadNavigate,
-    onAction: handleGamepadAction,
-    onStatusChange: (statusMsg) => {
-      setNoticeTone('info')
-      setNotice(statusMsg)
-      setTimeout(() => setNotice(''), 3000)
-    },
-  })
+  handleGamepadNavigateRef.current = handleGamepadNavigate
+  handleGamepadActionRef.current = handleGamepadAction
 
   // 2D Spatial Focus Auto-Scroll Coordinator
   useEffect(() => {
