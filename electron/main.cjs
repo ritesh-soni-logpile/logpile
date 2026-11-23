@@ -36,7 +36,10 @@ app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
 
 // Enforce single instance lock (exempt installer mode)
 const isInstallerArg = process.argv.includes('--installer');
-if (!isInstallerArg) {
+if (isInstallerArg) {
+  // Disable GPU hardware acceleration in installer mode to guarantee 100% reliable software rendering in temp directories
+  app.disableHardwareAcceleration();
+} else {
   const gotSingleInstanceLock = app.requestSingleInstanceLock();
   if (!gotSingleInstanceLock) {
     app.quit();
@@ -1559,7 +1562,7 @@ function createInstallerWindow() {
     maximizable: false,
     center: true,
     backgroundColor: '#08090d',
-    show: true,
+    show: false,
     alwaysOnTop: true,
     icon: getAppIconPath(),
     webPreferences: {
@@ -1570,26 +1573,55 @@ function createInstallerWindow() {
     }
   });
 
+  installerWindow.once('ready-to-show', () => {
+    if (installerWindow && !installerWindow.isDestroyed()) {
+      installerWindow.show();
+    }
+  });
+
+  setTimeout(() => {
+    try {
+      if (installerWindow && !installerWindow.isDestroyed() && !installerWindow.isVisible()) {
+        installerWindow.show();
+      }
+    } catch {}
+  }, 1200);
+
   setTimeout(() => {
     try {
       if (installerWindow && !installerWindow.isDestroyed()) {
         installerWindow.setAlwaysOnTop(false);
       }
     } catch {}
-  }, 1500);
+  }, 2000);
+
+  installerWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+    console.error(`[Installer] Failed to load ${validatedURL}: ${errorCode} (${errorDescription})`);
+  });
 
   const isDev = !app.isPackaged && (process.argv.includes('--dev') || process.env.NODE_ENV === 'development');
   const rendererUrl = !app.isPackaged ? (process.env.ELECTRON_RENDERER_URL || (isDev ? 'http://127.0.0.1:5173' : null)) : null;
   const indexPath = path.join(__dirname, '..', 'app-dist', 'index.html');
 
   if (rendererUrl) {
-    installerWindow.loadURL(`${rendererUrl}#installer`);
+    installerWindow.loadURL(`${rendererUrl}?mode=installer#installer`);
   } else {
-    installerWindow.loadFile(indexPath, { hash: 'installer' });
+    installerWindow.loadFile(indexPath, { hash: 'installer', query: { mode: 'installer' } }).catch((err) => {
+      console.warn('[Installer] loadFile with options failed, trying loadURL fallback:', err?.message);
+      try {
+        const directUrl = pathToFileURL(indexPath).href + '?mode=installer#installer';
+        installerWindow.loadURL(directUrl);
+      } catch (uErr) {
+        console.error('[Installer] Direct loadURL fallback failed:', uErr);
+      }
+    });
   }
 
   installerWindow.on('closed', () => {
     installerWindow = null;
+    if (process.argv.includes('--installer')) {
+      app.quit();
+    }
   });
 
   return installerWindow;
@@ -3749,6 +3781,14 @@ app.whenReady().then(() => {
   })
 
   if (process.platform === 'win32') app.setAppUserModelId('com.logpile.app')
+
+  registerIpc()
+
+  if (process.argv.includes('--installer')) {
+    createInstallerWindow()
+    return
+  }
+
   db = createDatabase(path.join(app.getPath('userData'), 'logpile.db'))
   try {
     const savedCustomModel = db.prepare("SELECT value FROM app_settings WHERE key = 'ai_custom_model_path'").get()
@@ -3769,21 +3809,17 @@ app.whenReady().then(() => {
   } catch (gErr) {
     console.warn('[Guides] Initial scan notice:', gErr?.message)
   }
-  registerIpc()
-  if (process.argv.includes('--installer')) {
-    createInstallerWindow()
-  } else {
-    createWindow()
-    createOverlayWindow()
-    try {
-      startHudGameMonitor()
-      startHardwareMonitor()
-    } catch {}
-    try {
-      registerGlobalShortcuts()
-    } catch (sErr) {
-      console.warn('[Shortcuts] Initial shortcut setup error:', sErr?.message)
-    }
+
+  createWindow()
+  createOverlayWindow()
+  try {
+    startHudGameMonitor()
+    startHardwareMonitor()
+  } catch {}
+  try {
+    registerGlobalShortcuts()
+  } catch (sErr) {
+    console.warn('[Shortcuts] Initial shortcut setup error:', sErr?.message)
   }
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

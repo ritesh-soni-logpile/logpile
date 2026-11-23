@@ -266,6 +266,7 @@ contextBridge.exposeInMainWorld('api', {
     enableEtw: () => ipcRenderer.invoke('telemetry:enableEtw'),
   },
   installer: {
+    isInstallerMode: process.argv.includes('--installer') || (typeof window !== 'undefined' && (window.location.hash.includes('installer') || window.location.search.includes('installer'))),
     detect: () => ipcRenderer.invoke('installer:detect'),
     browse: () => ipcRenderer.invoke('installer:browse'),
     getDriveSpace: (targetPath) => ipcRenderer.invoke('installer:getDriveSpace', targetPath),

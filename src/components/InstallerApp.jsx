@@ -276,8 +276,10 @@ export function InstallerApp() {
   return (
     <div
       style={{
-        width: '640px',
-        height: '440px',
+        width: '100%',
+        height: '100%',
+        maxWidth: '640px',
+        maxHeight: '440px',
         background: '#08090d',
         color: '#f8fafc',
         fontFamily: "'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",

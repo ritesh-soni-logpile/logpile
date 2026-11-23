@@ -6079,7 +6079,11 @@ function LiveHudOverlayView() {
 }
 
 function App() {
-  const isInstallerMode = typeof window !== 'undefined' && window.location.hash === '#installer'
+  const isInstallerMode = typeof window !== 'undefined' && (
+    window.location.hash.includes('installer') ||
+    window.location.search.includes('installer') ||
+    Boolean(window.api?.installer?.isInstallerMode)
+  )
   if (isInstallerMode) {
     return (
       <ErrorBoundary
@@ -6089,7 +6093,7 @@ function App() {
           </div>
         )}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'transparent' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100vw', height: '100vh', background: 'transparent', overflow: 'hidden' }}>
           <InstallerApp />
         </div>
       </ErrorBoundary>
