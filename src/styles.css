@@ -11688,12 +11688,26 @@ body.user-is-gamepad select {
   box-shadow: 0 0 16px -2px var(--accent-glow, rgba(99, 102, 241, 0.5)) !important;
 }
 
+.spotlight-btn-primary.gamepad-focused,
+.spotlight-btn-secondary.gamepad-focused,
 .spotlight-hero-btn.gamepad-focused,
-.home-spotlight-queue-card.gamepad-focused {
+.home-spotlight-queue-card.gamepad-focused,
+.collapsed-ribbon-play.gamepad-focused,
+.collapsed-ribbon-toggle.gamepad-focused {
   outline: 2px solid var(--accent, #6366f1) !important;
-  outline-offset: 3px !important;
+  outline-offset: 2px !important;
   box-shadow: 0 0 25px -2px var(--accent-glow, rgba(99, 102, 241, 0.45)) !important;
   transform: scale(1.04) !important;
+  z-index: 10 !important;
+}
+
+.spotlight-switch-pill.gamepad-focused {
+  outline: 2px solid var(--accent, #6366f1) !important;
+  outline-offset: 1px !important;
+  box-shadow: 0 0 20px -2px var(--accent-glow, rgba(99, 102, 241, 0.45)) !important;
+  background: color-mix(in srgb, var(--accent, #6366f1) 22%, rgba(255, 255, 255, 0.08)) !important;
+  transform: scale(1.02) !important;
+  z-index: 10 !important;
 }
 
 .gamepad-hud-bar {

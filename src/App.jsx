@@ -3455,6 +3455,11 @@ function HomeSpotlightAndShelf({
   familyLocks = {},
   isDrawerOpen = false,
   preferAnimatedArtwork = false,
+  isGamepadMode = false,
+  focusZone = 'grid',
+  spotlightFocusIndex = 0,
+  jumpInFocusIndex = 0,
+  onSpotlightStateChange,
 }) {
   const [shuffleSeed, setShuffleSeed] = useState(() => Math.random())
   const handleShuffle = (e) => {
@@ -3508,6 +3513,17 @@ function HomeSpotlightAndShelf({
     }).slice(0, 6)
   }, [games, spotlightCandidates, featured?.id])
 
+  // Notify parent of candidates & suggested games
+  useEffect(() => {
+    onSpotlightStateChange?.({
+      featured,
+      candidates: spotlightCandidates,
+      suggested: suggestedGames,
+      shuffle: handleShuffle,
+      setActiveIndex,
+    })
+  }, [featured, spotlightCandidates, suggestedGames, onSpotlightStateChange])
+
   if (!spotlightCandidates.length || !featured) return null
 
   const heroArt = featured.hero_url ? normalizeArtworkUrl(featured.hero_url) : (featured.cover_url ? normalizeArtworkUrl(featured.cover_url) : null)
@@ -3544,7 +3560,7 @@ function HomeSpotlightAndShelf({
             {featured.is_installed && (
               <button
                 type="button"
-                className="collapsed-ribbon-play"
+                className={cn("collapsed-ribbon-play", isGamepadMode && focusZone === 'spotlight' && spotlightFocusIndex === 0 && "gamepad-focused")}
                 onClick={() => onLaunch(featured)}
               >
                 <Play size={12} fill="currentColor" />
@@ -3553,7 +3569,7 @@ function HomeSpotlightAndShelf({
             )}
             <button
               type="button"
-              className="collapsed-ribbon-toggle"
+              className={cn("collapsed-ribbon-toggle", isGamepadMode && focusZone === 'spotlight' && spotlightFocusIndex === 1 && "gamepad-focused")}
               onClick={onToggleCollapse}
               title="Expand Spotlight (Ctrl+H)"
             >
@@ -3663,7 +3679,7 @@ function HomeSpotlightAndShelf({
                 {featured.is_installed ? (
                   <button
                     type="button"
-                    className={cn("spotlight-btn-primary", featuredFamilyLock && "spotlight-btn-family-warning")}
+                    className={cn("spotlight-btn-primary", featuredFamilyLock && "spotlight-btn-family-warning", isGamepadMode && focusZone === 'spotlight' && spotlightFocusIndex === 0 && "gamepad-focused")}
                     onClick={() => onLaunch(featured)}
                   >
                     <Play size={14} fill="currentColor" />
@@ -3672,7 +3688,7 @@ function HomeSpotlightAndShelf({
                 ) : (
                   <button
                     type="button"
-                    className="spotlight-btn-primary"
+                    className={cn("spotlight-btn-primary", isGamepadMode && focusZone === 'spotlight' && spotlightFocusIndex === 0 && "gamepad-focused")}
                     onClick={() => onSelect(featured, 'spotlight')}
                   >
                     <Sparkles size={14} />
@@ -3682,7 +3698,7 @@ function HomeSpotlightAndShelf({
 
                 <button
                   type="button"
-                  className="spotlight-btn-secondary"
+                  className={cn("spotlight-btn-secondary", isGamepadMode && focusZone === 'spotlight' && spotlightFocusIndex === 1 && "gamepad-focused")}
                   onClick={() => onSelect(featured, 'spotlight')}
                 >
                   <Info size={13} />
@@ -3691,7 +3707,7 @@ function HomeSpotlightAndShelf({
 
                 <button
                   type="button"
-                  className="spotlight-btn-secondary spotlight-shuffle-btn"
+                  className={cn("spotlight-btn-secondary spotlight-shuffle-btn", isGamepadMode && focusZone === 'spotlight' && spotlightFocusIndex === 2 && "gamepad-focused")}
                   onClick={handleShuffle}
                   title="Randomize & shuffle spotlight titles"
                 >
@@ -3713,7 +3729,7 @@ function HomeSpotlightAndShelf({
                     <button
                       key={game.id}
                       type="button"
-                      className={cn("spotlight-switch-pill", isActive && "is-active")}
+                      className={cn("spotlight-switch-pill", isActive && "is-active", isGamepadMode && focusZone === 'spotlight' && spotlightFocusIndex === (3 + idx) && "gamepad-focused")}
                       onClick={() => setActiveIndex(idx)}
                       title={game.canonical_title}
                     >
@@ -3754,12 +3770,12 @@ function HomeSpotlightAndShelf({
           </div>
 
           <div className="shelf-track">
-            {suggestedGames.map((game) => {
+            {suggestedGames.map((game, idx) => {
               const pForm = sourcePlatforms(game.sources)[0] || normalizePlatform(game.source)
               return (
                 <div
                   key={game.id}
-                  className="shelf-card"
+                  className={cn("shelf-card", isGamepadMode && focusZone === 'jump_in' && jumpInFocusIndex === idx && "gamepad-focused")}
                   onClick={() => onSelect(game, 'shelf')}
                   role="button"
                   tabIndex={0}
@@ -8207,6 +8223,14 @@ function App() {
   const [jumpInFocusIndex, setJumpInFocusIndex] = useState(0)
   const [gamepadIndex, setGamepadIndex] = useState(0)
 
+  const [spotlightState, setSpotlightState] = useState({
+    featured: null,
+    candidates: [],
+    suggested: [],
+    shuffle: null,
+    setActiveIndex: null,
+  })
+
   const allThemesList = useMemo(() => {
     try {
       const enabled = getEnabledAddonIds()
@@ -8332,6 +8356,10 @@ function App() {
 
     const cols = getGridColumns()
     const total = filteredGames.length
+    const isSpotlightVisible = isHomeView && !isSpotlightCollapsed && Boolean(spotlightState.featured)
+    const hasJumpIn = !isSpotlightCollapsed && Boolean(spotlightState.suggested && spotlightState.suggested.length >= 2)
+    const numCandidates = spotlightState.candidates?.length || 5
+    const numSuggested = spotlightState.suggested?.length || 0
 
     // Zone: Sidebar Navigation
     if (focusZone === 'sidebar') {
@@ -8374,7 +8402,86 @@ function App() {
       } else if (direction === 'right') {
         setTopbarFocusIndex((prev) => Math.min(2, prev + 1))
       } else if (direction === 'down') {
+        if (isSpotlightVisible) {
+          setFocusZone('spotlight')
+          setSpotlightFocusIndex(0)
+        } else if (hasJumpIn) {
+          setFocusZone('jump_in')
+          setJumpInFocusIndex(0)
+        } else {
+          setFocusZone('grid')
+        }
+      }
+      return
+    }
+
+    // Zone: Sanctuary Spotlight Navigation
+    if (focusZone === 'spotlight') {
+      if (direction === 'left') {
+        if (spotlightFocusIndex === 0) {
+          setFocusZone('sidebar')
+        } else if (spotlightFocusIndex === 1) {
+          setSpotlightFocusIndex(0)
+        } else if (spotlightFocusIndex === 2) {
+          setSpotlightFocusIndex(1)
+        } else if (spotlightFocusIndex >= 3) {
+          setSpotlightFocusIndex(2)
+        }
+      } else if (direction === 'right') {
+        if (spotlightFocusIndex === 0) {
+          setSpotlightFocusIndex(1)
+        } else if (spotlightFocusIndex === 1) {
+          setSpotlightFocusIndex(2)
+        } else if (spotlightFocusIndex === 2) {
+          setSpotlightFocusIndex(3)
+        }
+      } else if (direction === 'up') {
+        if (spotlightFocusIndex < 3) {
+          setFocusZone('topbar')
+          setTopbarFocusIndex(0)
+        } else if (spotlightFocusIndex === 3) {
+          setFocusZone('topbar')
+          setTopbarFocusIndex(2)
+        } else {
+          setSpotlightFocusIndex((prev) => prev - 1)
+        }
+      } else if (direction === 'down') {
+        if (spotlightFocusIndex >= 3 && spotlightFocusIndex < 3 + numCandidates - 1) {
+          setSpotlightFocusIndex((prev) => prev + 1)
+        } else {
+          if (hasJumpIn) {
+            setFocusZone('jump_in')
+            setJumpInFocusIndex(0)
+          } else {
+            setFocusZone('grid')
+            setGamepadIndex(0)
+          }
+        }
+      }
+      return
+    }
+
+    // Zone: Jump Back In Shelf Navigation
+    if (focusZone === 'jump_in') {
+      if (direction === 'left') {
+        if (jumpInFocusIndex === 0) {
+          setFocusZone('sidebar')
+        } else {
+          setJumpInFocusIndex((prev) => Math.max(0, prev - 1))
+        }
+      } else if (direction === 'right') {
+        setJumpInFocusIndex((prev) => Math.min(Math.max(0, numSuggested - 1), prev + 1))
+      } else if (direction === 'up') {
+        if (isSpotlightVisible) {
+          setFocusZone('spotlight')
+          setSpotlightFocusIndex(0)
+        } else {
+          setFocusZone('topbar')
+          setTopbarFocusIndex(0)
+        }
+      } else if (direction === 'down') {
         setFocusZone('grid')
+        setGamepadIndex(0)
       }
       return
     }
@@ -8382,7 +8489,18 @@ function App() {
     // Zone: Grid Navigation
     if (total === 0) {
       if (direction === 'left') setFocusZone('sidebar')
-      else if (direction === 'up') setFocusZone('topbar')
+      else if (direction === 'up') {
+        if (hasJumpIn) {
+          setFocusZone('jump_in')
+          setJumpInFocusIndex(0)
+        } else if (isSpotlightVisible) {
+          setFocusZone('spotlight')
+          setSpotlightFocusIndex(0)
+        } else {
+          setFocusZone('topbar')
+          setTopbarFocusIndex(0)
+        }
+      }
       return
     }
 
@@ -8396,15 +8514,23 @@ function App() {
       setGamepadIndex((prev) => Math.min(total - 1, prev + 1))
     } else if (direction === 'up') {
       if (gamepadIndex < cols) {
-        setFocusZone('topbar')
-        setTopbarFocusIndex(0)
+        if (hasJumpIn) {
+          setFocusZone('jump_in')
+          setJumpInFocusIndex(0)
+        } else if (isSpotlightVisible) {
+          setFocusZone('spotlight')
+          setSpotlightFocusIndex(0)
+        } else {
+          setFocusZone('topbar')
+          setTopbarFocusIndex(0)
+        }
       } else {
         setGamepadIndex((prev) => Math.max(0, prev - cols))
       }
     } else if (direction === 'down') {
       setGamepadIndex((prev) => Math.min(total - 1, prev + cols))
     }
-  }, [settingsModalOpen, isDetailView, focusZone, allSidebarNavItems.length, getGridColumns, filteredGames.length, gamepadIndex, screenshotMenuOpen, themeMenuOpen, bragMenuItems.length, allThemesList.length, topbarFocusIndex])
+  }, [settingsModalOpen, isDetailView, focusZone, allSidebarNavItems.length, getGridColumns, filteredGames.length, gamepadIndex, screenshotMenuOpen, themeMenuOpen, bragMenuItems.length, allThemesList.length, topbarFocusIndex, isHomeView, isSpotlightCollapsed, spotlightState, spotlightFocusIndex, jumpInFocusIndex])
 
   const handleGamepadAction = useCallback((code) => {
     const MAIN_VIEWS = ['installed', 'favorites', 'ready', 'all', 'today', 'system']
@@ -8497,6 +8623,41 @@ function App() {
         }
         return
       }
+      if (focusZone === 'spotlight') {
+        if (isSpotlightCollapsed) {
+          if (spotlightFocusIndex === 0 && spotlightState.featured?.is_installed) {
+            handleLaunch(spotlightState.featured)
+          } else {
+            handleToggleSpotlight()
+          }
+          return
+        }
+
+        if (spotlightFocusIndex === 0) {
+          if (spotlightState.featured?.is_installed) {
+            handleLaunch(spotlightState.featured)
+          } else if (spotlightState.featured) {
+            handleSelectGame(spotlightState.featured, 'spotlight')
+          }
+        } else if (spotlightFocusIndex === 1) {
+          if (spotlightState.featured) {
+            handleSelectGame(spotlightState.featured, 'spotlight')
+          }
+        } else if (spotlightFocusIndex === 2) {
+          spotlightState.shuffle?.()
+        } else if (spotlightFocusIndex >= 3) {
+          const candIdx = spotlightFocusIndex - 3
+          spotlightState.setActiveIndex?.(candIdx)
+        }
+        return
+      }
+      if (focusZone === 'jump_in') {
+        const game = spotlightState.suggested[jumpInFocusIndex]
+        if (game) {
+          handleSelectGame(game, 'shelf')
+        }
+        return
+      }
       if (focusZone === 'grid') {
         const currentGame = filteredGames[gamepadIndex] || activeGame
         if (currentGame) {
@@ -8535,6 +8696,17 @@ function App() {
           }
           return
         }
+        if (focusZone === 'spotlight' && spotlightState.featured?.is_installed) {
+          handleLaunch(spotlightState.featured)
+          return
+        }
+        if (focusZone === 'jump_in') {
+          const game = spotlightState.suggested[jumpInFocusIndex]
+          if (game?.is_installed) {
+            handleLaunch(game)
+            return
+          }
+        }
         const currentGame = filteredGames[gamepadIndex] || activeGame
         if (currentGame) {
           cycleGameStatus(currentGame)
@@ -8547,6 +8719,17 @@ function App() {
           const nextIdx = (curIdx + 1) % allThemesList.length
           handleLayoutThemeChange(allThemesList[nextIdx].value)
           return
+        }
+        if (focusZone === 'spotlight' && spotlightState.featured) {
+          handleToggleFavorite(spotlightState.featured)
+          return
+        }
+        if (focusZone === 'jump_in') {
+          const game = spotlightState.suggested[jumpInFocusIndex]
+          if (game) {
+            handleToggleFavorite(game)
+            return
+          }
         }
         const currentGame = filteredGames[gamepadIndex] || activeGame
         if (currentGame) {
@@ -8577,7 +8760,7 @@ function App() {
         return
       }
     }
-  }, [settingsModalOpen, isDetailView, screenshotMenuOpen, themeMenuOpen, focusZone, allSidebarNavItems, sidebarFocusIndex, topbarFocusIndex, bragFocusIndex, themeFocusIndex, bragMenuItems, allThemesList, layoutTheme, handleLayoutThemeChange, filteredGames, gamepadIndex, activeGame, handleSelectGame, cycleGameStatus, handleToggleFavorite, toggleBragMenu, handleBackToLibrary, selectMode, query, view, toggleVoiceListening])
+  }, [settingsModalOpen, isDetailView, screenshotMenuOpen, themeMenuOpen, focusZone, allSidebarNavItems, sidebarFocusIndex, topbarFocusIndex, bragFocusIndex, themeFocusIndex, bragMenuItems, allThemesList, layoutTheme, handleLayoutThemeChange, filteredGames, gamepadIndex, activeGame, handleSelectGame, cycleGameStatus, handleToggleFavorite, toggleBragMenu, handleBackToLibrary, selectMode, query, view, toggleVoiceListening, spotlightState, isSpotlightCollapsed, handleToggleSpotlight, handleLaunch, spotlightFocusIndex, jumpInFocusIndex])
 
   const { connectedGamepad, isGamepadMode } = useGamepad({
     enabled: !isGameRunning,
@@ -9298,6 +9481,11 @@ function App() {
       onToggleCollapse={handleToggleSpotlight}
       isDrawerOpen={aiDrawerOpen}
       preferAnimatedArtwork={true}
+      isGamepadMode={isGamepadMode}
+      focusZone={focusZone}
+      spotlightFocusIndex={spotlightFocusIndex}
+      jumpInFocusIndex={jumpInFocusIndex}
+      onSpotlightStateChange={setSpotlightState}
     />
   </ErrorBoundary>
 )}<div className="library-top-bar">
