@@ -43,6 +43,8 @@ Logpile is built for gamers who want the best offline PC game launcher, library 
 | Feature | Logpile v1.3.95 | Steam | Playnite | GOG Galaxy | LaunchBox |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Local Game Detection** | **Zero logins:** Scans drives & folders directly | Store account login required | Account logins required for library sync | GOG account login required | Account logins or store tokens required |
+| **PC Store & Launcher Coverage** | **22+ Stores & Custom Folders:** Steam, Epic, GOG, Xbox, EA, Ubisoft, Amazon, Itch.io, Battle.net, Riot, Rockstar, CDPR, Humble, HoYoPlay, Legacy, Wargaming & more | Steam only | Via store plugins | Via community integrations | Via store imports |
+| **Duplicate Installs Advisor** | **Built-in:** Detects multi-store installs, suggests which to keep/uninstall & shows reclaimable GB | No | Manual / no advisor | No | No |
 | **Bulk Backlog Import** | **Built-in:** Import entire uninstalled library via Excel / CSV | No (Single manual shortcut only) | Plugin required | No | Plugin required |
 | **Portable Drive Path Healing** | **Built-in:** Auto-adapts when drive letters change (`D:` to `E:`) | Breaks on drive letter change | Breaks on drive letter change | Breaks on drive letter change | Breaks on drive letter change |
 | **Live Steam Family Status** | **Yes:** Checks if shared game is free to play before launch | In-app store client only | No live check | No live check | No live check |
