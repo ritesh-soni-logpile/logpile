@@ -282,3 +282,4 @@ Copyright (c) 2026 Corporate Introvert Gamer (Ritesh Soni)
 
 ### Third-Party Software & Acknowledgments
 - **Intel PresentMon:** In-game graphics telemetry powered by Intel PresentMon (MIT License). Copyright (c) Intel Corporation.
+- **HWiNFO:** Hardware sensor telemetry via HWiNFO's Shared Memory Support (when enabled by the user in HWiNFO).
