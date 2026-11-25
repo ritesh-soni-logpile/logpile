@@ -395,6 +395,11 @@ function createDatabase(dbPath) {
   if (!sourceColumns.includes('id_source')) db.exec("ALTER TABLE game_sources ADD COLUMN id_source TEXT DEFAULT 'unknown'")
   if (!sourceColumns.includes('play_time_seconds')) db.exec('ALTER TABLE game_sources ADD COLUMN play_time_seconds INTEGER DEFAULT 0')
   if (!sourceColumns.includes('source_name')) db.exec('ALTER TABLE game_sources ADD COLUMN source_name TEXT')
+  if (!sourceColumns.includes('install_path')) db.exec('ALTER TABLE game_sources ADD COLUMN install_path TEXT')
+  if (!sourceColumns.includes('install_size_bytes')) db.exec('ALTER TABLE game_sources ADD COLUMN install_size_bytes INTEGER DEFAULT 0')
+  if (!sourceColumns.includes('executable_path')) db.exec('ALTER TABLE game_sources ADD COLUMN executable_path TEXT')
+  if (!sourceColumns.includes('launch_arguments')) db.exec('ALTER TABLE game_sources ADD COLUMN launch_arguments TEXT')
+  if (!sourceColumns.includes('is_installed')) db.exec('ALTER TABLE game_sources ADD COLUMN is_installed INTEGER DEFAULT 0')
   if (!columns.includes('genre')) db.exec('ALTER TABLE games ADD COLUMN genre TEXT')
   if (!columns.includes('genres')) db.exec('ALTER TABLE games ADD COLUMN genres TEXT')
   if (!columns.includes('is_dlc')) db.exec('ALTER TABLE games ADD COLUMN is_dlc INTEGER DEFAULT 0')
@@ -501,7 +506,12 @@ function getGames(db, filters = {}, sort = {}) {
         'installUri', gs.install_uri,
         'playTimeSeconds', gs.play_time_seconds,
         'sourceName', gs.source_name,
-        'ownershipStatus', gs.ownership_status
+        'ownershipStatus', gs.ownership_status,
+        'installPath', gs.install_path,
+        'installSizeBytes', COALESCE(gs.install_size_bytes, 0),
+        'executablePath', gs.executable_path,
+        'launchArguments', gs.launch_arguments,
+        'isInstalled', COALESCE(gs.is_installed, 0)
       )), '[]') AS sources_json
     FROM games g
     LEFT JOIN game_sources gs ON gs.game_id = g.id
@@ -525,7 +535,14 @@ function getGames(db, filters = {}, sort = {}) {
     active_mod_profile: row.active_mod_profile || null,
     last_checkpoint_note: row.last_checkpoint_note || null,
     last_checkpoint_at: row.last_checkpoint_at || null,
-    sources: JSON.parse(row.sources_json).filter((source) => source.platform !== null),
+    sources: JSON.parse(row.sources_json)
+      .filter((source) => source.platform !== null)
+      .map((source) => ({
+        ...source,
+        installPath: resolvePortablePath(source.installPath),
+        executablePath: resolvePortablePath(source.executablePath),
+        isInstalled: Boolean(source.isInstalled),
+      })),
     install_size_gb: Number((row.install_size_bytes / (1024 ** 3)).toFixed(2)),
   }))
 }
@@ -576,7 +593,12 @@ function updateGameStatus(db, gameId, status) {
         'installUri', gs.install_uri,
         'playTimeSeconds', gs.play_time_seconds,
         'sourceName', gs.source_name,
-        'ownershipStatus', gs.ownership_status
+        'ownershipStatus', gs.ownership_status,
+        'installPath', gs.install_path,
+        'installSizeBytes', COALESCE(gs.install_size_bytes, 0),
+        'executablePath', gs.executable_path,
+        'launchArguments', gs.launch_arguments,
+        'isInstalled', COALESCE(gs.is_installed, 0)
       )), '[]') AS sources_json
     FROM games g
     LEFT JOIN game_sources gs ON gs.game_id = g.id
@@ -597,7 +619,14 @@ function updateGameStatus(db, gameId, status) {
     is_utility: Boolean(updatedRow.is_utility),
     is_dlc: Boolean(updatedRow.is_dlc),
     is_hidden: Boolean(updatedRow.is_hidden),
-    sources: JSON.parse(updatedRow.sources_json).filter((source) => source.platform !== null),
+    sources: JSON.parse(updatedRow.sources_json)
+      .filter((source) => source.platform !== null)
+      .map((source) => ({
+        ...source,
+        installPath: resolvePortablePath(source.installPath),
+        executablePath: resolvePortablePath(source.executablePath),
+        isInstalled: Boolean(source.isInstalled),
+      })),
     install_size_gb: Number((updatedRow.install_size_bytes / (1024 ** 3)).toFixed(2)),
   }
 }
@@ -642,6 +671,14 @@ function getLibrarySettings(db) {
   const storedFpsStyle = getAppSetting(db, 'fps_style', 'minimalist-pill')
   const storedFpsTestMode = getAppSetting(db, 'fps_test_mode', 'true')
   const storedFpsMetrics = getAppSetting(db, 'fps_metrics', null)
+  const storedCustomScanFolders = getAppSetting(db, 'custom_scan_folders', '[]')
+  let parsedCustomScanFolders = []
+  try {
+    const parsed = JSON.parse(storedCustomScanFolders)
+    if (Array.isArray(parsed)) {
+      parsedCustomScanFolders = parsed.filter((f) => typeof f === 'string' && f.trim())
+    }
+  } catch {}
   let parsedFpsMetrics = {
     fps: true,
     onePercentLow: true,
@@ -679,6 +716,7 @@ function getLibrarySettings(db) {
     fpsStyle: typeof storedFpsStyle === 'string' && storedFpsStyle ? storedFpsStyle : 'minimalist-pill',
     fpsTestMode: storedFpsTestMode === 'true' || storedFpsTestMode === '1',
     fpsMetrics: parsedFpsMetrics,
+    customScanFolders: parsedCustomScanFolders,
   }
 }
 
@@ -701,6 +739,7 @@ function setLibrarySettings(db, settings = {}) {
   if (settings.fpsOpacity !== undefined && (typeof settings.fpsOpacity !== 'number' || isNaN(settings.fpsOpacity))) throw new Error('Invalid FPS opacity.')
   if (settings.fpsStyle !== undefined && typeof settings.fpsStyle !== 'string') throw new Error('Invalid FPS style.')
   if (settings.fpsTestMode !== undefined && typeof settings.fpsTestMode !== 'boolean') throw new Error('Invalid FPS test mode setting.')
+  if (settings.customScanFolders !== undefined && !Array.isArray(settings.customScanFolders)) throw new Error('Invalid custom scan folders setting.')
 
   if (settings.autoHideSupportEntries !== undefined) db.prepare("INSERT INTO app_settings (key, value) VALUES ('auto_hide_support_entries', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(settings.autoHideSupportEntries ? '1' : '0')
   if (settings.steamGridDbApiKey !== undefined) db.prepare("INSERT INTO app_settings (key, value) VALUES ('steamgriddb_api_key', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(String(settings.steamGridDbApiKey).trim())
@@ -720,6 +759,24 @@ function setLibrarySettings(db, settings = {}) {
   if (settings.fpsStyle !== undefined) db.prepare("INSERT INTO app_settings (key, value) VALUES ('fps_style', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(String(settings.fpsStyle).trim())
   if (settings.fpsTestMode !== undefined) db.prepare("INSERT INTO app_settings (key, value) VALUES ('fps_test_mode', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(settings.fpsTestMode ? 'true' : 'false')
   if (settings.fpsMetrics !== undefined && typeof settings.fpsMetrics === 'object') db.prepare("INSERT INTO app_settings (key, value) VALUES ('fps_metrics', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(JSON.stringify(settings.fpsMetrics))
+  if (settings.customScanFolders !== undefined) {
+    const seen = new Set()
+    const cleanFolders = []
+    for (const raw of settings.customScanFolders) {
+      if (typeof raw !== 'string') continue
+      const trimmed = raw.trim()
+      if (!trimmed || trimmed.length > 500) continue
+      let norm = path.normalize(trimmed)
+      if (norm.length > 3) norm = norm.replace(/[\\/]+$/, '')
+      const lower = norm.toLowerCase()
+      if (!seen.has(lower)) {
+        seen.add(lower)
+        cleanFolders.push(norm)
+      }
+      if (cleanFolders.length >= 30) break
+    }
+    db.prepare("INSERT INTO app_settings (key, value) VALUES ('custom_scan_folders', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(JSON.stringify(cleanFolders))
+  }
 
   if (settings.autoHideSupportEntries !== undefined) enforceHiddenClassification(db)
   return getLibrarySettings(db)
@@ -1337,4 +1394,40 @@ function deleteSaveBackup(db, backupId) {
   }
 }
 
-module.exports = { createDatabase, openDatabase, getActiveDatabase, seedIfEmpty, getGames, setGameHidden, updateGameStatus, updateGameMetadata, updateGameHltb, recordPlaySession, deleteGames, bulkUpdateGames, moveGameCategory, bulkMoveGameCategory, bulkSetGameHidden, getLibrarySettings, setLibrarySettings, getActivityLog, logActivity, logNetworkActivity, getNetworkActivityLog, getNetworkActivityStats, clearNetworkActivityLog, insertKnowledgeChunk, searchGameKnowledge, hasGuide, deleteGameKnowledge, findRecommendationCandidates, resolveGameByQuery, findGameEntityInText, getAppConfig, setAppConfig, getLibraryHealth, getRandomInstalledGame, getLibraryStats, exportLibraryCsv, exportSelectedCsv, purgeLibrary, enforceUtilityClassification, enforceDlcClassification, reconcileSteamAppIds, getUserCaptures, addUserCapture, deleteUserCapture, insertTechKnowledge, searchTechKnowledge, recordSaveBackup, getSaveBackups, deleteSaveBackup, updateGameSavePath, updateGameModProfile, updateCheckpointNote, toPortablePath, resolvePortablePath }
+function markSourceUninstalled(db, { gameId, platform, storeName, platformGameId } = {}) {
+  if (!db || !gameId) return { updated: false }
+  const sources = db.prepare('SELECT * FROM game_sources WHERE game_id = ?').all(String(gameId))
+  const normTargetStore = String(storeName || '').trim().toLowerCase()
+
+  const target = sources.find((s) => {
+    if (platformGameId && s.platform_game_id === platformGameId && (!platform || s.platform === platform)) return true
+    if (normTargetStore && String(s.source_name || '').trim().toLowerCase() === normTargetStore) return true
+    if (platform && s.platform === platform && platform !== 'custom') return true
+    return false
+  })
+
+  const tx = db.transaction(() => {
+    if (target) {
+      db.prepare('UPDATE game_sources SET is_installed = 0, install_path = NULL, install_size_bytes = 0, executable_path = NULL WHERE id = ?').run(target.id)
+    }
+    const remaining = db.prepare('SELECT * FROM game_sources WHERE game_id = ? AND is_installed = 1 LIMIT 1').get(String(gameId))
+    if (remaining) {
+      db.prepare(`UPDATE games SET
+        is_installed = 1,
+        install_path = COALESCE(?, install_path),
+        install_size_bytes = CASE WHEN ? > 0 THEN ? ELSE install_size_bytes END,
+        executable_path = COALESCE(?, executable_path),
+        launch_arguments = COALESCE(?, launch_arguments),
+        store_name = COALESCE(NULLIF(?, ''), store_name),
+        drive_status = 'online',
+        updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?`).run(remaining.install_path, remaining.install_size_bytes || 0, remaining.install_size_bytes || 0, remaining.executable_path, remaining.launch_arguments, remaining.source_name, String(gameId))
+    } else {
+      db.prepare("UPDATE games SET is_installed = 0, install_path = NULL, install_size_bytes = 0, drive_status = 'offline', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(String(gameId))
+    }
+  })
+  tx()
+  return { updated: true }
+}
+
+module.exports = { createDatabase, openDatabase, getActiveDatabase, seedIfEmpty, getGames, setGameHidden, updateGameStatus, updateGameMetadata, updateGameHltb, recordPlaySession, deleteGames, bulkUpdateGames, moveGameCategory, bulkMoveGameCategory, bulkSetGameHidden, getLibrarySettings, setLibrarySettings, getActivityLog, logActivity, logNetworkActivity, getNetworkActivityLog, getNetworkActivityStats, clearNetworkActivityLog, insertKnowledgeChunk, searchGameKnowledge, hasGuide, deleteGameKnowledge, findRecommendationCandidates, resolveGameByQuery, findGameEntityInText, getAppConfig, setAppConfig, getLibraryHealth, getRandomInstalledGame, getLibraryStats, exportLibraryCsv, exportSelectedCsv, purgeLibrary, enforceUtilityClassification, enforceDlcClassification, reconcileSteamAppIds, getUserCaptures, addUserCapture, deleteUserCapture, insertTechKnowledge, searchTechKnowledge, recordSaveBackup, getSaveBackups, deleteSaveBackup, updateGameSavePath, updateGameModProfile, updateCheckpointNote, markSourceUninstalled, toPortablePath, resolvePortablePath }

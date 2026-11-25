@@ -78,10 +78,10 @@ async function reconcileEpic(db, { installedAppNames, installedCatalogIds, insta
   if (!db || typeof db.prepare !== 'function') return
   try {
     const query = db.prepare(`
-      SELECT g.id, g.canonical_title, g.install_path, g.drive_letter, s.platform_game_id, s.platform_launch_id, s.id_source
+      SELECT g.id, g.canonical_title, COALESCE(s.install_path, g.install_path) AS install_path, g.drive_letter, s.platform_game_id, s.platform_launch_id, s.id_source
       FROM games g
       JOIN game_sources s ON s.game_id = g.id
-      WHERE s.platform = 'epic' AND g.is_installed = 1
+      WHERE s.platform = 'epic' AND (g.is_installed = 1 OR s.is_installed = 1)
     `)
     const installedEpicGames = query.all()
     const uninstalledIds = []
@@ -121,6 +121,32 @@ async function reconcileEpic(db, { installedAppNames, installedCatalogIds, insta
     }
 
     if (uninstalledIds.length > 0) {
+      const clearSourceStmt = db.prepare(`
+        UPDATE game_sources
+        SET is_installed = 0,
+            install_path = NULL,
+            install_size_bytes = 0,
+            executable_path = NULL
+        WHERE game_id = ? AND platform = 'epic'
+      `)
+      const otherInstalledStmt = db.prepare(`
+        SELECT install_path, install_size_bytes, executable_path, launch_arguments, source_name
+        FROM game_sources
+        WHERE game_id = ? AND is_installed = 1
+        LIMIT 1
+      `)
+      const promoteStmt = db.prepare(`
+        UPDATE games
+        SET is_installed = 1,
+            install_path = COALESCE(?, install_path),
+            install_size_bytes = CASE WHEN ? > 0 THEN ? ELSE install_size_bytes END,
+            executable_path = COALESCE(?, executable_path),
+            launch_arguments = COALESCE(?, launch_arguments),
+            store_name = COALESCE(NULLIF(?, ''), store_name),
+            drive_status = 'online',
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `)
       const updateStmt = db.prepare(`
         UPDATE games
         SET is_installed = 0,
@@ -132,7 +158,13 @@ async function reconcileEpic(db, { installedAppNames, installedCatalogIds, insta
       `)
       const reconcileTx = db.transaction(() => {
         for (const gameId of uninstalledIds) {
-          updateStmt.run(gameId)
+          clearSourceStmt.run(gameId)
+          const remaining = otherInstalledStmt.get(gameId)
+          if (remaining) {
+            promoteStmt.run(remaining.install_path, remaining.install_size_bytes || 0, remaining.install_size_bytes || 0, remaining.executable_path, remaining.launch_arguments, remaining.source_name, gameId)
+          } else {
+            updateStmt.run(gameId)
+          }
         }
       })
       reconcileTx()

@@ -1,141 +1,14 @@
 const crypto = require('node:crypto')
 const { isUtilityTitle, isHiddenByDefaultTitle, isDlcTitle, isDlcException } = require('./utilityRules.cjs')
+const {
+  TITLE_SUFFIXES,
+  PUBLISHER_PREFIXES,
+  cleanTitlePrefixes,
+  normalizeCanonicalTitle,
+  getEditionTierScore,
+} = require('./titleNormalizer.cjs')
 
 function id() { return crypto.randomUUID() }
-
-const TITLE_SUFFIXES = [
-  'xbox game studios',
-  'standard edition',
-  'definitive edition',
-  'game of the year edition',
-  'game of the year',
-  'goty edition',
-  'goty',
-  'master assassin edition',
-  'master assassin',
-  'gold edition',
-  'legacy collection',
-  'directors cut',
-  'director s cut',
-  'enhanced edition directors cut',
-  'enhanced edition director s cut',
-  'enhanced edition',
-  'enhanced',
-  'premium edition',
-  'special edition',
-  'anniversary edition',
-  '20th anniversary edition',
-  'legendary edition',
-  'challenger edition',
-  'rampage edition',
-  'premier edition',
-  'collector s edition',
-  'collectors edition',
-  'the collection',
-  'handsome collection',
-  'amazon prime',
-  'amazon luna',
-  'epic games',
-  'windows',
-  'steam',
-  'pc'
-]
-
-const PUBLISHER_PREFIXES = [
-  'deep silver',
-  'bethesda softworks',
-  'bethesda',
-  'warner bros games',
-  'warner bros interactive entertainment',
-  'warner bros',
-  'wb games',
-  'koch media',
-  'plaion',
-  'xbox game studios',
-  'microsoft studios',
-  '2k games',
-  '2k',
-  'square enix',
-  'bandai namco entertainment',
-  'bandai namco',
-  'focus home interactive',
-  'focus entertainment',
-  'thq nordic',
-  'thq',
-  'ubisoft entertainment',
-  'ubisoft',
-  'electronic arts',
-  'ea games',
-  'ea',
-  'capcom',
-  'konami',
-  'sega'
-]
-
-function cleanTitlePrefixes(rawTitle) {
-  if (!rawTitle) return ''
-  let title = String(rawTitle).trim()
-  if (/^(?:deep\s*silver\s*)?project\s*windfall$/i.test(title)) {
-    return 'Metro Exodus'
-  }
-  for (const pub of PUBLISHER_PREFIXES) {
-    const regex = new RegExp(`^${pub.replace(/\./g, '\\.')}\\s*[-:–—]?\\s+`, 'i')
-    if (regex.test(title)) {
-      title = title.replace(regex, '').trim()
-      break
-    }
-  }
-  title = title.replace(/\s*Xbox\s*Game\s*Studios$/i, '').trim()
-  title = title.replace(/^Metro-\s*/i, 'Metro: ')
-  return title
-}
-
-function normalizeCanonicalTitle(title) {
-  let value = String(title || '')
-    .toLowerCase()
-    .replace(/[™®©]/g, '')
-    .replace(/\s*\((pc|windows|mac|linux)\)\s*/gi, ' ')
-    .replace(/\b(legacy collection|bundle|edition)\s*\(\d{4}\)/gi, '$1')
-    .replace(/[^a-z0-9]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-
-  if (/^(?:deep\s*silver\s*)?project\s*windfall$/i.test(value)) {
-    value = 'metro exodus'
-  }
-
-  for (const pub of PUBLISHER_PREFIXES) {
-    if (value.startsWith(pub + ' ')) {
-      value = value.slice(pub.length + 1).trim()
-      break
-    }
-  }
-
-  let changed = true
-  while (changed && value) {
-    changed = false
-    for (const suffix of TITLE_SUFFIXES) {
-      if (value === suffix) continue
-      const marker = ` ${suffix}`
-      if (value.endsWith(marker)) {
-        value = value.slice(0, -marker.length).trim()
-        changed = true
-        break
-      }
-    }
-  }
-  return value.replace(/\b(game of the year|goty|definitive|ultimate|complete|deluxe|standard|edition|remastered|remaster|enhanced|digital|director s cut|directors cut|gold|legacy collection|master assassin|premium)\b/g, ' ')
-    .replace(/[^a-z0-9]/g, '')
-}
-
-function getEditionTierScore(title) {
-  const t = String(title || '').toLowerCase()
-  if (/\b(?:master assassin|ultimate|complete|collector'?s|legacy collection|handsome collection)\b/i.test(t)) return 5
-  if (/\b(?:game of the year|goty|gold|golden|director'?s cut|enhanced edition)\b/i.test(t)) return 4
-  if (/\b(?:deluxe|premium|special|anniversary|remastered|remaster|definitive|challenger|rampage|premier)\b/i.test(t)) return 3
-  if (/\b(?:enhanced|digital)\b/i.test(t)) return 2
-  return 1
-}
 
 function clean(value) { return value === undefined || value === null ? null : String(value).trim() || null }
 function normalizeRecordPlatform(platform) {
@@ -146,16 +19,29 @@ function normalizeStoreName(name) {
   const cleanName = clean(name)
   if (!cleanName) return null
   const lower = cleanName.toLowerCase()
-  if (lower === 'ea' || lower === 'ea games' || lower === 'origin' || lower === 'origin2') return 'EA Games'
-  if (lower === 'ubisoft' || lower === 'uplay') return 'Ubisoft'
+  if (lower === 'ea' || lower === 'ea games' || lower === 'origin' || lower === 'origin2' || lower === 'electronic arts') return 'EA Games'
+  if (lower === 'ubisoft' || lower === 'uplay' || lower === 'ubisoft connect') return 'Ubisoft'
   if (lower === 'epic' || lower === 'epic games') return 'Epic Games'
   if (lower === 'gog' || lower === 'gog galaxy') return 'GOG'
   if (lower === 'steam') return 'Steam'
   if (lower === 'xbox' || lower === 'microsoft' || lower === 'ms-xbl' || lower === 'ms-windows-store') return 'Xbox'
-  if (lower === 'repack' || lower === 'standalone') return 'Standalone'
+  if (lower === 'repack' || lower === 'standalone' || lower === 'custom-folder' || lower === 'standalone-clients') return 'Standalone'
   if (lower === 'amazon' || lower === 'amazon games') return 'Amazon Games'
-  if (lower === 'battlenet' || lower === 'battle.net') return 'Battle.net'
+  if (lower === 'battlenet' || lower === 'battle.net' || lower === 'blizzard') return 'Battle.net'
   if (lower === 'itch' || lower === 'itch.io') return 'Itch.io'
+  if (lower === 'riot' || lower === 'riot games' || lower === 'riotclient') return 'Riot Games'
+  if (lower === 'rockstar' || lower === 'rockstar games') return 'Rockstar Games'
+  if (lower === 'cdprojekt' || lower === 'cd projekt' || lower === 'cd projekt red' || lower === 'redlauncher') return 'CD Projekt'
+  if (lower === 'netmarble') return 'Netmarble'
+  if (lower === 'netease' || lower === 'netease games' || lower === 'loading bay') return 'NetEase'
+  if (lower === 'legacy' || lower === 'legacy games') return 'Legacy Games'
+  if (lower === 'hoyo' || lower === 'hoyoplay' || lower === 'hoyoverse' || lower === 'mihoyo') return 'HoYoPlay'
+  if (lower === 'humble' || lower === 'humble app' || lower === 'humble bundle' || lower === 'humble games') return 'Humble'
+  if (lower === 'wargaming' || lower === 'wgc' || lower === 'wargaming.net') return 'Wargaming'
+  if (lower === 'gaijin') return 'Gaijin'
+  if (lower === 'nexon') return 'Nexon'
+  if (lower === 'kuro' || lower === 'kuro games') return 'Kuro Games'
+  if (lower === 'roblox') return 'Roblox'
   return cleanName
 }
 
@@ -210,10 +96,10 @@ function mergeRecord(db, record) {
     const gameId = id()
     db.prepare(`INSERT INTO games (
       id, canonical_title, normalized_title, description, genre, genres, purchase_price, developer, publisher, release_date,
-      cover_url, hero_url, logo_url, store_name, executable_path, steamgriddb_id, is_installed, drive_letter, install_path, install_size_bytes, play_time_seconds,
+      cover_url, hero_url, logo_url, store_name, executable_path, launch_arguments, steamgriddb_id, is_installed, drive_letter, install_path, install_size_bytes, play_time_seconds,
       last_played, backlog_status, user_rating, is_favorite, is_utility, is_dlc, is_hidden, hidden_reason, drive_status
     ) VALUES (@id, @canonicalTitle, @normalizedTitle, @description, @genre, @genres, @price, @developer, @publisher, @releaseDate,
-      @coverUrl, @heroUrl, @logoUrl, @storeName, @executablePath, @steamGridDbId, @isInstalled, @driveLetter, @installPath, @installSizeBytes, @playTimeSeconds,
+      @coverUrl, @heroUrl, @logoUrl, @storeName, @executablePath, @launchArguments, @steamGridDbId, @isInstalled, @driveLetter, @installPath, @installSizeBytes, @playTimeSeconds,
       @lastPlayed, @backlogStatus, @userRating, @isFavorite, @isUtility, @isDlc, @isHidden, @hiddenReason, @driveStatus)`).run({
       id: gameId,
       canonicalTitle,
@@ -230,6 +116,7 @@ function mergeRecord(db, record) {
       logoUrl: clean(record.logoUrl),
       storeName: recordStoreName(record),
       executablePath: clean(record.executablePath) || clean(record.executable) || null,
+      launchArguments: clean(record.launchArguments) || null,
       steamGridDbId: clean(record.steamGridDbId) || clean(record.steamgriddbId) || null,
       isInstalled: record.isInstalled ? 1 : 0,
       driveLetter: clean(record.driveLetter),
@@ -267,7 +154,7 @@ function mergeRecord(db, record) {
 
     db.prepare(`UPDATE games SET
       canonical_title = CASE WHEN @preferIncomingTitle = 1 THEN @canonicalTitle ELSE canonical_title END,
-      store_name = CASE WHEN @preferIncomingTitle = 1 AND NULLIF(@storeName, '') IS NOT NULL THEN @storeName ELSE store_name END,
+      store_name = CASE WHEN NULLIF(@storeName, '') IS NOT NULL AND (@preferIncomingTitle = 1 OR store_name IS NULL OR TRIM(store_name) = '' OR LOWER(TRIM(store_name)) = 'custom') THEN @storeName ELSE store_name END,
       cover_url = CASE WHEN @preferIncomingTitle = 1 AND NULLIF(@coverUrl, '') IS NOT NULL THEN @coverUrl ELSE cover_url END,
       hero_url = CASE WHEN @preferIncomingTitle = 1 AND NULLIF(@heroUrl, '') IS NOT NULL THEN @heroUrl ELSE hero_url END,
       steamgriddb_id = CASE WHEN @preferIncomingTitle = 1 AND NULLIF(@steamGridDbId, '') IS NOT NULL THEN @steamGridDbId ELSE steamgriddb_id END,
@@ -280,6 +167,7 @@ function mergeRecord(db, record) {
       publisher = COALESCE(NULLIF(@publisher, ''), publisher),
       release_date = COALESCE(NULLIF(@releaseDate, ''), release_date),
       executable_path = COALESCE(NULLIF(@executablePath, ''), executable_path),
+      launch_arguments = COALESCE(NULLIF(@launchArguments, ''), launch_arguments),
       is_installed = CASE WHEN @isInstalled = 1 THEN 1 ELSE is_installed END,
       drive_letter = CASE WHEN @isInstalled = 1 AND NULLIF(@driveLetter, '') IS NOT NULL THEN @driveLetter ELSE COALESCE(NULLIF(@driveLetter, ''), drive_letter) END,
       install_path = CASE WHEN @isInstalled = 1 AND NULLIF(@installPath, '') IS NOT NULL THEN @installPath ELSE COALESCE(NULLIF(@installPath, ''), install_path) END,
@@ -311,6 +199,7 @@ function mergeRecord(db, record) {
       logoUrl: clean(record.logoUrl) || '',
       storeName: recordStoreName(record) || '',
       executablePath: clean(record.executablePath) || clean(record.executable) || '',
+      launchArguments: clean(record.launchArguments) || '',
       steamGridDbId: clean(record.steamGridDbId) || clean(record.steamgriddbId) || '',
       isInstalled: record.isInstalled ? 1 : 0,
       driveLetter: clean(record.driveLetter) || '',
@@ -336,29 +225,86 @@ function mergeRecord(db, record) {
     game = db.prepare('SELECT * FROM games WHERE id = ?').get(game.id)
   }
   const platform = normalizeRecordPlatform(record.platform)
+  const incomingStoreName = recordStoreName(record)
   const platformGameId = clean(record.platformGameId) || canonicalTitle
   const platformLaunchId = clean(record.platformLaunchId) || platformGameId
   const idSource = sourceIdSource(record, canonicalTitle)
   const existingSources = db.prepare('SELECT * FROM game_sources WHERE game_id = ?').all(game.id)
-  const exactSource = existingSources.find((source) => source.platform === platform && source.platform_game_id === platformGameId)
-  const existingPlatform = existingSources.find((source) => source.platform === platform)
-  const replaceableSource = existingSources.find((source) => source.platform === platform && (isTitleFallbackId(source.platform_game_id, canonicalTitle) || isTitleFallbackId(source.platform_launch_id, canonicalTitle) || source.id_source === 'title-fallback'))
+  const sameStore = (source) => {
+    if (source.platform !== platform) return false
+    if (platform !== 'custom') return true
+    const existingStore = normalizeStoreName(source.source_name)
+    if (!existingStore || !incomingStoreName) return true
+    return existingStore === incomingStoreName
+  }
+  const exactSource = existingSources.find((source) => sameStore(source) && source.platform_game_id === platformGameId)
+  const existingSameStore = existingSources.find((source) => sameStore(source))
+  const replaceableSource = existingSources.find((source) => sameStore(source) && (isTitleFallbackId(source.platform_game_id, canonicalTitle) || isTitleFallbackId(source.platform_launch_id, canonicalTitle) || source.id_source === 'title-fallback'))
+  const sourceInstallPath = clean(record.installPath) || null
+  const sourceInstallSize = Number(record.installSizeBytes || 0)
+  const sourceExePath = clean(record.executablePath) || clean(record.executable) || null
+  const sourceLaunchArgs = clean(record.launchArguments) || null
+  const sourceIsInstalled = record.isInstalled ? 1 : 0
   if (exactSource) {
-    db.prepare("UPDATE game_sources SET platform_launch_id = CASE WHEN ? = 'epic' AND ? <> '' THEN ? ELSE COALESCE(NULLIF(platform_launch_id, ''), ?) END, id_source = CASE WHEN COALESCE(id_source, '') IN ('', 'unknown') THEN ? ELSE id_source END, launch_uri = COALESCE(NULLIF(?, ''), launch_uri), install_uri = COALESCE(NULLIF(?, ''), install_uri), play_time_seconds = CASE WHEN ? > 0 THEN ? ELSE play_time_seconds END, source_name = COALESCE(NULLIF(?, ''), source_name) WHERE id = ?").run(platform, platformLaunchId, platformLaunchId, platformLaunchId, idSource, record.launchUri || '', record.installUri || '', Number(record.playTimeSeconds || 0), Number(record.playTimeSeconds || 0), recordStoreName(record) || '', exactSource.id)
+    db.prepare(`UPDATE game_sources SET
+      platform_launch_id = CASE WHEN ? = 'epic' AND ? <> '' THEN ? ELSE COALESCE(NULLIF(platform_launch_id, ''), ?) END,
+      id_source = CASE WHEN COALESCE(id_source, '') IN ('', 'unknown') THEN ? ELSE id_source END,
+      launch_uri = COALESCE(NULLIF(?, ''), launch_uri),
+      install_uri = COALESCE(NULLIF(?, ''), install_uri),
+      play_time_seconds = CASE WHEN ? > 0 THEN ? ELSE play_time_seconds END,
+      source_name = COALESCE(NULLIF(?, ''), source_name),
+      install_path = COALESCE(NULLIF(?, ''), install_path),
+      install_size_bytes = CASE WHEN ? > 0 THEN ? ELSE install_size_bytes END,
+      executable_path = COALESCE(NULLIF(?, ''), executable_path),
+      launch_arguments = COALESCE(NULLIF(?, ''), launch_arguments),
+      is_installed = CASE WHEN ? = 1 THEN 1 ELSE is_installed END
+      WHERE id = ?`).run(
+      platform, platformLaunchId, platformLaunchId, platformLaunchId,
+      idSource, record.launchUri || '', record.installUri || '',
+      Number(record.playTimeSeconds || 0), Number(record.playTimeSeconds || 0),
+      incomingStoreName || '',
+      sourceInstallPath || '', sourceInstallSize, sourceInstallSize,
+      sourceExePath || '', sourceLaunchArgs || '', sourceIsInstalled,
+      exactSource.id
+    )
   } else if (replaceableSource && !isTitleFallbackId(platformGameId, canonicalTitle)) {
-    db.prepare("UPDATE game_sources SET platform_game_id = ?, platform_launch_id = ?, id_source = ?, launch_uri = COALESCE(NULLIF(?, ''), launch_uri), install_uri = COALESCE(NULLIF(?, ''), install_uri), play_time_seconds = CASE WHEN ? > 0 THEN ? ELSE play_time_seconds END, source_name = COALESCE(NULLIF(?, ''), source_name) WHERE id = ?").run(platformGameId, platformLaunchId, idSource, record.launchUri || '', record.installUri || '', Number(record.playTimeSeconds || 0), Number(record.playTimeSeconds || 0), recordStoreName(record) || '', replaceableSource.id)
-  } else if (existingSources.length && !isTitleFallbackId(platformGameId, canonicalTitle)) {
-    const existingReal = existingSources.find((source) => !isTitleFallbackId(source.platform_game_id, canonicalTitle))
+    db.prepare(`UPDATE game_sources SET
+      platform_game_id = ?, platform_launch_id = ?, id_source = ?,
+      launch_uri = COALESCE(NULLIF(?, ''), launch_uri),
+      install_uri = COALESCE(NULLIF(?, ''), install_uri),
+      play_time_seconds = CASE WHEN ? > 0 THEN ? ELSE play_time_seconds END,
+      source_name = COALESCE(NULLIF(?, ''), source_name),
+      install_path = COALESCE(NULLIF(?, ''), install_path),
+      install_size_bytes = CASE WHEN ? > 0 THEN ? ELSE install_size_bytes END,
+      executable_path = COALESCE(NULLIF(?, ''), executable_path),
+      launch_arguments = COALESCE(NULLIF(?, ''), launch_arguments),
+      is_installed = CASE WHEN ? = 1 THEN 1 ELSE is_installed END
+      WHERE id = ?`).run(
+      platformGameId, platformLaunchId, idSource,
+      record.launchUri || '', record.installUri || '',
+      Number(record.playTimeSeconds || 0), Number(record.playTimeSeconds || 0),
+      incomingStoreName || '',
+      sourceInstallPath || '', sourceInstallSize, sourceInstallSize,
+      sourceExePath || '', sourceLaunchArgs || '', sourceIsInstalled,
+      replaceableSource.id
+    )
+  } else if (existingSameStore && !isTitleFallbackId(platformGameId, canonicalTitle)) {
+    const existingReal = existingSources.find((source) => sameStore(source) && !isTitleFallbackId(source.platform_game_id, canonicalTitle))
     if (existingReal && existingReal.platform_game_id !== platformGameId) {
       logIdConflict({ canonicalTitle, platform, existingId: existingReal.platform_game_id, incomingId: platformGameId, incomingSource: idSource })
       if (platform === 'epic' && idSource.startsWith('epic-manifest:') && platformLaunchId) {
-        db.prepare("UPDATE game_sources SET platform_launch_id = ?, launch_uri = COALESCE(NULLIF(?, ''), launch_uri), install_uri = COALESCE(NULLIF(?, ''), install_uri) WHERE id = ?").run(platformLaunchId, record.launchUri || '', record.installUri || '', existingReal.id)
+        db.prepare("UPDATE game_sources SET platform_launch_id = ?, launch_uri = COALESCE(NULLIF(?, ''), launch_uri), install_uri = COALESCE(NULLIF(?, ''), install_uri), install_path = COALESCE(NULLIF(?, ''), install_path), install_size_bytes = CASE WHEN ? > 0 THEN ? ELSE install_size_bytes END, is_installed = CASE WHEN ? = 1 THEN 1 ELSE is_installed END WHERE id = ?").run(platformLaunchId, record.launchUri || '', record.installUri || '', sourceInstallPath || '', sourceInstallSize, sourceInstallSize, sourceIsInstalled, existingReal.id)
       }
     }
-  } else if (!existingSources.length) {
-    db.prepare(`INSERT INTO game_sources (id, game_id, platform, platform_game_id, platform_launch_id, id_source, launch_uri, install_uri, play_time_seconds, source_name, ownership_status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'owned')`).run(id(), game.id, platform, platformGameId, platformLaunchId, idSource, record.launchUri || null, record.installUri || null, Number(record.playTimeSeconds || 0), recordStoreName(record))
-    sourceLinked = Boolean(existingPlatform)
+  } else if (!existingSameStore) {
+    db.prepare(`INSERT INTO game_sources (id, game_id, platform, platform_game_id, platform_launch_id, id_source, launch_uri, install_uri, play_time_seconds, source_name, ownership_status, install_path, install_size_bytes, executable_path, launch_arguments, is_installed)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'owned', ?, ?, ?, ?, ?)`).run(
+      id(), game.id, platform, platformGameId, platformLaunchId, idSource,
+      record.launchUri || null, record.installUri || null,
+      Number(record.playTimeSeconds || 0), incomingStoreName,
+      sourceInstallPath, sourceInstallSize, sourceExePath, sourceLaunchArgs, sourceIsInstalled
+    )
+    sourceLinked = existingSources.length > 0
   }
   const sourceTotal = db.prepare('SELECT COALESCE(SUM(play_time_seconds), 0) AS total FROM game_sources WHERE game_id = ?').get(game.id).total
   if (sourceTotal > 0) db.prepare("UPDATE games SET play_time_seconds = ?, backlog_status = CASE WHEN backlog_status = 'unplayed' THEN 'playing' ELSE backlog_status END, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(sourceTotal, game.id)

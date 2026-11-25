@@ -20,6 +20,9 @@ import '@fontsource/outfit/500.css'
 import '@fontsource/outfit/600.css'
 import { normalizeArtworkUrl } from './utils/artworkUrl'
 import { SourceIcon } from './components/SourceIcons'
+import { normalizePlatform, platformLabel, platformClass, normalizeStoreLabel, launcherLabelFromUri, isLauncherUri } from './utils/platformMeta.mjs'
+import { normalizeTitleSpaced, getEditionTierScore } from './utils/titleNormalizer.mjs'
+import { analyzeDuplicateInstalls } from './utils/duplicateAdvisor.mjs'
 import { CustomDropdown } from './components/CustomDropdown'
 import { AboutView } from './components/views/AboutView'
 import { SettingsModal, renderHudPreview } from './components/SettingsModal'
@@ -57,9 +60,9 @@ const fallbackApi = {
   async updateGameStatus() { return null },
   async openExternal(url) { window.open(url, '_blank'); return { success: true } },
   window: { minimize() {}, maximize() {}, close() {}, async captureScreen() { return { success: true } }, async captureRect() { return { success: true, dataUrl: '' } }, async saveBragCollage() { return { success: true } }, async openCapturesFolder() { return { success: true } }, async openPicturesFolder() { return { success: true } } },
-  database: { async seedCheck() { return { seeded: false, count: 0 } }, async getGames() { return [] }, async getLibraryStats() { return { totalGames: 0, installedGames: 0, utilityTools: 0, installedUtilities: 0, visibleGames: 0, visibleInstalledGames: 0, dlcGames: 0, installedDlc: 0, hiddenGames: 0, hiddenInstalledGames: 0, hiddenDlc: 0, hiddenInstalledDlc: 0, readyToInstallCount: 0, artworkCovered: 0, missingArtwork: 0, totalStorageGb: 0, platformBreakdown: [] } }, async getLibrarySettings() { return { autoHideSupportEntries: true, steamGridDbApiKey: '', preferAnimatedArtwork: false, preferAnimatedCovers: false, overlayShortcut: 'CommandOrControl+Shift+Space', fpsShortcut: 'CommandOrControl+Shift+F', searchShortcut: 'CommandOrControl+F', fpsEnabled: false, fpsPosition: 'top-right', fpsOpacity: 80, fpsStyle: 'minimalist-pill' } }, async getActivityLog() { return [] }, async getLibraryHealth() { return { totalGames: 0, installedGames: 0, lastBackupTimestamp: null, lastBackupPath: null, lastScanTimestamp: null, backupsDirectory: null } }, async backupNow() { return { ok: true, backupPath: '' } }, async listBackups() { return { directory: 'UserData/backups', backups: [] } }, async openBackupsFolder() { return { success: true } }, async chooseBackupFile() { return null }, async restoreBackup() { return { success: true } }, async setLibrarySettings() { return { autoHideSupportEntries: true, steamGridDbApiKey: '', preferAnimatedArtwork: false, preferAnimatedCovers: false, overlayShortcut: 'CommandOrControl+Shift+Space', fpsShortcut: 'CommandOrControl+Shift+F', searchShortcut: 'CommandOrControl+F', fpsEnabled: false, fpsPosition: 'top-right', fpsOpacity: 80, fpsStyle: 'minimalist-pill' } }, async setGameHidden() { return null }, async updateGameStatus() { return null }, async updateGameMetadata() { return null }, async deleteGames() { return null }, async bulkUpdateGames() { return null }, async bulkMoveGameCategory() { return null }, async bulkSetGameHidden() { return null }, async moveGameCategory() { return null }, async exportCsv() { return null }, async exportSelectedCsv() { return null }, async purgeLibrary() { return { deletedGames: 0 } }, async backupArtworkCache() { return null }, async restoreArtworkCache() { return null }, onUpdated() { return () => {} } },
-  scanner: { async scanAll() { return {} }, async chooseImportFile() { return null }, async importFile() { return {} }, async importBuffer() { return {} }, onProgress() { return () => {} } },
-  games: { async openUri() {}, async getMedia() { return { success: false, screenshots: [], movies: [] } }, async changeArtwork() { return null }, async refetchArtwork() { return null }, async refetchSelectedArtwork() { return null }, async chooseAndSaveArtwork() { return null }, async chooseExecutable() { return null }, async launchExecutable() { return null }, async addCustomGame() { return null }, async updateModProfile() { return true } },
+  database: { async seedCheck() { return { seeded: false, count: 0 } }, async getGames() { return [] }, async getLibraryStats() { return { totalGames: 0, installedGames: 0, utilityTools: 0, installedUtilities: 0, visibleGames: 0, visibleInstalledGames: 0, dlcGames: 0, installedDlc: 0, hiddenGames: 0, hiddenInstalledGames: 0, hiddenDlc: 0, hiddenInstalledDlc: 0, readyToInstallCount: 0, artworkCovered: 0, missingArtwork: 0, totalStorageGb: 0, platformBreakdown: [] } }, async getLibrarySettings() { return { autoHideSupportEntries: true, customScanFolders: [], steamGridDbApiKey: '', preferAnimatedArtwork: false, preferAnimatedCovers: false, overlayShortcut: 'CommandOrControl+Shift+Space', fpsShortcut: 'CommandOrControl+Shift+F', searchShortcut: 'CommandOrControl+F', fpsEnabled: false, fpsPosition: 'top-right', fpsOpacity: 80, fpsStyle: 'minimalist-pill' } }, async getActivityLog() { return [] }, async getLibraryHealth() { return { totalGames: 0, installedGames: 0, lastBackupTimestamp: null, lastBackupPath: null, lastScanTimestamp: null, backupsDirectory: null } }, async backupNow() { return { ok: true, backupPath: '' } }, async listBackups() { return { directory: 'UserData/backups', backups: [] } }, async openBackupsFolder() { return { success: true } }, async chooseBackupFile() { return null }, async restoreBackup() { return { success: true } }, async setLibrarySettings() { return { autoHideSupportEntries: true, customScanFolders: [], steamGridDbApiKey: '', preferAnimatedArtwork: false, preferAnimatedCovers: false, overlayShortcut: 'CommandOrControl+Shift+Space', fpsShortcut: 'CommandOrControl+Shift+F', searchShortcut: 'CommandOrControl+F', fpsEnabled: false, fpsPosition: 'top-right', fpsOpacity: 80, fpsStyle: 'minimalist-pill' } }, async setGameHidden() { return null }, async updateGameStatus() { return null }, async updateGameMetadata() { return null }, async deleteGames() { return null }, async bulkUpdateGames() { return null }, async bulkMoveGameCategory() { return null }, async bulkSetGameHidden() { return null }, async moveGameCategory() { return null }, async exportCsv() { return null }, async exportSelectedCsv() { return null }, async purgeLibrary() { return { deletedGames: 0 } }, async backupArtworkCache() { return null }, async restoreArtworkCache() { return null }, onUpdated() { return () => {} } },
+  scanner: { async scanAll() { return {} }, async chooseFolder() { return null }, async chooseImportFile() { return null }, async importFile() { return {} }, async importBuffer() { return {} }, onProgress() { return () => {} } },
+  games: { async openUri() {}, async getMedia() { return { success: false, screenshots: [], movies: [] } }, async changeArtwork() { return null }, async refetchArtwork() { return null }, async refetchSelectedArtwork() { return null }, async chooseAndSaveArtwork() { return null }, async chooseExecutable() { return null }, async launchExecutable() { return null }, async addCustomGame() { return null }, async openInstallFolder() { return true }, async triggerUninstallCopy() { return {} }, async markSourceUninstalled() { return {} }, async updateModProfile() { return true } },
   roulette: { async pick() { return null } },
   scraper: { async isSyncing() { return false }, async fetchMissingArt() { return { candidates: 0, matched: 0, covers: 0, heroes: 0 } }, async runBulkArtworkSync() { return { candidates: 0, updated: 0, matched: 0, skipped: 0, failed: 0 } }, async cancelSync() { return { cancelled: false } }, async syncMetadataAndArt() { return { candidates: 0, fastTracked: 0, updated: 0, metadataUpdated: 0, heroesUpdated: 0, matched: 0, skipped: 0, failed: 0 } }, async syncMetadata() { return { candidates: 0, metadataUpdated: 0, heroesUpdated: 0, matched: 0, skipped: 0, failed: 0 } }, async generateAutomaticFallbacks() { return { candidates: 0, fallbackCovers: 0, fallbackHeroes: 0, steamAssets: 0 } }, async testIgdb() { return { success: false, error: 'Unavailable' } }, async fetchGameMetadata() { return null }, async backupCache() { return null }, async restoreCache() { return null }, onProgress() { return () => {} }, onUpdated() { return () => {} }, async chooseOverride() { return null } },
   steam: { async getFamilyLocks() { return {} }, onFamilyLocksUpdated() { return () => {} } },
@@ -81,9 +84,7 @@ function formatBytes(bytes) {
   return `${(num / (1024 * 1024 * 1024)).toFixed(2)} GB`
 }
 function formatPlayTime(seconds) { const minutes = Math.round(Number(seconds || 0) / 60); if (minutes < 1) return 'No play time'; if (minutes < 60) return `${minutes}m played`; const hours = Math.floor(minutes / 60); const remainder = minutes % 60; return remainder ? `${hours}h ${remainder}m played` : `${hours}h played` }
-function normalizePlatform(platform) { const key = String(platform || '').toLowerCase().replace(/[^a-z0-9]/g, ''); return key.includes('steam') ? 'steam' : key.includes('epic') ? 'epic' : key.includes('gog') ? 'gog' : key.includes('amazon') ? 'amazon' : 'custom' }
-function platformLabel(platform) { return ({ steam: 'Steam', epic: 'Epic Games', gog: 'GOG', amazon: 'Amazon Games', custom: 'Custom' })[normalizePlatform(platform)] || platform }
-function platformClass(platform) { return ({ steam: 'platform-steam', epic: 'platform-epic', gog: 'platform-gog', amazon: 'platform-amazon', custom: 'platform-custom' })[normalizePlatform(platform)] || 'platform-custom' }
+// Platform mapping helpers imported from ./utils/platformMeta
 function sourcePlatforms(sources = []) { if (!Array.isArray(sources)) return []; return [...new Set(sources.filter(Boolean).map((source) => normalizePlatform(source?.platform)))] }
 function getFamilyLockForGame(game, familyLocks) {
   if (!game || !familyLocks || Object.keys(familyLocks).length === 0) return null
@@ -143,86 +144,7 @@ const MENU_WIDTH = 220
 const MENU_HEIGHT = 280
 const MENU_PADDING = 12
 function sourceKey(label) { return String(label || '').trim().toLowerCase().replace(/\s+/g, ' ') }
-const TITLE_SUFFIXES = [
-  'game of the year edition',
-  'game of the year',
-  'goty edition',
-  'goty',
-  'director s cut',
-  'directors cut',
-  'master assassin edition',
-  'golden edition',
-  'gold edition',
-  'definitive edition',
-  'definitive series',
-  'the definitive edition',
-  'telltale definitive series',
-  'complete edition',
-  'the complete edition',
-  'complete collection',
-  'deluxe edition',
-  'digital deluxe edition',
-  'deluxe',
-  'ultimate edition',
-  'the ultimate edition',
-  'enhanced edition directors cut',
-  'enhanced edition director s cut',
-  'enhanced edition',
-  'enhanced',
-  'remastered',
-  'remaster',
-  'challenger edition',
-  'rampage edition',
-  'premier edition',
-  'special edition',
-  'anniversary edition',
-  '20th anniversary edition',
-  'legendary edition',
-  'premium edition',
-  'standard edition',
-  'collector s edition',
-  'collectors edition',
-  'legacy collection',
-  'the collection',
-  'handsome collection',
-  'xbox game studios',
-  'amazon prime',
-  'amazon luna',
-  'epic games',
-  'windows',
-  'steam',
-  'pc',
-]
-function normalizedGameTitle(title) {
-  const raw = String(title || '').trim()
-  const isEditionYear = /\b(?:edition|collection|bundle|remaster|cut)\s*\((?:19\d\d|20\d\d)\)/i.test(raw)
-  const yearMatch = !isEditionYear ? raw.match(/\((19\d\d|20\d\d)\)/) : null
-  const yearTag = yearMatch ? ` ${yearMatch[1]}` : ''
-
-  let normalized = raw
-    .replace(/[\u2122\u00ae\u00a9]/g, '')
-    .replace(/\s*\((?:pc|windows|mac|linux)\)\s*/gi, ' ')
-    .replace(/\((19\d\d|20\d\d)\)/g, '')
-    .toLocaleLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-
-  let changed = true
-  while (changed && normalized) {
-    changed = false
-    for (const suffix of TITLE_SUFFIXES) {
-      if (normalized === suffix) continue
-      const marker = ` ${suffix}`
-      if (normalized.endsWith(marker)) {
-        normalized = normalized.slice(0, -marker.length).trim()
-        changed = true
-        break
-      }
-    }
-  }
-  return (normalized + yearTag).trim()
-}
+const normalizedGameTitle = normalizeTitleSpaced
 function normalizeSearchText(value) { return String(value || '').trim().toLocaleLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ') }
 function titleMatchesQuery(title, query) {
   const titleText = normalizeSearchText(title)
@@ -248,14 +170,7 @@ function strictTitleSearch(games, query) {
   if (!queryText) return [...games]
   return games.filter((game) => titleMatchesQuery(game.canonical_title, queryText)).sort((a, b) => titleSearchRank(a.canonical_title, queryText) - titleSearchRank(b.canonical_title, queryText) || a.canonical_title.localeCompare(b.canonical_title))
 }
-function getEditionTierScore(title) {
-  const t = String(title || '').toLowerCase()
-  if (/\b(?:master assassin|ultimate|complete|collector'?s|legacy collection|handsome collection)\b/i.test(t)) return 5
-  if (/\b(?:game of the year|goty|gold|golden|director'?s cut|enhanced edition)\b/i.test(t)) return 4
-  if (/\b(?:deluxe|premium|special|anniversary|remastered|remaster|definitive|challenger|rampage|premier)\b/i.test(t)) return 3
-  if (/\b(?:enhanced|digital)\b/i.test(t)) return 2
-  return 1
-}
+// Edition tier score imported from ./utils/titleNormalizer.mjs
 
 function consolidateGames(games = []) {
   const groups = new Map()
@@ -280,30 +195,11 @@ function consolidateGames(games = []) {
       return String(a.canonical_title || '').localeCompare(String(b.canonical_title || ''))
     })
     const representative = sortedVariants[0]
-    const sources = [...new Map(sortedVariants.flatMap((variant) => variant.sources || []).map((source) => [`${source.platform}|${source.platformGameId}|${source.launchUri || ''}`, source])).values()]
+    const sources = [...new Map(sortedVariants.flatMap((variant) => variant.sources || []).map((source) => [`${source.platform}|${normalizeStoreLabel(source.sourceName || source.source_name || '')}|${source.platformGameId}|${source.launchUri || ''}`, source])).values()]
     const installedVariant = variants.find((variant) => variant.is_installed && variant.executable_path) || variants.find((variant) => variant.is_installed) || representative
     const merged = { ...representative, variants: sortedVariants, sources, is_utility: Boolean(representative.is_utility), is_dlc: Boolean(representative.is_dlc), is_installed: variants.some((variant) => Boolean(variant.is_installed)), play_time_seconds: variants.reduce((total, variant) => total + Number(variant.play_time_seconds || 0), 0), install_size_bytes: variants.reduce((total, variant) => total + Number(variant.install_size_bytes || 0), 0), install_size_gb: Number((variants.reduce((total, variant) => total + Number(variant.install_size_bytes || 0), 0) / (1024 ** 3)).toFixed(2)), executable_path: installedVariant.executable_path || null, drive_letter: installedVariant.drive_letter || representative.drive_letter, install_path: installedVariant.install_path || representative.install_path }
     return merged
   })
-}
-function normalizeStoreLabel(label) {
-  const clean = String(label || '').trim()
-  const lower = clean.toLowerCase()
-  if (lower === 'ea' || lower === 'ea games' || lower === 'origin' || lower === 'origin2') return 'EA Games'
-  if (lower === 'ubisoft' || lower === 'uplay') return 'Ubisoft'
-  if (lower === 'epic' || lower === 'epic games') return 'Epic Games'
-  if (lower === 'gog' || lower === 'gog galaxy') return 'GOG'
-  if (lower === 'steam') return 'Steam'
-  if (lower === 'xbox' || lower === 'microsoft' || lower === 'ms-xbl' || lower === 'ms-windows-store') return 'Xbox'
-  if (lower === 'repack' || lower === 'standalone') return 'Standalone'
-  if (lower === 'amazon' || lower === 'amazon games') return 'Amazon Games'
-  if (lower === 'battlenet' || lower === 'battle.net') return 'Battle.net'
-  if (lower === 'itch' || lower === 'itch.io') return 'Itch.io'
-  return clean
-}
-function launcherLabelFromUri(uri) {
-  const scheme = String(uri || '').match(/^([a-z][a-z0-9+.-]*):\/\//i)?.[1]?.toLowerCase()
-  return ({ ea: 'EA Games', origin2: 'EA Games', ubisoft: 'Ubisoft', uplay: 'Ubisoft', xbox: 'Xbox', 'ms-xbl': 'Xbox', 'ms-windows-store': 'Xbox', 'amazon-games': 'Amazon Games', itch: 'Itch.io', 'battle-net': 'Battle.net', battlenet: 'Battle.net', riotclient: 'Riot Games' })[scheme] || null
 }
 function splitSourceLabels(value) { return String(value || '').split(/[,;|]/).map((label) => normalizeStoreLabel(label.trim())).filter((label) => label && label.toLowerCase() !== 'custom') }
 function sourceLabelsForGame(game) {
@@ -348,7 +244,6 @@ function sourceOptionsForGames(games = []) {
     .filter((source) => source.count > 0)
     .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }))
 }
-function isLauncherUri(uri) { return /^(steam|com\.epicgames\.launcher|goggalaxy|origin2|origin|ea|ubisoft|uplay|xbox|ms-xbl|ms-windows-store|amazon-games|itch|battle-net|battlenet|riotclient):\/\//i.test(String(uri || '')) }
 function sourceLauncherFamily(source) {
   const platform = normalizePlatform(source?.platform)
   const label = String(source?.sourceName || source?.source_name || '').toLowerCase()
@@ -358,6 +253,10 @@ function sourceLauncherFamily(source) {
   if (label.includes('ubisoft') || label.includes('uplay')) return 'ubisoft'
   if (label.includes('xbox') || label.includes('microsoft')) return 'xbox'
   if (label.includes('amazon')) return 'amazon'
+  if (label.includes('itch')) return 'itch'
+  if (label.includes('battle') || label.includes('blizzard')) return 'battlenet'
+  if (label.includes('riot')) return 'riot'
+  if (label.includes('roblox')) return 'roblox'
   return null
 }
 function isPlaceholderId(value) { return /^(?:text|title)[-_ ]?fallback$/i.test(String(value || '').trim()) }
@@ -385,6 +284,10 @@ function launcherUriForSource(source, game) {
   if (family === 'ubisoft') return id ? `uplay://launch/${id}/0` : null
   if (family === 'xbox') return `ms-windows-store://search/?query=${title}`
   if (family === 'amazon') return id ? `amazon-games://play/${id}` : 'amazon-games://'
+  if (family === 'itch') return id ? `itch://games/${id}` : 'itch://'
+  if (family === 'battlenet') return (rawId && /^[A-Z0-9_]{2,10}$/i.test(rawId)) ? `battlenet://game/${id}` : 'battlenet://'
+  if (family === 'riot') return 'riotclient://'
+  if (family === 'roblox') return 'roblox-player://'
   return null
 }
 function fallbackLauncherUri(game) {
@@ -394,7 +297,7 @@ function fallbackLauncherUri(game) {
     if (generated) return generated
   }
   const labels = sourceLabelsForGame(game).map((label) => String(label).toLowerCase())
-  const source = labels.find((label) => label.includes('steam') || label.includes('epic') || label.includes('gog') || label.includes('xbox') || label.includes('ea') || label.includes('origin') || label.includes('ubisoft') || label.includes('amazon')) || labels[0] || ''
+  const source = labels.find((label) => /steam|epic|gog|xbox|ea|origin|ubisoft|amazon|itch|battle|riot|roblox/.test(label)) || labels[0] || ''
   if (source.includes('steam')) return null
   if (source.includes('epic')) return 'com.epicgames.launcher://'
   if (source.includes('gog')) return 'goggalaxy://'
@@ -402,6 +305,10 @@ function fallbackLauncherUri(game) {
   if (source.includes('ea') || source.includes('origin') || source.includes('electronic arts')) return null
   if (source.includes('ubisoft') || source.includes('uplay')) return null
   if (source.includes('amazon')) return 'amazon-games://'
+  if (source.includes('itch')) return 'itch://'
+  if (source.includes('battle')) return 'battlenet://'
+  if (source.includes('riot')) return 'riotclient://'
+  if (source.includes('roblox')) return 'roblox-player://'
   return null
 }
 function gameYear(game) {
@@ -2582,7 +2489,7 @@ function ScanImportPanel({ open, onClose, onRefresh }) {
         <div className="scan-action-grid">
           <button className="scan-action-card" disabled={running} onClick={() => run(() => api.scanner.scanAll())}>
             <span className="scan-action-icon scan-lime"><ScanLine size={21} /></span>
-            <span><strong>Scan local drives</strong><small>Steam · Epic Games · GOG · Amazon Games</small></span>
+            <span><strong>Scan local drives</strong><small>Steam · Epic · GOG · Xbox · EA · Ubisoft · Amazon · Battle.net · Riot · itch.io · Rockstar · +more</small></span>
             <ChevronDown className="action-arrow" size={15} />
           </button>
           <button className="scan-action-card" disabled={running} onClick={importViaPicker}>
@@ -4675,6 +4582,8 @@ function HeroView({
   onDossierInfo = null,
 }) {
   const familyLock = useMemo(() => getFamilyLockForGame(activeGame, familyLocks), [activeGame, familyLocks])
+  const duplicateInfo = useMemo(() => analyzeDuplicateInstalls(activeGame), [activeGame])
+  const [dupNoticeMsg, setDupNoticeMsg] = useState('')
   const [internalActiveTab, setInternalActiveTab] = useState('overview')
   const activeTab = dossierActiveTab !== undefined ? dossierActiveTab : internalActiveTab
   const setActiveTab = useCallback((tab) => {
@@ -5192,6 +5101,60 @@ function HeroView({
                 <div className="hero-family-lock-copy">
                   <strong>Currently in use by {familyLock.playerName}</strong>
                   <span>This game is shared via Steam Family ({familyLock.familyGroup}). Launching now may interrupt their active session or fail if no other copy is available.</span>
+                </div>
+              </div>
+            )}
+
+            {duplicateInfo && (
+              <div className="hero-family-lock-banner" style={{ borderColor: 'rgba(245, 158, 11, 0.35)', background: 'rgba(245, 158, 11, 0.08)' }}>
+                <Layers size={16} style={{ color: '#fbbf24', flexShrink: 0 }} />
+                <div className="hero-family-lock-copy" style={{ flex: 1 }}>
+                  <strong>Installed on {duplicateInfo.allCopies.length} platforms · Save {duplicateInfo.reclaimableGb} GB</strong>
+                  <span>
+                    Keep <strong>{duplicateInfo.keep.storeLabel}</strong> ({duplicateInfo.keep.reason}) · Suggest uninstalling{' '}
+                    {duplicateInfo.remove.map((c) => `${c.storeLabel}${c.installSizeBytes > 0 ? ` (${(c.installSizeBytes / (1024 ** 3)).toFixed(1)} GB)` : ''}`).join(', ')}.
+                    {dupNoticeMsg ? ` — ${dupNoticeMsg}` : ''}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: '6px', flexShrink: 0, flexWrap: 'wrap' }}>
+                  {duplicateInfo.remove[0]?.installPath && (
+                    <button
+                      type="button"
+                      className="outline-button small-button"
+                      onClick={() => api.games?.openInstallFolder?.(duplicateInfo.remove[0].installPath).catch((err) => setDupNoticeMsg(err?.message || 'Folder unavailable'))}
+                    >
+                      <FolderOpen size={12} /> Folder
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="outline-button small-button"
+                    style={{ borderColor: 'rgba(245, 158, 11, 0.45)', color: '#fbbf24' }}
+                    onClick={async () => {
+                      const target = duplicateInfo.remove[0]
+                      if (!target) return
+                      const res = await api.games?.triggerUninstallCopy?.(target).catch(() => null)
+                      if (res?.message) setDupNoticeMsg(res.message)
+                    }}
+                  >
+                    <Trash2 size={12} /> Uninstall {duplicateInfo.remove[0]?.storeLabel}
+                  </button>
+                  <button
+                    type="button"
+                    className="outline-button small-button"
+                    onClick={async () => {
+                      const target = duplicateInfo.remove[0]
+                      if (!target) return
+                      await api.games?.markSourceUninstalled?.({
+                        gameId: target.gameId,
+                        platform: target.platform,
+                        storeName: target.storeLabel,
+                        platformGameId: target.platformGameId,
+                      }).catch(() => {})
+                    }}
+                  >
+                    Mark Removed
+                  </button>
                 </div>
               </div>
             )}
@@ -6517,6 +6480,22 @@ function App() {
         setShowIntro(true);
       }
     }
+  };
+  const [sourcesPlacement, setSourcesPlacement] = useState(() => {
+    try {
+      const saved = localStorage.getItem('logpile-sources-placement');
+      return ['sidebar', 'filterbar'].includes(saved) ? saved : 'sidebar';
+    } catch {
+      return 'sidebar';
+    }
+  });
+  const [publisherLaunchersOpen, setPublisherLaunchersOpen] = useState(false);
+  const handleSourcesPlacementChange = (nextPlacement) => {
+    if (!['sidebar', 'filterbar'].includes(nextPlacement)) return;
+    setSourcesPlacement(nextPlacement);
+    try {
+      localStorage.setItem('logpile-sources-placement', nextPlacement);
+    } catch {}
   };
   const mode = 'dark';
   const [loading, setLoading] = useState(true);
@@ -10590,30 +10569,60 @@ function App() {
 
           <div className="nav-divider" />
 
-          <div className="nav-group nav-group-sources">
-            <p className="nav-label nav-label-spaced">Sources</p>
-            <button
-              className={cn('nav-item nav-item-source nav-item-all-sources', !sourceFilters.length && 'active', isSidebarItemFocused('source_all') && 'gamepad-focused')}
-              onClick={() => { setSourceFilters([]); setViewMode('grid'); if (view === 'system' || view === 'today') setSidebarView('all') }}
-              title="All sources"
-            >
-              <SourceIcon source="all" size={14} className="sidebar-source-icon" />
-              <span>All sources</span>
-              <em>{games.length}</em>
-            </button>
-            {sourceOptions.map((source) => (
+          {sourcesPlacement === 'sidebar' && (
+            <div className='nav-group nav-group-sources'>
+              <p className='nav-label nav-label-spaced'>Sources</p>
               <button
-                key={source.key}
-                className={cn('nav-item nav-item-source', sourceFilters.includes(source.key) && 'active', isSidebarItemFocused(`source_${source.key}`) && 'gamepad-focused')}
-                onClick={() => { toggleSource(source.key); setViewMode('grid'); if (view === 'system' || view === 'today') setSidebarView('all') }}
-                title={source.label}
+                className={cn('nav-item nav-item-source nav-item-all-sources', !sourceFilters.length && 'active', isSidebarItemFocused('source_all') && 'gamepad-focused')}
+                onClick={() => { setSourceFilters([]); setViewMode('grid'); if (view === 'system' || view === 'today') setSidebarView('all') }}
+                title='All sources'
               >
-                <SourceIcon source={source.key} size={14} className="sidebar-source-icon" />
-                <span>{source.label}</span>
-                <em>{source.count}</em>
+                <SourceIcon source='all' size={14} className='sidebar-source-icon' />
+                <span>All sources</span>
+                <em>{games.length}</em>
               </button>
-            ))}
-          </div>
+              {(() => {
+                const mainKeys = new Set(['steam', 'epic games', 'gog', 'xbox', 'ea games', 'ubisoft', 'amazon games', 'itch.io', 'humble', 'standalone', 'custom']);
+                const mainSources = sourceOptions.filter((s) => mainKeys.has(s.key));
+                const publisherSources = sourceOptions.filter((s) => !mainKeys.has(s.key));
+                const hasActivePublisher = publisherSources.some((s) => sourceFilters.includes(s.key));
+                const showPublishers = publisherLaunchersOpen || hasActivePublisher;
+                const renderSourceBtn = (source) => (
+                  <button
+                    key={source.key}
+                    className={cn('nav-item nav-item-source', sourceFilters.includes(source.key) && 'active', isSidebarItemFocused(`source_${source.key}`) && 'gamepad-focused')}
+                    onClick={() => { toggleSource(source.key); setViewMode('grid'); if (view === 'system' || view === 'today') setSidebarView('all') }}
+                    title={source.label}
+                  >
+                    <SourceIcon source={source.key} size={14} className='sidebar-source-icon' />
+                    <span>{source.label}</span>
+                    <em>{source.count}</em>
+                  </button>
+                );
+                return (
+                  <>
+                    {mainSources.map(renderSourceBtn)}
+                    {publisherSources.length > 0 && (
+                      <>
+                        <button
+                          type='button'
+                          className='nav-item nav-item-source'
+                          onClick={() => setPublisherLaunchersOpen((prev) => !prev)}
+                          title='Toggle Publisher Launchers'
+                          style={{ opacity: 0.85 }}
+                        >
+                          {showPublishers ? <ChevronDown size={14} className='sidebar-source-icon' /> : <ChevronRight size={14} className='sidebar-source-icon' />}
+                          <span>Publisher Launchers</span>
+                          <em>{publisherSources.length}</em>
+                        </button>
+                        {showPublishers && publisherSources.map(renderSourceBtn)}
+                      </>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          )}
         </nav>
 
         <div className="sidebar-bottom-dock">
@@ -10899,6 +10908,19 @@ onDossierInfo={(info) => {
     </div>
     <div className="top-bar-divider" />
     <CustomDropdown value={sortKey} onChange={setSortKey} options={sortOptions} icon={ArrowDownAZ} className="top-bar-dropdown" title="Sort games" />
+    {sourcesPlacement === 'filterbar' && (
+      <CustomDropdown
+        value={sourceFilters[0] || 'all'}
+        onChange={(val) => setSourceFilters(val === 'all' ? [] : [val])}
+        options={[
+          { value: 'all', label: `All stores (${games.length})` },
+          ...sourceOptions.map((s) => ({ value: s.key, label: `${s.label} (${s.count})` })),
+        ]}
+        icon={Layers}
+        className="top-bar-dropdown"
+        title="Filter by store"
+      />
+    )}
     <CustomDropdown value={genreFilter} onChange={setGenreFilter} options={genreOptions} icon={Filter} className="top-bar-dropdown" title="Filter by genre" />
     <CustomDropdown value={backlogFilter} onChange={setBacklogFilter} options={backlogOptions} icon={SlidersHorizontal} className="top-bar-dropdown" title="Filter by backlog status" />
     <CustomDropdown value={timeFilter} onChange={setTimeFilter} options={timeOptions} icon={Clock} className="top-bar-dropdown" title="Filter by playtime (HowLongToBeat)" />
@@ -11199,9 +11221,9 @@ onDossierInfo={(info) => {
     </div>
   </footer>
 ) : (
-  <footer className="statusbar"><span className="statusbar-item statusbar-terminal"><TerminalSquare size={13} style={{ color: 'var(--accent, #d6ff4b)', opacity: 0.9 }} /> {scannerStatus ? <span className="inline-flex items-center gap-1.5"><span className="pulse-dot" /> {scannerStatus}</span> : 'Ready'}</span>{globalSyncRunning && (<span className="statusbar-item statusbar-sync-active" title="Artwork & metadata sync in progress"><span className="pulse-dot" /><span>{globalSyncProgress?.gameTitle ? `Syncing: ${globalSyncProgress.gameTitle} (${globalSyncProgress.current}/${globalSyncProgress.total})${globalSyncProgress.formattedTransfer ? ` • ${globalSyncProgress.formattedTransfer}` : ''}` : (globalSyncProgress?.message || `Syncing artwork (${globalSyncProgress?.current || 0}/${globalSyncProgress?.total || 0})...`)}</span><button type="button" onClick={handleCancelGlobalSync} className="statusbar-cancel-btn" title="Cancel sync immediately"><X size={11} /> Cancel</button></span>)}{guideSyncStatus?.running && (<span className="statusbar-item statusbar-sync-active" title="Strategy guides downloading from StrategyWiki in progress"><span className="pulse-dot" /><span>{guideSyncStatus.progress?.title ? `Downloading Guides: ${guideSyncStatus.progress.title} (${guideSyncStatus.progress.current}/${guideSyncStatus.progress.total})` : 'Downloading Guides from StrategyWiki...'}</span><button type="button" onClick={() => window.api?.guides?.cancelBatch?.()} className="statusbar-cancel-btn" title="Cancel guide download"><X size={11} /> Cancel</button></span>)}<span className="statusbar-item statusbar-storage"><HardDrive size={11} style={{ color: 'var(--accent, #d6ff4b)', opacity: 0.85 }} /> Offline · Local storage</span>{isVoiceListening && (<span className="statusbar-item statusbar-voice-listening" style={{ color: 'var(--accent, #d6ff4b)' }}><span className="pulse-dot" style={{ background: 'var(--accent, #d6ff4b)', boxShadow: '0 0 8px var(--accent-glow, rgba(214, 255, 75, 0.6))' }} /> Listening (PTT)...</span>)}{connectedGamepad && (<><span className="statusbar-item statusbar-gamepad" title={`Connected Controller: ${connectedGamepad}`}><Gamepad2 size={12} style={{ color: 'var(--accent, #d6ff4b)' }} /><span>{connectedGamepad}</span></span><span className="statusbar-item statusbar-shortcuts" title="Controller Navigation Shortcuts"><span className="statusbar-shortcut-item"><GamepadGlyph button="A" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> Select</span><span className="statusbar-shortcut-item"><GamepadGlyph button="B" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> {isDetailView ? 'Library' : 'Back'}</span><span className="statusbar-shortcut-item"><GamepadGlyph button="X" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> {isDetailView ? 'Launch' : 'Status'}</span><span className="statusbar-shortcut-item"><GamepadGlyph button="Y" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> Fav</span><span className="statusbar-shortcut-item"><GamepadGlyph button="LB/RB" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> {isDetailView ? 'Tabs' : 'Views'}</span>{isDetailView && <span className="statusbar-shortcut-item"><GamepadGlyph button="LT/RT" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> Games</span>}</span></>)}<span className="statusbar-item statusbar-version">Version 1.3.9</span></footer>
+  <footer className="statusbar"><span className="statusbar-item statusbar-terminal"><TerminalSquare size={13} style={{ color: 'var(--accent, #d6ff4b)', opacity: 0.9 }} /> {scannerStatus ? <span className="inline-flex items-center gap-1.5"><span className="pulse-dot" /> {scannerStatus}</span> : 'Ready'}</span>{globalSyncRunning && (<span className="statusbar-item statusbar-sync-active" title="Artwork & metadata sync in progress"><span className="pulse-dot" /><span>{globalSyncProgress?.gameTitle ? `Syncing: ${globalSyncProgress.gameTitle} (${globalSyncProgress.current}/${globalSyncProgress.total})${globalSyncProgress.formattedTransfer ? ` • ${globalSyncProgress.formattedTransfer}` : ''}` : (globalSyncProgress?.message || `Syncing artwork (${globalSyncProgress?.current || 0}/${globalSyncProgress?.total || 0})...`)}</span><button type="button" onClick={handleCancelGlobalSync} className="statusbar-cancel-btn" title="Cancel sync immediately"><X size={11} /> Cancel</button></span>)}{guideSyncStatus?.running && (<span className="statusbar-item statusbar-sync-active" title="Strategy guides downloading from StrategyWiki in progress"><span className="pulse-dot" /><span>{guideSyncStatus.progress?.title ? `Downloading Guides: ${guideSyncStatus.progress.title} (${guideSyncStatus.progress.current}/${guideSyncStatus.progress.total})` : 'Downloading Guides from StrategyWiki...'}</span><button type="button" onClick={() => window.api?.guides?.cancelBatch?.()} className="statusbar-cancel-btn" title="Cancel guide download"><X size={11} /> Cancel</button></span>)}<span className="statusbar-item statusbar-storage"><HardDrive size={11} style={{ color: 'var(--accent, #d6ff4b)', opacity: 0.85 }} /> Offline · Local storage</span>{isVoiceListening && (<span className="statusbar-item statusbar-voice-listening" style={{ color: 'var(--accent, #d6ff4b)' }}><span className="pulse-dot" style={{ background: 'var(--accent, #d6ff4b)', boxShadow: '0 0 8px var(--accent-glow, rgba(214, 255, 75, 0.6))' }} /> Listening (PTT)...</span>)}{connectedGamepad && (<><span className="statusbar-item statusbar-gamepad" title={`Connected Controller: ${connectedGamepad}`}><Gamepad2 size={12} style={{ color: 'var(--accent, #d6ff4b)' }} /><span>{connectedGamepad}</span></span><span className="statusbar-item statusbar-shortcuts" title="Controller Navigation Shortcuts"><span className="statusbar-shortcut-item"><GamepadGlyph button="A" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> Select</span><span className="statusbar-shortcut-item"><GamepadGlyph button="B" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> {isDetailView ? 'Library' : 'Back'}</span><span className="statusbar-shortcut-item"><GamepadGlyph button="X" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> {isDetailView ? 'Launch' : 'Status'}</span><span className="statusbar-shortcut-item"><GamepadGlyph button="Y" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> Fav</span><span className="statusbar-shortcut-item"><GamepadGlyph button="LB/RB" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> {isDetailView ? 'Tabs' : 'Views'}</span>{isDetailView && <span className="statusbar-shortcut-item"><GamepadGlyph button="LT/RT" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> Games</span>}</span></>)}<span className="statusbar-item statusbar-version">Version 1.3.95</span></footer>
 )}</main>
-    </div><VirtualKeyboard isOpen={oskOpen} value={query} onChange={(val) => { setQuery(val); setDebouncedQuery(val); setGamepadIndex(0); if (view === 'system' || view === 'today' || view === 'about') setSidebarView('all'); }} onDone={() => { setOskOpen(false); setFocusZone('grid'); setGamepadIndex(0); }} onClose={() => { setOskOpen(false); setFocusZone('grid'); setGamepadIndex(0); }} activeRow={oskRow} activeCol={oskCol} matchCount={filteredGames.length} isGamepadMode={isGamepadMode} gamepadGlyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /><SettingsModal isOpen={settingsModalOpen} onClose={() => setSettingsModalOpen(false)} initialTab={settingsModalTab} isGamepadMode={isGamepadMode} settingsSection={settingsSection} settingsCategoryIndex={settingsCategoryIndex} settingsContentIndex={settingsContentIndex} onSettingsTabChange={(tabId) => { setSettingsModalTab(tabId); const idx = SETTINGS_TAB_IDS.indexOf(tabId); if (idx >= 0) setSettingsCategoryIndex(idx); }} gamepadGlyphStyle={gamepadGlyphStyle} onGamepadGlyphStyleChange={handleGamepadGlyphStyleChange} consoleAudioEnabled={consoleAudioEnabled} onToggleConsoleAudio={handleToggleConsoleAudio} stats={stats} health={libraryHealth} backupsList={backupsList} backupBusy={backupBusy} restoreBusy={restoreBusy} onBackupNow={handleBackupNow} onOpenBackupsFolder={handleOpenBackupsFolder} onOpenBackupsManager={handleOpenBackupsManager} onExport={handleExport} onBackupCache={handleBackupCache} onRestoreCache={handleRestoreCache} onPurge={() => setPurgeOpen(true)} onRefresh={() => loadData({ preserveScroll: true })} connectedGamepad={connectedGamepad} hiddenGames={hiddenGames} onRestoreHidden={(game) => updateHiddenState(game, false)} activityLog={activityLog} activityLoading={activityLoading} onRefreshActivity={fetchSystemHealthAndActivity} layoutTheme={layoutTheme} onLayoutThemeChange={handleLayoutThemeChange} colorPalette={colorPalette} onColorPaletteChange={handleColorPaletteChange} onTriggerIntroPreview={() => { setSettingsModalOpen(false); setShowIntro(true); }} aiUserEnabled={aiUserEnabled} onToggleAiUserEnabled={handleToggleAiUserEnabled} aiInstalled={aiInstalled} isBigPictureMode={isBigPictureMode} onExitBigPicture={() => handleToggleBigPicture(false)} /><AiAssistantDrawer
+    </div><VirtualKeyboard isOpen={oskOpen} value={query} onChange={(val) => { setQuery(val); setDebouncedQuery(val); setGamepadIndex(0); if (view === 'system' || view === 'today' || view === 'about') setSidebarView('all'); }} onDone={() => { setOskOpen(false); setFocusZone('grid'); setGamepadIndex(0); }} onClose={() => { setOskOpen(false); setFocusZone('grid'); setGamepadIndex(0); }} activeRow={oskRow} activeCol={oskCol} matchCount={filteredGames.length} isGamepadMode={isGamepadMode} gamepadGlyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /><SettingsModal isOpen={settingsModalOpen} onClose={() => setSettingsModalOpen(false)} initialTab={settingsModalTab} isGamepadMode={isGamepadMode} settingsSection={settingsSection} settingsCategoryIndex={settingsCategoryIndex} settingsContentIndex={settingsContentIndex} onSettingsTabChange={(tabId) => { setSettingsModalTab(tabId); const idx = SETTINGS_TAB_IDS.indexOf(tabId); if (idx >= 0) setSettingsCategoryIndex(idx); }} gamepadGlyphStyle={gamepadGlyphStyle} onGamepadGlyphStyleChange={handleGamepadGlyphStyleChange} consoleAudioEnabled={consoleAudioEnabled} onToggleConsoleAudio={handleToggleConsoleAudio} stats={stats} health={libraryHealth} backupsList={backupsList} backupBusy={backupBusy} restoreBusy={restoreBusy} onBackupNow={handleBackupNow} onOpenBackupsFolder={handleOpenBackupsFolder} onOpenBackupsManager={handleOpenBackupsManager} onExport={handleExport} onBackupCache={handleBackupCache} onRestoreCache={handleRestoreCache} onPurge={() => setPurgeOpen(true)} onRefresh={() => loadData({ preserveScroll: true })} connectedGamepad={connectedGamepad} hiddenGames={hiddenGames} onRestoreHidden={(game) => updateHiddenState(game, false)} activityLog={activityLog} activityLoading={activityLoading} onRefreshActivity={fetchSystemHealthAndActivity} layoutTheme={layoutTheme} onLayoutThemeChange={handleLayoutThemeChange} sourcesPlacement={sourcesPlacement} onSourcesPlacementChange={handleSourcesPlacementChange} colorPalette={colorPalette} onColorPaletteChange={handleColorPaletteChange} onTriggerIntroPreview={() => { setSettingsModalOpen(false); setShowIntro(true); }} aiUserEnabled={aiUserEnabled} onToggleAiUserEnabled={handleToggleAiUserEnabled} aiInstalled={aiInstalled} isBigPictureMode={isBigPictureMode} onExitBigPicture={() => handleToggleBigPicture(false)} /><AiAssistantDrawer
         open={aiDrawerOpen}
         onClose={() => setAiDrawerOpen(false)}
         activeGame={activeGame}

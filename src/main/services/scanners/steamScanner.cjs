@@ -186,10 +186,10 @@ async function reconcileSteam(db, sweptAppIds, libraries = []) {
   if (!db || typeof db.prepare !== 'function') return
   try {
     const query = db.prepare(`
-      SELECT g.id, g.canonical_title, g.install_path, g.drive_letter, s.platform_game_id, s.id_source
+      SELECT g.id, g.canonical_title, COALESCE(s.install_path, g.install_path) AS install_path, g.drive_letter, s.platform_game_id, s.id_source, COALESCE(s.is_installed, 0) AS source_installed
       FROM games g
       JOIN game_sources s ON s.game_id = g.id
-      WHERE s.platform = 'steam' AND g.is_installed = 1
+      WHERE s.platform = 'steam' AND (g.is_installed = 1 OR s.is_installed = 1)
     `)
     const installedSteamGames = query.all()
     const uninstalledIds = []
@@ -214,14 +214,14 @@ async function reconcileSteam(db, sweptAppIds, libraries = []) {
         libraries.some((lib) => normInstallPath.startsWith(path.normalize(lib).toLowerCase()))
       )
 
-      // Only reconcile Steam-owned or Steam-located installs (avoid touching games installed via Epic/GOG)
+      // Only reconcile Steam-owned or Steam-located installs (avoid touching legacy games installed via Epic/GOG)
       if (isNumericAppId || isSteamPath || !game.install_path) {
         const notFoundInSweep = isNumericAppId ? !sweptAppIds.has(appId) : true
         const folderMissingOnDisk = game.install_path ? !(await fileExistsAsync(game.install_path)) : true
 
         if (notFoundInSweep || folderMissingOnDisk) {
-          // If the game has another active install path on disk from another store, preserve it
-          if (game.install_path && !isSteamPath && (await fileExistsAsync(game.install_path))) {
+          // If the game has an un-tracked legacy install path from another store and Steam source wasn't explicitly marked installed, preserve it
+          if (game.install_path && !isSteamPath && !game.source_installed && (await fileExistsAsync(game.install_path))) {
             continue
           }
           uninstalledIds.push(game.id)
@@ -230,6 +230,32 @@ async function reconcileSteam(db, sweptAppIds, libraries = []) {
     }
 
     if (uninstalledIds.length > 0) {
+      const clearSourceStmt = db.prepare(`
+        UPDATE game_sources
+        SET is_installed = 0,
+            install_path = NULL,
+            install_size_bytes = 0,
+            executable_path = NULL
+        WHERE game_id = ? AND platform = 'steam'
+      `)
+      const otherInstalledStmt = db.prepare(`
+        SELECT install_path, install_size_bytes, executable_path, launch_arguments, source_name
+        FROM game_sources
+        WHERE game_id = ? AND is_installed = 1
+        LIMIT 1
+      `)
+      const promoteStmt = db.prepare(`
+        UPDATE games
+        SET is_installed = 1,
+            install_path = COALESCE(?, install_path),
+            install_size_bytes = CASE WHEN ? > 0 THEN ? ELSE install_size_bytes END,
+            executable_path = COALESCE(?, executable_path),
+            launch_arguments = COALESCE(?, launch_arguments),
+            store_name = COALESCE(NULLIF(?, ''), store_name),
+            drive_status = 'online',
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `)
       const updateStmt = db.prepare(`
         UPDATE games
         SET is_installed = 0,
@@ -241,7 +267,13 @@ async function reconcileSteam(db, sweptAppIds, libraries = []) {
       `)
       const reconcileTx = db.transaction(() => {
         for (const gameId of uninstalledIds) {
-          updateStmt.run(gameId)
+          clearSourceStmt.run(gameId)
+          const remaining = otherInstalledStmt.get(gameId)
+          if (remaining) {
+            promoteStmt.run(remaining.install_path, remaining.install_size_bytes || 0, remaining.install_size_bytes || 0, remaining.executable_path, remaining.launch_arguments, remaining.source_name, gameId)
+          } else {
+            updateStmt.run(gameId)
+          }
         }
       })
       reconcileTx()

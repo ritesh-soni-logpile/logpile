@@ -2357,7 +2357,12 @@ async function fetchGameMetadata(db, gameId, signal) {
   const igdbClientId = getAppSettingValue(db, 'igdb_client_id')
   const igdbClientSecret = getAppSettingValue(db, 'igdb_client_secret')
   const storeLower = String(game.store_name || '').toLowerCase()
-  const isStorePc = ['steam', 'epic', 'epic games', 'gog', 'ea', 'ea games', 'ubisoft', 'xbox'].some((s) => storeLower.includes(s))
+  const isStorePc = [
+    'steam', 'epic', 'epic games', 'gog', 'ea', 'ea games', 'ubisoft', 'xbox',
+    'amazon', 'itch', 'battle.net', 'battlenet', 'riot', 'rockstar', 'cd projekt',
+    'netmarble', 'netease', 'legacy', 'hoyo', 'humble', 'wargaming', 'gaijin',
+    'nexon', 'kuro', 'roblox',
+  ].some((s) => storeLower.includes(s))
 
   let steamAppId = null
   try {

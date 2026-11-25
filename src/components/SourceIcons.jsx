@@ -5,13 +5,20 @@ import {
   SiGogdotcom,
   SiEa,
   SiUbisoft,
-  SiOrigin,
   SiLegacygames,
   SiBattledotnet,
   SiItchdotio,
+  SiRiotgames,
+  SiRockstargames,
+  SiCdprojekt,
+  SiMihoyo,
+  SiHumblebundle,
+  SiNexon,
+  SiRoblox,
+  SiSquareenix,
 } from 'react-icons/si'
 import { FaXbox, FaAmazon } from 'react-icons/fa6'
-import { LuPackage, LuGamepad2 } from 'react-icons/lu'
+import { LuPackage, LuGamepad2, LuShield, LuCrosshair, LuSwords, LuFlame, LuLayers } from 'react-icons/lu'
 
 export function SourceIcon({ source, size = 15, className = '' }) {
   const s = String(source || '').toLowerCase().trim()
@@ -31,11 +38,8 @@ export function SourceIcon({ source, size = 15, className = '' }) {
     return <SiGogdotcom size={size} className={className} />
   }
 
-  // EA Games / Origin
-  if (s.includes('origin')) {
-    return <SiOrigin size={size} className={className} />
-  }
-  if (s.includes('ea') || s.includes('electronic arts')) {
+  // EA Games / Origin (merged)
+  if (s === 'ea' || s.includes('ea games') || s.includes('electronic arts') || s.includes('origin')) {
     return <SiEa size={size} className={className} />
   }
 
@@ -69,7 +73,72 @@ export function SourceIcon({ source, size = 15, className = '' }) {
     return <SiItchdotio size={size} className={className} />
   }
 
-  // Standalone / Custom installer
+  // Riot Games
+  if (s.includes('riot')) {
+    return <SiRiotgames size={size} className={className} />
+  }
+
+  // Rockstar Games
+  if (s.includes('rockstar')) {
+    return <SiRockstargames size={size} className={className} />
+  }
+
+  // CD Projekt / REDlauncher
+  if (s.includes('cd projekt') || s.includes('cdprojekt') || s.includes('redlauncher')) {
+    return <SiCdprojekt size={size} className={className} />
+  }
+
+  // HoYoPlay / HoYoverse / miHoYo
+  if (s.includes('hoyo') || s.includes('mihoyo')) {
+    return <SiMihoyo size={size} className={className} />
+  }
+
+  // Humble App / Humble Games
+  if (s.includes('humble')) {
+    return <SiHumblebundle size={size} className={className} />
+  }
+
+  // Nexon
+  if (s.includes('nexon')) {
+    return <SiNexon size={size} className={className} />
+  }
+
+  // Roblox
+  if (s.includes('roblox')) {
+    return <SiRoblox size={size} className={className} />
+  }
+
+  // Square Enix / FFXIV
+  if (s.includes('square')) {
+    return <SiSquareenix size={size} className={className} />
+  }
+
+  // Wargaming
+  if (s.includes('wargaming') || s === 'wgc') {
+    return <LuShield size={size} className={className} />
+  }
+
+  // Gaijin
+  if (s.includes('gaijin')) {
+    return <LuCrosshair size={size} className={className} />
+  }
+
+  // Kuro Games
+  if (s.includes('kuro')) {
+    return <LuSwords size={size} className={className} />
+  }
+
+  // Netmarble
+  if (s.includes('netmarble')) {
+    return <LuLayers size={size} className={className} />
+  }
+
+  // NetEase
+  if (s.includes('netease') || s.includes('loading bay')) {
+    return <LuFlame size={size} className={className} />
+  }
+
+  // Standalone / Custom folder / Repack
   if (s.includes('repack') || s.includes('fitgirl') || s.includes('dodi') || s.includes('custom') || s.includes('standalone')) {
     return <LuPackage size={size} className={className} />
   }

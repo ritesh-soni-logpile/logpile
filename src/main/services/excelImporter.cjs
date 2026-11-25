@@ -26,21 +26,53 @@ function inferPlatform(sheetName, row) {
 
 function inferStoreName(sheetName, row) {
   const explicit = String(firstValue(row, ['Platform', 'Store', 'Source', 'Launcher'])).trim()
-  if (explicit) return explicit
-  const sheet = String(sheetName || '').trim()
-  if (/steam/i.test(sheet)) return 'Steam'
-  if (/epic/i.test(sheet)) return 'Epic Games'
-  if (/gog/i.test(sheet)) return 'GOG'
-  return null
+  const raw = explicit || String(sheetName || '').trim()
+  const lower = raw.toLowerCase()
+  if (/steam/i.test(lower)) return 'Steam'
+  if (/epic/i.test(lower)) return 'Epic Games'
+  if (/gog/i.test(lower)) return 'GOG'
+  if (/amazon|luna/i.test(lower)) return 'Amazon Games'
+  if (/xbox|microsoft|game\s*pass/i.test(lower)) return 'Xbox'
+  if (/ubisoft|uplay/i.test(lower)) return 'Ubisoft'
+  if (/\bea\b|ea\s*games|ea\s*app|origin|electronic\s*arts/i.test(lower)) return 'EA Games'
+  if (/itch/i.test(lower)) return 'Itch.io'
+  if (/battle\.?net|blizzard/i.test(lower)) return 'Battle.net'
+  if (/riot/i.test(lower)) return 'Riot Games'
+  if (/rockstar/i.test(lower)) return 'Rockstar Games'
+  if (/cd\s*projekt|redlauncher/i.test(lower)) return 'CD Projekt'
+  if (/netmarble/i.test(lower)) return 'Netmarble'
+  if (/netease|loading\s*bay/i.test(lower)) return 'NetEase'
+  if (/legacy/i.test(lower)) return 'Legacy Games'
+  if (/hoyo|mihoyo/i.test(lower)) return 'HoYoPlay'
+  if (/humble/i.test(lower)) return 'Humble'
+  if (/wargaming|\bwgc\b/i.test(lower)) return 'Wargaming'
+  if (/gaijin/i.test(lower)) return 'Gaijin'
+  if (/nexon/i.test(lower)) return 'Nexon'
+  if (/kuro/i.test(lower)) return 'Kuro Games'
+  if (/roblox/i.test(lower)) return 'Roblox'
+  return explicit || null
 }
 
 function autoLabelCustomStore(storeName, title, publisher, developer) {
   const current = String(storeName || '').trim()
-  if (current.toLowerCase() !== 'custom') return current || null
+  if (current && current.toLowerCase() !== 'custom') return current
   const text = `${title || ''} ${publisher || ''} ${developer || ''}`
   if (/xbox|microsoft/i.test(text)) return 'Xbox'
   if (/electronic arts|\bea\b/i.test(text)) return 'EA Games'
+  if (/ubisoft/i.test(text)) return 'Ubisoft'
   if (/amazon/i.test(text)) return 'Amazon Games'
+  if (/blizzard|battle\.?net/i.test(text)) return 'Battle.net'
+  if (/riot\s*games|valorant|league of legends/i.test(text)) return 'Riot Games'
+  if (/rockstar/i.test(text)) return 'Rockstar Games'
+  if (/netmarble/i.test(text)) return 'Netmarble'
+  if (/netease/i.test(text)) return 'NetEase'
+  if (/hoyoverse|cognosphere|mihoyo/i.test(text)) return 'HoYoPlay'
+  if (/legacy\s*games/i.test(text)) return 'Legacy Games'
+  if (/wargaming/i.test(text)) return 'Wargaming'
+  if (/gaijin/i.test(text)) return 'Gaijin'
+  if (/nexon/i.test(text)) return 'Nexon'
+  if (/kuro\s*games/i.test(text)) return 'Kuro Games'
+  if (/humble/i.test(text)) return 'Humble'
   return 'Custom'
 }
 

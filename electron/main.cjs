@@ -104,6 +104,7 @@ const {
   findGameEntityInText,
   updateGameModProfile,
   updateCheckpointNote,
+  markSourceUninstalled,
 } = require('./db.cjs')
 const { scanAndImportGuides, startGuideWatcher } = require('../src/main/services/guideImporter.cjs')
 const { scanAll, importFile, importBuffer } = require('../src/main/services/scanService.cjs')
@@ -479,6 +480,18 @@ const IGNORED_EXE_NAMES = new Set([
   'ubisoftconnect.exe', 'upc.exe', 'uplay.exe', 'uplaywebcore.exe',
   'battle.net.exe', 'agent.exe',
   'riotclientservices.exe', 'riotclientux.exe',
+  'itch.exe', 'butler.exe',
+  'rockstarlauncher.exe', 'launcherpatcher.exe', 'rockstarservice.exe', 'socialclubhelper.exe',
+  'redlauncher.exe', 'redprelauncher.exe',
+  'netmarblelauncher.exe', 'nmupdate.exe',
+  'loadingbay.exe', 'fever.exe', 'neteaselauncher.exe',
+  'legacy games launcher.exe',
+  'hoyoplay.exe', 'hyp_helper.exe',
+  'humble app.exe',
+  'wgc.exe', 'wgc_renderer.exe',
+  'gjagent.exe', 'nexon_launcher.exe', 'nexon_runtime.exe', 'kuro_launcher.exe',
+  'amazon games.exe', 'amazon games ui.exe',
+  'gamingservices.exe', 'xboxpcapp.exe', 'xboxapp.exe',
   'gog.com.galaxy.client.exe',
   'electron.exe', 'logpile.exe', 'node.exe', 'cmd.exe', 'powershell.exe', 'tasklist.exe',
   'explorer.exe', 'svchost.exe', 'dwm.exe', 'runtimebroker.exe'
@@ -597,7 +610,17 @@ const IGNORED_ETW_PROCESSES = new Set([
   'steam.exe',
   'steamwebhelper.exe',
   'epicgameslauncher.exe',
-  'eadesktop.exe'
+  'eadesktop.exe',
+  'galaxyclient.exe',
+  'ubisoftconnect.exe',
+  'battle.net.exe',
+  'riotclientservices.exe',
+  'riotclientux.exe',
+  'itch.exe',
+  'rockstarlauncher.exe',
+  'redlauncher.exe',
+  'hoyoplay.exe',
+  'wgc.exe'
 ]);
 
 function startPresentMonForGame(targetExe = null) {
@@ -2004,6 +2027,7 @@ function registerIpc() {
         battery: true,
         clock: true,
       },
+      customScanFolders: Array.isArray(settings.customScanFolders) ? settings.customScanFolders : [],
     }
   })
   ipcMain.handle('hardware:getMetrics', () => hardwareTelemetry)
@@ -2070,6 +2094,7 @@ function registerIpc() {
         battery: true,
         clock: true,
       },
+      customScanFolders: Array.isArray(next.customScanFolders) ? next.customScanFolders : [],
     }
   })
   ipcMain.handle('db:getActivityLog', (_event, limit) => {
@@ -2376,6 +2401,13 @@ function registerIpc() {
       }
     })()
     return currentScanPromise
+  })
+  ipcMain.handle('scanner:chooseFolder', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Select Game Library Folder',
+      properties: ['openDirectory'],
+    })
+    return result.canceled ? null : result.filePaths[0]
   })
   ipcMain.handle('scanner:chooseImportFile', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
@@ -2876,7 +2908,7 @@ function registerIpc() {
     return true
   })
   ipcMain.handle('game:openUri', async (_event, uri, launchMeta = {}) => {
-    const allowedSchemes = /^(https?|steam|com\.epicgames\.launcher|goggalaxy|origin2|origin|ea|ubisoft|uplay|xbox|ms-xbl|ms-windows-store|amazon-games|itch|battle-net|battlenet|riotclient):\/\//i
+    const allowedSchemes = /^(https?|steam|com\.epicgames\.launcher|goggalaxy|origin2|origin|ea|ubisoft|uplay|xbox|ms-xbl|ms-windows-store|amazon-games|itch|battle-net|battlenet|riotclient|rockstar|legacygames|hoyoplay|wgc|humble|roblox-player):\/\//i
     const meta = launchMeta && typeof launchMeta === 'object' && !Array.isArray(launchMeta) ? launchMeta : {}
     const details = { uri, storefront: meta.storefront, id: meta.id, idSource: meta.idSource }
     const steamMatch = typeof uri === 'string' ? uri.match(/^steam:\/\/rungameid\/([^/?#]+)$/i) : null
@@ -2910,6 +2942,36 @@ function registerIpc() {
       logLaunchAttempt({ ...details, result: 'os-rejected', error: error?.message || 'OS rejected launcher URI.' })
       throw new Error('OS rejected launcher URI.')
     }
+  })
+
+  ipcMain.handle('game:openInstallFolder', async (_event, targetPath) => {
+    if (typeof targetPath !== 'string' || !targetPath.trim()) {
+      throw new Error('No install folder recorded for this copy.')
+    }
+    const resolved = resolvePortablePath(targetPath)
+    if (!resolved || !fs.existsSync(resolved)) {
+      throw new Error('Install folder no longer exists on disk.')
+    }
+    const err = await shell.openPath(resolved)
+    if (err) throw new Error(err)
+    return true
+  })
+
+  ipcMain.handle('game:triggerUninstallCopy', async (_event, copy = {}) => {
+    const platform = String(copy?.platform || '').toLowerCase()
+    const id = String(copy?.platformGameId || '').trim()
+    if (platform === 'steam' && /^\d+$/.test(id)) {
+      await shell.openExternal(`steam://uninstall/${id}`)
+      return { method: 'steam-uri', message: 'Opened Steam uninstall prompt.' }
+    }
+    await shell.openExternal('ms-settings:appsfeatures')
+    return { method: 'windows-apps', message: 'Opened Windows Installed Apps. Uninstall the duplicate copy there, then click Rescan.' }
+  })
+
+  ipcMain.handle('game:markSourceUninstalled', async (_event, payload = {}) => {
+    const res = markSourceUninstalled(db, payload)
+    mainWindow?.webContents.send('library:updated', { type: 'source-uninstalled', gameId: payload?.gameId })
+    return res
   })
 
   ipcMain.handle('captures:getForGame', async (_event, gameId) => {
@@ -3432,7 +3494,7 @@ function registerIpc() {
               return {
                 isInstalled: true,
                 installPath: regPath,
-                currentVersion: '1.3.9',
+                currentVersion: '1.3.95',
                 theme: installedTheme?.theme || savedTheme,
                 palette: installedTheme?.palette || savedPalette
               }
@@ -3454,7 +3516,7 @@ function registerIpc() {
           return {
             isInstalled: true,
             installPath: cand,
-            currentVersion: '1.3.9',
+            currentVersion: '1.3.95',
             theme: installedTheme?.theme || savedTheme,
             palette: installedTheme?.palette || savedPalette
           }
@@ -3641,7 +3703,7 @@ function registerIpc() {
         const { execSync } = require('node:child_process')
         try {
           const regBase = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\com.logpile.app'
-          execSync(`reg add "${regBase}" /v DisplayName /d "Logpile" /f && reg add "${regBase}" /v DisplayVersion /d "1.3.9" /f && reg add "${regBase}" /v Publisher /d "Corporate Introvert Gamer" /f && reg add "${regBase}" /v InstallLocation /d "${targetPath}" /f && reg add "${regBase}" /v DisplayIcon /d "${targetPath}\\Logpile.exe,0" /f`, { stdio: 'ignore' })
+          execSync(`reg add "${regBase}" /v DisplayName /d "Logpile" /f && reg add "${regBase}" /v DisplayVersion /d "1.3.95" /f && reg add "${regBase}" /v Publisher /d "Corporate Introvert Gamer" /f && reg add "${regBase}" /v InstallLocation /d "${targetPath}" /f && reg add "${regBase}" /v DisplayIcon /d "${targetPath}\\Logpile.exe,0" /f`, { stdio: 'ignore' })
         } catch (regErr) {
           console.warn('[Installer] Registry note:', regErr?.message)
         }

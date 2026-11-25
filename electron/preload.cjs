@@ -64,6 +64,7 @@ contextBridge.exposeInMainWorld('api', {
   },
   scanner: {
     scanAll: () => ipcRenderer.invoke('scanner:scanAll'),
+    chooseFolder: () => ipcRenderer.invoke('scanner:chooseFolder'),
     chooseImportFile: () => ipcRenderer.invoke('scanner:chooseImportFile'),
     importFile: (filePath) => ipcRenderer.invoke('scanner:importFile', filePath),
     importBuffer: (data, filename) => ipcRenderer.invoke('scanner:importBuffer', data, filename),
@@ -86,6 +87,9 @@ contextBridge.exposeInMainWorld('api', {
     chooseExecutable: () => ipcRenderer.invoke('game:chooseExecutable'),
     launchExecutable: (executablePath, launchArguments, launchMeta) => ipcRenderer.invoke('game:launchExecutable', executablePath, launchArguments, launchMeta),
     addCustomGame: (executablePath) => ipcRenderer.invoke('game:addCustomGame', executablePath),
+    openInstallFolder: (targetPath) => ipcRenderer.invoke('game:openInstallFolder', targetPath),
+    triggerUninstallCopy: (copy) => ipcRenderer.invoke('game:triggerUninstallCopy', copy),
+    markSourceUninstalled: (payload) => ipcRenderer.invoke('game:markSourceUninstalled', payload),
     fetchHltb: (gameId, title) => ipcRenderer.invoke('game:fetchHltb', gameId, title),
     syncHltb: (options) => ipcRenderer.invoke('library:syncHltb', options),
     cancelHltbSync: () => ipcRenderer.invoke('library:cancelHltbSync'),

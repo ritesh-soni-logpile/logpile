@@ -10,12 +10,12 @@
 [![AlternativeTo](https://img.shields.io/badge/AlternativeTo-Listed-267ecb?style=for-the-badge)](https://alternativeto.net/software/logpile-desktop/about/)
 
 <p align="center">
-  <a href="https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.9/Logpile.Setup.1.3.9.exe">
-    <img src="https://img.shields.io/badge/Download-Installer%20(.exe)%20--%20v1.3.9-2ea44f?style=for-the-badge&logo=windows" alt="Download Installer" />
+  <a href="https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.95/Logpile.Setup.1.3.95.exe">
+    <img src="https://img.shields.io/badge/Download-Installer%20(.exe)%20--%20v1.3.95-2ea44f?style=for-the-badge&logo=windows" alt="Download Installer" />
   </a>
   &nbsp;&nbsp;
-  <a href="https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.9/Logpile-v1.3.9-Portable.zip">
-    <img src="https://img.shields.io/badge/Download-Portable%20(.zip)%20--%20v1.3.9-0969da?style=for-the-badge&logo=zip" alt="Download Portable" />
+  <a href="https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.95/Logpile-1.3.95-win.zip">
+    <img src="https://img.shields.io/badge/Download-Portable%20(.zip)%20--%20v1.3.95-0969da?style=for-the-badge&logo=zip" alt="Download Portable" />
   </a>
 </p>
 
@@ -43,7 +43,7 @@ Logpile is built for gamers who want the best offline PC game launcher, library 
   <img src="docs/assets/comparison-table-v1.3.5.png" alt="Logpile v1.3.5 vs Competitors Comparison Matrix" width="100%" />
 </p>
 
-| Feature | Logpile v1.3.9 | Steam | Playnite | GOG Galaxy | LaunchBox |
+| Feature | Logpile v1.3.95 | Steam | Playnite | GOG Galaxy | LaunchBox |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Local Game Detection** | **Zero logins:** Scans drives & folders directly | Store account login required | Account logins required for library sync | GOG account login required | Account logins or store tokens required |
 | **Bulk Backlog Import** | **Built-in:** Import entire uninstalled library via Excel / CSV | No (Single manual shortcut only) | Plugin required | No | Plugin required |
@@ -57,6 +57,17 @@ Logpile is built for gamers who want the best offline PC game launcher, library 
 | **Big Picture Console Mode** | **5 Theme Worlds:** Distinct 10-foot UIs, Couch OSK, Adaptive Glyphs & Voice AI | One fixed layout | Fullscreen mode (theme-dependent) | No | Paid Big Box mode |
 | **Controller Auto-Detect** | **Yes:** Instant Windows plug-and-play detection | Big Picture mode or manual setup | Wake-up button press required | Manual setup / limited | Wake-up button press required |
 | **Privacy & Offline First** | **100% Offline:** MIT open source, zero logins, zero tracking | Closed source, store accounts & tracking | Open source, relies on store logins | Closed source, accounts & telemetry | Closed source, logins for metadata |
+
+---
+
+## What's New in v1.3.95
+
+### Universal PC Storefront & Custom Folder Scanning
+- **20+ Supported PC Platforms & Launchers:** Automatic local detection across **Steam**, **Epic Games**, **GOG**, **Xbox / Microsoft Store**, **EA App / Origin**, **Ubisoft Connect**, **Amazon Games**, **itch.io** (`butler.db`), **Battle.net**, **Riot Games**, **Rockstar Games Launcher**, **CD Projekt REDlauncher**, **Netmarble**, **NetEase**, **Legacy Games**, **HoYoPlay (HoYoverse)**, **Humble App**, **Wargaming Game Center**, **Gaijin**, **Nexon**, **Kuro Games**, **Roblox**, and standalone MMO/repack clients.
+- **Custom Game Scan Folders:** Add custom library directories (such as `D:\Games` or portable SSD game folders) in **Settings** to automatically detect DRM-free, portable, and standalone titles without adding games one by one.
+- **Multi-Store Linking, Icons & Launch Support:** Distinct storefront icons, platform badges, launch argument persistence (for Riot Client & custom launchers), Excel/CSV auto-labeling, and background launcher process protection during playtime tracking.
+- **Cross-Store Deduplication & Duplicate Install Advisor:** Unified matching across editions and naming styles (e.g., *GTA V* / *Grand Theft Auto V Legacy* / *Enhanced* / *Premium Edition*, Roman numerals, abbreviations) plus a **Duplicate Installs & Storage Saver** panel in the Dashboard and Game Dossier that highlights games installed on 2+ storefronts, recommends which copy to keep, and shows reclaimable GB with quick Uninstall / Open Folder controls.
+- *Coming in v1.4.0:* Retro / ROM Emulator library support.
 
 ---
 
@@ -196,8 +207,8 @@ Tracks your true gaming journey: backlog campaign debt (HLTB synced), source dis
 
 ### For Gamers
 1. Grab the latest installer or portable archive from [Releases](../../releases/latest):
-   - **Installer:** [`Logpile.Setup.1.3.9.exe`](https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.9/Logpile.Setup.1.3.9.exe)
-   - **Portable (.zip):** [`Logpile-v1.3.9-Portable.zip`](https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.9/Logpile-v1.3.9-Portable.zip)
+   - **Installer:** [`Logpile.Setup.1.3.95.exe`](https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.95/Logpile.Setup.1.3.95.exe)
+   - **Portable (.zip):** [`Logpile-1.3.95-win.zip`](https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.95/Logpile-1.3.95-win.zip)
 2. Extract or install to any internal drive or portable SSD (`logpile_data/` stores all assets self-contained).
 3. *(Optional)* Drop any quantized `.gguf` model into the `/models` directory to enable offline conversational backlog guidance.
 

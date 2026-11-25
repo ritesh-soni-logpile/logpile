@@ -387,7 +387,7 @@ export function exportCustomThemes(themeIds = null) {
 
   return JSON.stringify({
     format: 'logpile-theme-export',
-    version: '1.3.9',
+    version: '1.3.95',
     exportDate: new Date().toISOString(),
     count: toExport.length,
     themes: toExport

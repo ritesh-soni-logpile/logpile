@@ -17,14 +17,17 @@ const UTILITY_PATTERNS = Object.freeze([
   /\b3dmark\b/i,
   /\bmodkit\b/i,
   /\brazer cortex\b/i,
-  /\b(?:minecraft\s+launcher|game\s+launcher|replikant\s+chat|festival\s+suite)\b/i,
+  /\b(?:minecraft\s+launcher|game\s+launcher|replikant\s+chat|festival\s+suite|riot\s+vanguard|social\s+club|redlauncher)\b/i,
 ])
 
 const HIDDEN_EXACT_TITLES = new Set([
   'steamworkscommonredistributables',
+  'riotvanguard',
+  'rockstargamessocialclub',
 ])
 const HIDDEN_TITLE_PATTERNS = Object.freeze([
   /\bredmod\b/i,
+  /\briot vanguard\b/i,
   /\bredistributable(s)?\b/i,
   /\bredistributables\b/i,
   /\b(dlc|add[- ]?on|addon|expansion pass|content pack|season pass)\b/i,

@@ -433,6 +433,8 @@ export function SettingsModal({
   onRefreshActivity,
   layoutTheme = 'cinematic',
   onLayoutThemeChange,
+  sourcesPlacement = 'sidebar',
+  onSourcesPlacementChange,
   colorPalette = 'auto',
   onColorPaletteChange,
   onTriggerIntroPreview,
@@ -983,6 +985,7 @@ export function SettingsModal({
     }
   })
   const [autoHideSupportEntries, setAutoHideSupportEntries] = useState(true)
+  const [customScanFolders, setCustomScanFolders] = useState([])
   const [overlayShortcut, setOverlayShortcut] = useState('CommandOrControl+Shift+Space')
   const [fpsShortcut, setFpsShortcut] = useState('CommandOrControl+Shift+F')
   const [searchShortcut, setSearchShortcut] = useState('CommandOrControl+F')
@@ -1590,6 +1593,7 @@ export function SettingsModal({
       setPreferAnimatedCovers(Boolean(settings.preferAnimatedCovers))
       setMinimizeToTray(Boolean(settings.minimizeToTray))
       setAutoHideSupportEntries(settings.autoHideSupportEntries !== false)
+      setCustomScanFolders(Array.isArray(settings.customScanFolders) ? settings.customScanFolders : [])
       setOverlayShortcut(settings.overlayShortcut || 'CommandOrControl+Shift+Space')
       setFpsShortcut(settings.fpsShortcut || 'CommandOrControl+Shift+F')
       setSearchShortcut(settings.searchShortcut || 'CommandOrControl+F')
@@ -1860,7 +1864,7 @@ export function SettingsModal({
 
           <div className="settings-sidebar-footer">
             <span>Logpile Desktop</span>
-            <span className="settings-card-badge">v1.3.9</span>
+            <span className="settings-card-badge">v1.3.95</span>
           </div>
         </aside>
 
@@ -1947,6 +1951,43 @@ export function SettingsModal({
                         api.database?.setLibrarySettings?.({ minimizeToTray: val }).catch(() => {})
                       }}
                     />
+                  </div>
+
+                  <div
+                    className="settings-toggle-row"
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid rgba(255, 255, 255, 0.06)' }}
+                  >
+                    <div className="settings-toggle-text" style={{ flex: 1, minWidth: 0 }}>
+                      <strong>Store Filter Placement</strong>
+                      <small>Group publisher launchers in the left sidebar or move store filtering into the library filter bar.</small>
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                      {[
+                        { id: 'sidebar', label: 'Sidebar Groups' },
+                        { id: 'filterbar', label: 'Library Filter Bar' },
+                      ].map((opt) => {
+                        const active = sourcesPlacement === opt.id
+                        return (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => onSourcesPlacementChange?.(opt.id)}
+                            style={{
+                              padding: '5px 10px',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              borderRadius: '6px',
+                              border: active ? '1px solid var(--accent, #ef4444)' : '1px solid rgba(255, 255, 255, 0.12)',
+                              background: active ? 'rgba(239, 68, 68, 0.16)' : 'rgba(255, 255, 255, 0.04)',
+                              color: active ? '#fff' : '#cbd5e1',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {opt.label}
+                          </button>
+                        )
+                      })}
+                    </div>
                   </div>
 
                   {/* Startup Intro & Theme Transformation Behaviors */}
@@ -2083,6 +2124,76 @@ export function SettingsModal({
                       }}
                     />
                   </div>
+                </div>
+
+                {/* Section: Custom Game Folders (Standalone & DRM-Free Scanner) */}
+                <div className="settings-card">
+                  <div className="settings-card-header">
+                    <div>
+                      <strong className="settings-card-title">Custom Game Scan Folders</strong>
+                      <small className="settings-card-subtitle">Extra folders containing standalone, portable, itch.io, or DRM-free games (scanned alongside all 20+ storefronts)</small>
+                    </div>
+                    <button
+                      type="button"
+                      className="outline-button small-button"
+                      onClick={async () => {
+                        try {
+                          const chosen = await api.scanner?.chooseFolder?.()
+                          if (!chosen) return
+                          const next = [...new Set([...customScanFolders, chosen])]
+                          setCustomScanFolders(next)
+                          await api.database?.setLibrarySettings?.({ customScanFolders: next })
+                        } catch {}
+                      }}
+                    >
+                      <Plus size={13} />
+                      <span>Add Folder</span>
+                    </button>
+                  </div>
+
+                  {customScanFolders.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+                      {customScanFolders.map((folder) => (
+                        <div
+                          key={folder}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '12px',
+                            padding: '8px 12px',
+                            borderRadius: '8px',
+                            background: 'rgba(255,255,255,0.04)',
+                            border: '1px solid rgba(255,255,255,0.08)',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                            <FolderOpen size={14} style={{ color: 'var(--accent, #d6ff4b)', flexShrink: 0 }} />
+                            <span style={{ fontSize: '12px', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={folder}>
+                              {folder}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            className="outline-button small-button"
+                            style={{ padding: '4px 8px', flexShrink: 0 }}
+                            title="Remove folder"
+                            onClick={async () => {
+                              const next = customScanFolders.filter((f) => f !== folder)
+                              setCustomScanFolders(next)
+                              await api.database?.setLibrarySettings?.({ customScanFolders: next }).catch(() => {})
+                            }}
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '4px 0 0' }}>
+                      No custom folders added yet. Click &quot;Add Folder&quot; to include drives or directories like <code>D:\Games</code> during local scans.
+                    </p>
+                  )}
                 </div>
 
                 {/* Section: Visual Quality & Presentation */}
@@ -5553,7 +5664,7 @@ export function SettingsModal({
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <h3 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Logpile Desktop</h3>
-                        <span className="settings-version-tag">v1.3.9</span>
+                        <span className="settings-version-tag">v1.3.95</span>
                       </div>
                       <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '4px 0 0' }}>
                         An offline-first, private personal game sanctuary &amp; library manager.

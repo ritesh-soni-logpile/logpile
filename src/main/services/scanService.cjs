@@ -6,26 +6,63 @@ const { scanUbisoft } = require('./scanners/ubisoftScanner.cjs')
 const { scanEA } = require('./scanners/eaScanner.cjs')
 const { scanXbox } = require('./scanners/xboxScanner.cjs')
 const { scanAmazon } = require('./scanners/amazonScanner.cjs')
+const { scanItch } = require('./scanners/itchScanner.cjs')
+const { scanRiot } = require('./scanners/riotScanner.cjs')
+const { scanLegacy } = require('./scanners/legacyScanner.cjs')
+const { scanHumble } = require('./scanners/humbleScanner.cjs')
+const { scanHoyoverse } = require('./scanners/hoyoverseScanner.cjs')
+const { scanWargaming } = require('./scanners/wargamingScanner.cjs')
+const {
+  scanBattleNet,
+  scanRockstar,
+  scanCdProjekt,
+  scanNetmarble,
+  scanNetEase,
+  scanGaijin,
+  scanNexon,
+  scanKuro,
+  scanRoblox,
+  scanStandaloneClients,
+} = require('./scanners/publisherScanner.cjs')
+const { scanCustomFolders } = require('./scanners/customFolderScanner.cjs')
 const { importCatalog, importCatalogFromBuffer } = require('./excelImporter.cjs')
 const { mergeRecords } = require('./deduplicationService.cjs')
 const {
   relinkAllLocalArtwork,
   autoResolveMissingArtwork,
 } = require('./artworkService.cjs')
-const { emitProgress } = require('./scanners/scannerUtils.cjs')
+const { emitProgress, clearRegistryCache } = require('./scanners/scannerUtils.cjs')
 
 async function scanAll(db, onProgress, userDataPath) {
   const startedAt = Date.now()
+  clearRegistryCache()
   const results = []
   const scanners = [
     { source: 'steam', run: scanSteam },
     { source: 'epic', run: scanEpic },
     { source: 'gog', run: scanGog },
     { source: 'amazon', run: scanAmazon },
-    { source: 'repack', run: scanRepacks },
     { source: 'ubisoft', run: scanUbisoft },
     { source: 'ea', run: scanEA },
     { source: 'xbox', run: scanXbox },
+    { source: 'itch', run: scanItch },
+    { source: 'battlenet', run: scanBattleNet },
+    { source: 'riot', run: scanRiot },
+    { source: 'rockstar', run: scanRockstar },
+    { source: 'cdprojekt', run: scanCdProjekt },
+    { source: 'netmarble', run: scanNetmarble },
+    { source: 'netease', run: scanNetEase },
+    { source: 'legacy', run: scanLegacy },
+    { source: 'hoyo', run: scanHoyoverse },
+    { source: 'humble', run: scanHumble },
+    { source: 'wargaming', run: scanWargaming },
+    { source: 'gaijin', run: scanGaijin },
+    { source: 'nexon', run: scanNexon },
+    { source: 'kuro', run: scanKuro },
+    { source: 'roblox', run: scanRoblox },
+    { source: 'standalone-clients', run: scanStandaloneClients },
+    { source: 'repack', run: scanRepacks },
+    { source: 'custom-folders', run: scanCustomFolders },
   ]
 
   let totalCreated = 0

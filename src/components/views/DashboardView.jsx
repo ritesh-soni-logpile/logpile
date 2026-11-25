@@ -11,9 +11,15 @@ import {
   X,
   BookOpen,
   Search,
+  FolderOpen,
+  Trash2,
+  CheckCircle2,
+  AlertTriangle,
+  Layers,
 } from 'lucide-react'
 import { normalizeArtworkUrl } from '../../utils/artworkUrl'
 import { SourceIcon } from '../SourceIcons'
+import { findDuplicateInstalls } from '../../utils/duplicateAdvisor.mjs'
 
 function cn(...classes) {
   return classes.filter(Boolean).join(' ')
@@ -42,6 +48,62 @@ export function DashboardView({
   onFilterMissingGuides,
 }) {
   const [activeChartSlice, setActiveChartSlice] = useState(null)
+  const [dupNotice, setDupNotice] = useState(null)
+  const [rescanningDup, setRescanningDup] = useState(false)
+  const duplicateReport = useMemo(() => findDuplicateInstalls(games), [games])
+
+  const handleOpenDupFolder = async (installPath) => {
+    try {
+      await window.api?.games?.openInstallFolder?.(installPath)
+    } catch (err) {
+      setDupNotice({ type: 'error', message: err?.message || 'Could not open install folder.' })
+      setTimeout(() => setDupNotice(null), 5000)
+    }
+  }
+
+  const handleTriggerDupUninstall = async (copy) => {
+    try {
+      const res = await window.api?.games?.triggerUninstallCopy?.(copy)
+      setDupNotice({ type: 'info', message: res?.message || `Opened uninstall options for ${copy.storeLabel}.` })
+      setTimeout(() => setDupNotice(null), 6000)
+    } catch (err) {
+      setDupNotice({ type: 'error', message: err?.message || 'Could not open uninstall prompt.' })
+      setTimeout(() => setDupNotice(null), 5000)
+    }
+  }
+
+  const handleMarkDupRemoved = async (copy) => {
+    try {
+      await window.api?.games?.markSourceUninstalled?.({
+        gameId: copy.gameId,
+        platform: copy.platform,
+        storeName: copy.storeLabel,
+        platformGameId: copy.platformGameId,
+      })
+      setDupNotice({ type: 'success', message: `Marked ${copy.storeLabel} copy of "${copy.title}" as uninstalled.` })
+      if (onRefreshLibrary) await onRefreshLibrary()
+      setTimeout(() => setDupNotice(null), 5000)
+    } catch (err) {
+      setDupNotice({ type: 'error', message: err?.message || 'Failed updating source state.' })
+      setTimeout(() => setDupNotice(null), 5000)
+    }
+  }
+
+  const handleRescanDup = async () => {
+    if (rescanningDup) return
+    setRescanningDup(true)
+    try {
+      await window.api?.scanner?.scanAll?.()
+      if (onRefreshLibrary) await onRefreshLibrary()
+      setDupNotice({ type: 'success', message: 'Library scan complete — duplicate install list updated.' })
+      setTimeout(() => setDupNotice(null), 4000)
+    } catch (err) {
+      setDupNotice({ type: 'error', message: err?.message || 'Scan failed.' })
+      setTimeout(() => setDupNotice(null), 5000)
+    } finally {
+      setRescanningDup(false)
+    }
+  }
   const [syncingHltb, setSyncingHltb] = useState(false)
   const [hltbProgress, setHltbProgress] = useState(null)
   const [syncNotice, setSyncNotice] = useState(null)
@@ -1160,6 +1222,183 @@ export function DashboardView({
                 </div>
               )}
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* 4.5. Duplicate Installs & Storage Saver */}
+      <div className="dashboard-card" style={{ marginBottom: '20px' }}>
+        <div className="dashboard-card-header">
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <Layers size={16} style={{ color: duplicateReport.totalDuplicateGames > 0 ? '#f59e0b' : 'var(--accent, #d6ff4b)' }} />
+              <h3 className="card-heading">Duplicate Installs &amp; Storage Saver</h3>
+              {duplicateReport.totalDuplicateGames > 0 ? (
+                <span className="card-badge-neutral" style={{ background: 'rgba(245, 158, 11, 0.14)', color: '#fbbf24', borderColor: 'rgba(245, 158, 11, 0.35)' }}>
+                  {duplicateReport.totalDuplicateGames} {duplicateReport.totalDuplicateGames === 1 ? 'game' : 'games'} · Reclaim {duplicateReport.totalReclaimableGb} GB
+                </span>
+              ) : (
+                <span className="card-badge-neutral" style={{ background: 'rgba(16, 185, 129, 0.12)', color: '#34d399', borderColor: 'rgba(16, 185, 129, 0.3)' }}>
+                  Clean · 0 duplicates
+                </span>
+              )}
+            </div>
+            <p className="card-sub">Detects games installed simultaneously across 2+ storefronts and recommends which copy to keep vs. uninstall</p>
+          </div>
+          <button
+            type="button"
+            className="dashboard-sync-btn"
+            onClick={handleRescanDup}
+            disabled={rescanningDup}
+            title="Rescan all 22+ storefronts and custom folders"
+          >
+            <RotateCw size={12} className={rescanningDup ? 'spin-icon' : ''} />
+            <span>{rescanningDup ? 'Scanning...' : 'Rescan Drives'}</span>
+          </button>
+        </div>
+
+        {dupNotice && (
+          <div className={cn('dashboard-notice-banner', `notice-${dupNotice.type}`)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '12px' }}>
+            <span>{dupNotice.message}</span>
+            <button
+              type="button"
+              onClick={() => setDupNotice(null)}
+              style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', opacity: 0.7, padding: '2px 6px', fontSize: '13px' }}
+              title="Dismiss"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        {duplicateReport.items.length === 0 ? (
+          <div className="dashboard-empty-note" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <CheckCircle2 size={16} style={{ color: '#34d399', flexShrink: 0 }} />
+            <span>No duplicate installs detected right now. Whenever the same title is installed on two storefronts at once, Logpile will recommend which copy to keep and how much space uninstalling the extra copy saves.</span>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {duplicateReport.items.map((item) => (
+              <div
+                key={item.gameId}
+                style={{
+                  padding: '12px 14px',
+                  borderRadius: '10px',
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const target = games.find((g) => g.id === item.gameId)
+                      if (target) onSelectGame?.(target)
+                    }}
+                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 700, fontSize: '14px', textAlign: 'left' }}
+                  >
+                    {item.title}
+                  </button>
+                  <span style={{ fontSize: '11px', fontWeight: 600, color: '#fbbf24' }}>
+                    Save up to {item.reclaimableGb} GB
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {/* Recommended to Keep */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', padding: '8px 10px', borderRadius: '8px', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.25)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
+                      <SourceIcon source={item.keep.storeLabel} size={14} />
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                          <strong style={{ fontSize: '12px', color: 'var(--text-primary)' }}>{item.keep.storeLabel}</strong>
+                          <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 6px', borderRadius: '4px', background: 'rgba(16, 185, 129, 0.18)', color: '#34d399' }}>
+                            KEEP
+                          </span>
+                          {item.keep.installSizeBytes > 0 && (
+                            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                              {(item.keep.installSizeBytes / (1024 ** 3)).toFixed(1)} GB
+                            </span>
+                          )}
+                        </div>
+                        <small style={{ display: 'block', fontSize: '11px', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.keep.installPath || ''}>
+                          {item.keep.reason}{item.keep.installPath ? ` · ${item.keep.installPath}` : ''}
+                        </small>
+                      </div>
+                    </div>
+                    {item.keep.installPath && (
+                      <button
+                        type="button"
+                        className="dashboard-sync-btn dashboard-sync-secondary"
+                        onClick={() => handleOpenDupFolder(item.keep.installPath)}
+                        title="Open kept install folder"
+                      >
+                        <FolderOpen size={12} />
+                        <span>Folder</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Suggested to Uninstall */}
+                  {item.remove.map((copy) => (
+                    <div key={copy.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', padding: '8px 10px', borderRadius: '8px', background: 'rgba(245, 158, 11, 0.07)', border: '1px solid rgba(245, 158, 11, 0.25)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
+                        <SourceIcon source={copy.storeLabel} size={14} />
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                            <strong style={{ fontSize: '12px', color: 'var(--text-primary)' }}>{copy.storeLabel}</strong>
+                            <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 6px', borderRadius: '4px', background: 'rgba(245, 158, 11, 0.18)', color: '#fbbf24' }}>
+                              SUGGEST UNINSTALL
+                            </span>
+                            {copy.installSizeBytes > 0 && (
+                              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                                {(copy.installSizeBytes / (1024 ** 3)).toFixed(1)} GB
+                              </span>
+                            )}
+                          </div>
+                          <small style={{ display: 'block', fontSize: '11px', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={copy.installPath || ''}>
+                            {copy.reason}{copy.installPath ? ` · ${copy.installPath}` : ''}
+                          </small>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                        {copy.installPath && (
+                          <button
+                            type="button"
+                            className="dashboard-sync-btn dashboard-sync-secondary"
+                            onClick={() => handleOpenDupFolder(copy.installPath)}
+                            title="Open duplicate folder in File Explorer"
+                          >
+                            <FolderOpen size={12} />
+                            <span>Folder</span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="dashboard-sync-btn"
+                          onClick={() => handleTriggerDupUninstall(copy)}
+                          title={`Uninstall ${copy.storeLabel} copy`}
+                        >
+                          <Trash2 size={12} />
+                          <span>Uninstall</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="dashboard-sync-btn dashboard-sync-secondary"
+                          onClick={() => handleMarkDupRemoved(copy)}
+                          title="Already uninstalled? Clear this source's installed status"
+                        >
+                          <span>Mark Removed</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
