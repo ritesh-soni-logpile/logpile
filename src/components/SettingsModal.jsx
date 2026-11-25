@@ -128,7 +128,8 @@ import {
   RotateCcw,
   Code,
   Camera,
-  MicOff
+  MicOff,
+  Tv
 } from 'lucide-react'
 import {
   getCustomThemes,
@@ -442,6 +443,13 @@ export function SettingsModal({
   onSettingsTabChange = null,
   gamepadGlyphStyle = 'auto',
   onGamepadGlyphStyleChange = null,
+  consoleAudioEnabled = false,
+  onToggleConsoleAudio = null,
+  aiUserEnabled = true,
+  onToggleAiUserEnabled = null,
+  aiInstalled = false,
+  isBigPictureMode = false,
+  onExitBigPicture = null,
 }) {
   const [activeTab, setActiveTab] = useState(initialTab)
 
@@ -978,6 +986,8 @@ export function SettingsModal({
   const [overlayShortcut, setOverlayShortcut] = useState('CommandOrControl+Shift+Space')
   const [fpsShortcut, setFpsShortcut] = useState('CommandOrControl+Shift+F')
   const [searchShortcut, setSearchShortcut] = useState('CommandOrControl+F')
+  const [consoleModeShortcut, setConsoleModeShortcut] = useState('F11')
+  const [allowEscExitConsole, setAllowEscExitConsole] = useState(false)
   const [fpsEnabled, setFpsEnabled] = useState(false)
   const [fpsPosition, setFpsPosition] = useState('top-right')
   const [fpsOrientation, setFpsOrientation] = useState('horizontal')
@@ -1583,6 +1593,8 @@ export function SettingsModal({
       setOverlayShortcut(settings.overlayShortcut || 'CommandOrControl+Shift+Space')
       setFpsShortcut(settings.fpsShortcut || 'CommandOrControl+Shift+F')
       setSearchShortcut(settings.searchShortcut || 'CommandOrControl+F')
+      setConsoleModeShortcut(settings.consoleModeShortcut || 'F11')
+      setAllowEscExitConsole(Boolean(settings.allowEscExitConsole))
       setFpsEnabled(Boolean(settings.fpsEnabled))
       setFpsPosition(settings.fpsPosition || 'top-right')
       setFpsOrientation(settings.fpsOrientation || 'horizontal')
@@ -1848,7 +1860,7 @@ export function SettingsModal({
 
           <div className="settings-sidebar-footer">
             <span>Logpile Desktop</span>
-            <span className="settings-card-badge">v1.3.7</span>
+            <span className="settings-card-badge">v1.3.9</span>
           </div>
         </aside>
 
@@ -2156,6 +2168,31 @@ export function SettingsModal({
             {/* DEDICATED TAB: THEMES & ADDONS */}
             {activeTab === 'themes' && (
               <div className="settings-tab-pane">
+                {isBigPictureMode && (
+                  <div className="settings-card" style={{ borderColor: 'var(--accent, #6366f1)', background: 'color-mix(in srgb, var(--accent, #6366f1) 10%, rgba(20, 20, 28, 0.95))' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
+                      <div>
+                        <strong className="settings-card-title">Console Mode Active</strong>
+                        <p className="settings-card-subtitle" style={{ color: '#cbd5e1' }}>
+                          Currently running in Big Picture Console Mode. Switch back to desktop view anytime.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className="primary-button"
+                        onClick={() => {
+                          onClose?.()
+                          onExitBigPicture?.()
+                        }}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 18px' }}
+                      >
+                        <Tv size={14} />
+                        <span>Return to Desktop</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* 1. Core Themes */}
                 <div className="settings-card">
                   <div className="settings-card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
@@ -3128,6 +3165,38 @@ export function SettingsModal({
                       handleUpdateShortcutSetting({ fpsShortcut: newVal })
                     }}
                   />
+
+                  <SettingsShortcutRecorder
+                    label="Console Mode (Big Picture) Toggle"
+                    description="Hotkey to enter or toggle Big Picture Console Mode. Designed for 10-foot TV screens and couch controllers."
+                    value={consoleModeShortcut}
+                    defaultValue="F11"
+                    onChange={(newVal) => {
+                      setConsoleModeShortcut(newVal)
+                      handleUpdateShortcutSetting({ consoleModeShortcut: newVal })
+                    }}
+                  />
+
+                  <div className="settings-toggle-row">
+                    <div>
+                      <strong>Allow Escape key to exit Console Mode</strong>
+                      <p className="settings-toggle-desc">
+                        When disabled (default), the Esc key acts strictly like the controller Back (B) button to exit menus or search without dropping out of Console Mode.
+                      </p>
+                    </div>
+                    <label className="settings-switch">
+                      <input
+                        type="checkbox"
+                        checked={allowEscExitConsole}
+                        onChange={(e) => {
+                          const val = e.target.checked
+                          setAllowEscExitConsole(val)
+                          handleUpdateShortcutSetting({ allowEscExitConsole: val })
+                        }}
+                      />
+                      <span className="settings-slider" />
+                    </label>
+                  </div>
                 </div>
               </div>
             )}
@@ -4156,6 +4225,46 @@ export function SettingsModal({
                     <span className="settings-card-badge">100% Offline</span>
                   </div>
 
+                  {/* Master AI Visibility & Enablement Toggle */}
+                  <div className="settings-field-group" style={{ marginBottom: '16px' }}>
+                    <div
+                      className="settings-toggle-row"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '16px',
+                        padding: '12px 14px',
+                        borderRadius: '8px',
+                        background: 'rgba(255, 255, 255, 0.03)',
+                        border: '1px solid var(--border-color)',
+                        cursor: 'pointer'
+                      }}
+                      onClick={() => onToggleAiUserEnabled?.(!aiUserEnabled)}
+                    >
+                      <div className="settings-toggle-text" style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <strong style={{ fontSize: '13px', color: 'var(--text-primary)' }}>Enable Local Gaming AI</strong>
+                          <span className="settings-card-badge" style={{
+                            background: aiUserEnabled ? 'rgba(34, 197, 94, 0.15)' : 'rgba(255, 255, 255, 0.08)',
+                            color: aiUserEnabled ? '#4ade80' : 'var(--text-muted)'
+                          }}>
+                            {aiUserEnabled ? (aiInstalled ? 'Active' : 'No Model Attached') : 'Hidden / Disabled'}
+                          </span>
+                        </div>
+                        <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '4px 0 0' }}>
+                          {aiUserEnabled
+                            ? 'Enabled: AI Companion tabs, buttons, and prompts are active and visible in your library and console ribbon.'
+                            : 'Disabled: Keeps all AI Companion tabs and buttons completely hidden from your library and console HUD.'}
+                        </p>
+                      </div>
+                      <PillToggle
+                        checked={Boolean(aiUserEnabled)}
+                        onChange={(val) => onToggleAiUserEnabled?.(val)}
+                      />
+                    </div>
+                  </div>
+
                   <div className="settings-field-group">
                     <label className="settings-field-label">Companion Tone &amp; Role</label>
                     <select
@@ -4892,6 +5001,29 @@ export function SettingsModal({
                     </div>
                   </div>
                 </div>
+
+                {/* Tactile Controller Navigation Audio Card (Phase 5 of Spec) */}
+                <div className="settings-card">
+                  <div className="settings-card-header">
+                    <div>
+                      <strong className="settings-card-title">Tactile Controller Navigation Audio</strong>
+                      <small className="settings-card-subtitle">
+                        Zero-file Web Audio synthesizer navigation sound effects (Off by default for quiet late-night sessions)
+                      </small>
+                    </div>
+                    <label className="settings-toggle-switch">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(consoleAudioEnabled)}
+                        onChange={(e) => onToggleConsoleAudio?.(e.target.checked)}
+                      />
+                      <span className="settings-toggle-slider" />
+                    </label>
+                  </div>
+                  <p style={{ fontSize: '12px', color: 'var(--text-secondary, #cbd5e1)', margin: '8px 0 0' }}>
+                    Plays subtle synthesized micro-ticks on d-pad/arrow traversal, soft ascending chime on Select (A / Enter), and dampened click on Back (B / Esc). Built entirely with native browser Web Audio — zero audio files stored on disk.
+                  </p>
+                </div>
               </div>
             )}
 
@@ -5421,7 +5553,7 @@ export function SettingsModal({
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <h3 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Logpile Desktop</h3>
-                        <span className="settings-version-tag">v1.3.7</span>
+                        <span className="settings-version-tag">v1.3.9</span>
                       </div>
                       <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '4px 0 0' }}>
                         An offline-first, private personal game sanctuary &amp; library manager.

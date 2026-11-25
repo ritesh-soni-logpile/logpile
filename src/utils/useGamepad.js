@@ -173,6 +173,8 @@ export function useGamepad({
       { index: 3, code: 'Y' },     // Y / Triangle
       { index: 4, code: 'LB' },    // Left Bumper
       { index: 5, code: 'RB' },    // Right Bumper
+      { index: 6, code: 'LT' },    // Left Trigger
+      { index: 7, code: 'RT' },    // Right Trigger
       { index: 8, code: 'SELECT' },// Select / View
       { index: 9, code: 'START' }, // Start / Menu
       { index: 10, code: 'L3' },   // Left Stick Click
@@ -229,7 +231,8 @@ export function useGamepad({
 
         // 2. Button checks with single-trigger edge detection
         BUTTON_MAP.forEach(({ index, code }) => {
-          const isPressed = Boolean(gp.buttons[index]?.pressed)
+          const btn = gp.buttons[index]
+          const isPressed = Boolean(btn?.pressed || (btn?.value && btn.value > 0.45))
           const wasPressed = Boolean(lastButtonStatesRef.current[index])
 
           if (isPressed && !wasPressed) {
@@ -267,9 +270,19 @@ export function useGamepad({
     }
   }, [enabled, checkNativeGamepads])
 
+  const activateGamepadMode = useCallback(() => {
+    if (!isGamepadModeRef.current) {
+      isGamepadModeRef.current = true
+      setIsGamepadMode(true)
+      document.body.classList.add('user-is-gamepad')
+    }
+  }, [])
+
   return {
     connectedGamepad,
     isGamepadMode,
+    setIsGamepadMode,
+    activateGamepadMode,
     refreshGamepads: checkNativeGamepads,
   }
 }

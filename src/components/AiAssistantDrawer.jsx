@@ -1,3 +1,4 @@
+import { GamepadGlyph } from './GamepadGlyph'
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   Sparkles,
@@ -349,6 +350,10 @@ export function AiAssistantDrawer({
   onAction,
   isVoiceListening = false,
   onToggleVoice,
+  isBigPictureMode = false,
+  connectedGamepad = '',
+  gamepadGlyphStyle = 'auto',
+  onOpenOsk,
 }) {
   const [sessions, setSessions] = useState(loadInitialSessions)
   const [ttsEnabled, setTtsEnabled] = useState(() => getVoiceSettings().ttsEnabled)
@@ -391,7 +396,7 @@ export function AiAssistantDrawer({
     return () => unsub?.()
   }, [])
 
-  const messagesEndRef = useRef(null)
+    const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
 
   // Resolve active session reliably
@@ -719,6 +724,65 @@ export function AiAssistantDrawer({
     return defaultChips
   }, [activeGame])
 
+  const [focusedIndex, setFocusedIndex] = useState(0)
+
+  // Auto-stream recognized voice input directly into active chat session
+  useEffect(() => {
+    if (!open || !window.api?.voice?.onRecognized) return
+    const unbind = window.api.voice.onRecognized((data) => {
+      if (data?.text) {
+        handleSend(data.text)
+      }
+    })
+    return () => unbind?.()
+  }, [open, handleSend])
+
+  // Gamepad navigation & actions within AI Companion drawer in Console Mode
+  useEffect(() => {
+    if (!open || !isBigPictureMode) return
+
+    const handleNavigate = (e) => {
+      const dir = e.detail?.direction
+      const maxIdx = quickChips.length + 1
+      if (dir === 'down') {
+        setFocusedIndex((prev) => Math.min(maxIdx, prev + 1))
+      } else if (dir === 'up') {
+        setFocusedIndex((prev) => Math.max(0, prev - 1))
+      }
+    }
+
+    const handleAction = (e) => {
+      const action = e.detail?.action
+      if (action === 'SELECT') {
+        if (focusedIndex === 0) {
+          onToggleVoice?.()
+        } else if (focusedIndex >= 1 && focusedIndex <= quickChips.length) {
+          const chip = quickChips[focusedIndex - 1]
+          if (chip) handleSend(chip.prompt)
+        } else {
+          inputRef.current?.focus()
+          onOpenOsk?.()
+        }
+      }
+    }
+
+    const handleToggleTtsEvent = () => handleToggleTts()
+    const handleNewChatEvent = () => handleNewChat()
+
+    window.addEventListener('logpile-ai-gamepad-navigate', handleNavigate)
+    window.addEventListener('logpile-ai-gamepad-action', handleAction)
+    window.addEventListener('logpile-ai-toggle-tts', handleToggleTtsEvent)
+    window.addEventListener('logpile-ai-new-chat', handleNewChatEvent)
+
+    return () => {
+      window.removeEventListener('logpile-ai-gamepad-navigate', handleNavigate)
+      window.removeEventListener('logpile-ai-gamepad-action', handleAction)
+      window.removeEventListener('logpile-ai-toggle-tts', handleToggleTtsEvent)
+      window.removeEventListener('logpile-ai-new-chat', handleNewChatEvent)
+    }
+  }, [open, isBigPictureMode, focusedIndex, quickChips, onToggleVoice, handleSend, handleToggleTts, handleNewChat, onOpenOsk])
+
+
   if (!open) return null
 
   const activePersonaObj = PERSONA_OPTIONS.find((p) => p.id === selectedPersona) || PERSONA_OPTIONS[0]
@@ -869,6 +933,44 @@ export function AiAssistantDrawer({
 
         {/* Messages Body OR History Panel */}
         <div className="ai-drawer-body custom-scrollbar">
+          {/* Console Voice Mode Hero Banner */}
+          {isBigPictureMode && !showHistory && (
+            <div className={`ai-console-voice-hero ${isVoiceListening ? 'is-listening' : ''} ${focusedIndex === 0 ? 'gamepad-focused' : ''}`}>
+              <button
+                type="button"
+                className="ai-voice-hero-btn"
+                onClick={onToggleVoice}
+                title="Push-to-Talk (Gamepad R3)"
+              >
+                <div className="ai-voice-orb">
+                  {isVoiceListening && (
+                    <>
+                      <div className="ai-voice-wave-ring ring-1" />
+                      <div className="ai-voice-wave-ring ring-2" />
+                    </>
+                  )}
+                  <div className="ai-voice-icon-inner">
+                    {isVoiceListening ? (
+                      <Mic size={24} style={{ color: '#d6ff4b' }} />
+                    ) : (
+                      <Mic size={24} style={{ color: '#D4AF37' }} />
+                    )}
+                  </div>
+                </div>
+                <div className="ai-voice-hero-text">
+                  <div className="ai-voice-hero-title">
+                    <GamepadGlyph button="R3" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} />
+                    <span>{isVoiceListening ? 'LISTENING... SPEAK NOW' : 'PUSH TO TALK (VOICE MODE)'}</span>
+                  </div>
+                  <div className="ai-voice-hero-sub">
+                    {isVoiceListening
+                      ? 'Voice listening active — speak your question or command'
+                      : 'Press R3 or tap to speak · 100% offline AI voice assistant'}
+                  </div>
+                </div>
+              </button>
+            </div>
+          )}
           {showHistory ? (
             /* History Sessions View */
             <div className="ai-history-panel custom-scrollbar">
@@ -993,16 +1095,20 @@ export function AiAssistantDrawer({
                 </span>
                 {quickChips.map((chip, idx) => {
                   const Icon = chip.icon
+                  const isFocused = isBigPictureMode && focusedIndex === idx + 1
                   return (
                     <button
                       key={idx}
                       type="button"
                       disabled={loading}
-                      className="ai-drawer-chip"
+                      className={`ai-drawer-chip ${isFocused ? 'gamepad-focused' : ''}`}
                       onClick={() => handleSend(chip.prompt)}
                     >
                       <Icon size={13} className="text-[var(--accent)] shrink-0" />
-                      <span className="truncate text-left">{chip.label}</span>
+                      <span className="truncate text-left flex-1">{chip.label}</span>
+                      {isFocused && (
+                        <GamepadGlyph button="A" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} />
+                      )}
                     </button>
                   )
                 })}
@@ -1141,6 +1247,32 @@ export function AiAssistantDrawer({
               <ShieldCheck size={11} className="text-[var(--accent)]" />
               <span>Runs locally on CPU/GPU · Unloads instantly on close or game launch</span>
             </div>
+
+            {/* Console Controller Navigation Legend */}
+            {isBigPictureMode && (
+              <div className="ai-drawer-console-legend">
+                <div className="ai-legend-pill" onClick={onToggleVoice}>
+                  <GamepadGlyph button="R3" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} />
+                  <span>Speak</span>
+                </div>
+                <div className="ai-legend-pill">
+                  <GamepadGlyph button="A" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} />
+                  <span>Select</span>
+                </div>
+                <div className="ai-legend-pill" onClick={handleToggleTts}>
+                  <GamepadGlyph button="X" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} />
+                  <span>Audio: {ttsEnabled ? 'ON' : 'OFF'}</span>
+                </div>
+                <div className="ai-legend-pill" onClick={handleNewChat}>
+                  <GamepadGlyph button="Y" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} />
+                  <span>New Chat</span>
+                </div>
+                <div className="ai-legend-pill" onClick={handleCloseDrawer}>
+                  <GamepadGlyph button="B" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} />
+                  <span>Close</span>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </aside>

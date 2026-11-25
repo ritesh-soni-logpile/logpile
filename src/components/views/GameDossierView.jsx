@@ -17,6 +17,8 @@ import {
   Camera,
 } from 'lucide-react'
 
+const cn = (...classes) => classes.filter(Boolean).join(' ')
+
 export function PcgwTechSyncButton({ game, onGameUpdated }) {
   const [loading, setLoading] = useState(false)
   const hasSavePath = Boolean(game?.save_dir_path)
@@ -205,14 +207,8 @@ export function SaveBackupsPanel({ game, onGameUpdated }) {
 
   return (
     <div
-      className="cinematic-save-backups-sheet"
-      style={{
-        marginTop: '16px',
-        padding: '16px',
-        background: 'rgba(255, 255, 255, 0.03)',
-        borderRadius: '12px',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-      }}
+      className="cinematic-save-backups-sheet dossier-sheet-card"
+      style={{ marginTop: '16px' }}
     >
       <div
         style={{
@@ -251,13 +247,8 @@ export function SaveBackupsPanel({ game, onGameUpdated }) {
 
         <button
           type="button"
-          className="hero-ghost-btn"
+          className={cn("dossier-panel-btn hero-ghost-btn", hasSavePath && "is-ready")}
           style={{
-            padding: '4px 10px',
-            fontSize: '11px',
-            height: '26px',
-            borderColor: hasSavePath ? 'rgba(214, 255, 75, 0.35)' : 'rgba(255, 255, 255, 0.1)',
-            color: hasSavePath ? 'var(--accent, #d6ff4b)' : 'var(--text-muted, #71717a)',
             cursor: hasSavePath && !backingUp ? 'pointer' : 'default',
           }}
           title={
@@ -283,10 +274,8 @@ export function SaveBackupsPanel({ game, onGameUpdated }) {
       </div>
 
       <div
+        className="dossier-path-box"
         style={{
-          background: 'rgba(0, 0, 0, 0.35)',
-          border: '1px solid rgba(255, 255, 255, 0.06)',
-          borderRadius: '8px',
           padding: '8px 10px',
           marginBottom: '12px',
           display: 'flex',
@@ -319,18 +308,9 @@ export function SaveBackupsPanel({ game, onGameUpdated }) {
         {!hasSavePath && (
           <button
             type="button"
+            className="dossier-locate-btn"
             onClick={handleInlinePcgwSync}
             disabled={syncingPcgw}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: 'var(--accent, #d6ff4b)',
-              textDecoration: 'underline',
-              fontSize: '11px',
-              fontWeight: 600,
-              cursor: syncingPcgw ? 'default' : 'pointer',
-              flexShrink: 0,
-            }}
           >
             {syncingPcgw ? 'Locating...' : 'Locate Now'}
           </button>
@@ -459,21 +439,9 @@ export function SaveBackupsPanel({ game, onGameUpdated }) {
                 {b.exists && hasSavePath && (
                   <button
                     type="button"
+                    className="dossier-restore-btn"
                     onClick={() => handleRestore(b)}
                     disabled={restoringId === b.id}
-                    style={{
-                      background: 'rgba(56, 189, 248, 0.12)',
-                      border: '1px solid rgba(56, 189, 248, 0.3)',
-                      color: '#38bdf8',
-                      borderRadius: '4px',
-                      padding: '2px 8px',
-                      fontSize: '10px',
-                      fontWeight: 600,
-                      cursor: restoringId === b.id ? 'default' : 'pointer',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '3px',
-                    }}
                     title="Restore this backup into local save folder"
                   >
                     <RotateCcw size={10} className={restoringId === b.id ? 'spin-icon' : ''} />
@@ -528,13 +496,9 @@ export function ModProfilePanel({ game, onGameUpdated }) {
 
   return (
     <div
-      className="cinematic-mod-profile-sheet"
+      className="cinematic-mod-profile-sheet dossier-sheet-card"
       style={{
         marginTop: '16px',
-        padding: '16px',
-        background: 'rgba(255, 255, 255, 0.03)',
-        borderRadius: '12px',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
       }}
     >
       <div
@@ -622,32 +586,15 @@ export function ModProfilePanel({ game, onGameUpdated }) {
             placeholder="e.g. -dx11 -mod=ColdWar -novid"
             spellCheck="false"
             autoComplete="off"
-            style={{
-              width: '100%',
-              padding: '7px 10px 7px 30px',
-              fontSize: '11px',
-              fontFamily: 'monospace',
-              background: 'rgba(0, 0, 0, 0.4)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: '6px',
-              color: 'var(--text-primary, #ffffff)',
-              outline: 'none',
-              boxSizing: 'border-box',
-            }}
+            className="dossier-input-box"
           />
         </div>
 
         <button
           type="submit"
-          className="hero-ghost-btn"
+          className={cn("dossier-panel-btn dossier-save-btn hero-ghost-btn", isDirty && "is-dirty", savedNotice && "is-saved")}
           disabled={saving || (!isDirty && !savedNotice)}
           style={{
-            padding: '4px 12px',
-            fontSize: '11px',
-            height: '30px',
-            flexShrink: 0,
-            borderColor: savedNotice ? 'rgba(74, 222, 128, 0.4)' : isDirty ? 'var(--accent, #d6ff4b)' : 'rgba(255, 255, 255, 0.1)',
-            color: savedNotice ? '#4ade80' : isDirty ? 'var(--accent, #d6ff4b)' : 'var(--text-muted, #71717a)',
             cursor: isDirty || savedNotice ? 'pointer' : 'default',
           }}
           title={isDirty ? 'Save launch arguments to database' : 'Arguments are up to date'}

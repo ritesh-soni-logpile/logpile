@@ -20,7 +20,7 @@ contextBridge.exposeInMainWorld('api', {
     close: () => ipcRenderer.invoke('window:close'),
     isMaximized: () => ipcRenderer.invoke('window:isMaximized'),
     reload: () => ipcRenderer.invoke('window:reload'),
-    toggleFullScreen: () => ipcRenderer.invoke('window:toggleFullScreen'),
+    toggleFullScreen: (flag) => ipcRenderer.invoke('window:toggleFullScreen', flag),
     isFullScreen: () => ipcRenderer.invoke('window:isFullScreen'),
     captureScreen: (prefix) => ipcRenderer.invoke('window:captureScreen', prefix),
     captureRect: (rect) => ipcRenderer.invoke('window:captureRect', rect),

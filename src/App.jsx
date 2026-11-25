@@ -9,7 +9,7 @@ import {
   Dices, KeyRound, RefreshCw, RotateCw, ImagePlus, Trophy, WandSparkles, EyeOff, Eye, FileDown, Trash2, AlertTriangle, ArrowRightLeft,
   Bookmark, MoreHorizontal, PlugZap, Info, Film, Camera, ChevronRight, ZoomIn,
   PanelLeftClose, PanelLeft, Shuffle, Layers, Users, LayoutDashboard, BookOpen,
-  Mic, MicOff, Keyboard, Gauge, Zap, Flame, Waves, Compass,
+  Mic, MicOff, Keyboard, Gauge, Zap, Flame, Waves, Compass, Tv,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
@@ -32,6 +32,15 @@ import { speakConfirmation, getVoiceSettings, saveVoiceSettings } from './utils/
 import { useGamepad } from './utils/useGamepad'
 import { GamepadGlyph } from './components/GamepadGlyph'
 import { VirtualKeyboard, KEYBOARD_LAYOUT } from './components/VirtualKeyboard'
+import { ConsoleTelemetryBar } from './components/ConsoleTelemetryBar'
+import { ConsoleStageView } from './components/ConsoleStageView'
+import {
+  isConsoleAudioEnabled,
+  setConsoleAudioEnabled,
+  playNavTick,
+  playSelectChime,
+  playBackClick,
+} from './utils/consoleAudio'
 import { generateBragCollage } from './utils/generateBragCollage'
 import { IntroSplash, THEME_LOGOS } from './components/IntroSplash'
 import { InstallerApp } from './components/InstallerApp'
@@ -2689,12 +2698,22 @@ function ScanImportPanel({ open, onClose, onRefresh }) {
   )
 }
 
-function RoulettePanel({ onWinner }) {
+function RoulettePanel({
+  onWinner,
+  isGamepadMode = false,
+  isFocused = false,
+  connectedGamepad = '',
+  gamepadGlyphStyle = 'auto',
+  onLaunch = null,
+  onSelect = null,
+  spinTriggerRef = null,
+}) {
   const [rolling, setRolling] = useState(false)
   const [candidate, setCandidate] = useState(null)
   const [winner, setWinner] = useState(null)
   const [error, setError] = useState('')
-  const start = async () => {
+
+  const start = useCallback(async () => {
     if (rolling) return
     setError('')
     setWinner(null)
@@ -2712,7 +2731,7 @@ function RoulettePanel({ onWinner }) {
         if (step >= 18) {
           setWinner(target)
           setRolling(false)
-          onWinner(target)
+          onWinner?.(target)
           return
         }
         step += 1
@@ -2723,9 +2742,122 @@ function RoulettePanel({ onWinner }) {
       setRolling(false)
       setError(err.message || 'Unable to choose a title.')
     }
-  }
+  }, [rolling, onWinner])
+
+  useEffect(() => {
+    if (spinTriggerRef) {
+      spinTriggerRef.current = {
+        spin: start,
+        winner,
+        rolling,
+      }
+    }
+  }, [spinTriggerRef, start, winner, rolling])
+
   const shown = candidate || winner
-  return <section className="pick-panel"><div className="pick-orbit"><div className="pick-orbit-ring" /><div className="pick-card-window">{shown ? <PosterImage game={shown} className={cn('pick-poster', rolling && 'pick-poster-rolling')} /> : <div className="pick-placeholder"><Dices size={36} /><span>Ready when you are</span></div>}</div></div><div className="pick-copy"><div className="eyebrow"><span>LOCAL RANDOMIZER</span><span className="eyebrow-line" /></div><h2>{winner ? 'Your next session' : 'Today’s Pick'}</h2><p>{winner ? `${winner.canonical_title} is installed, owned, and ready for a focused session.` : 'A private roulette wheel for the games already installed on your connected drives.'}</p><div className="pick-rule"><span><Trophy size={14} /> Installed only</span><span><WandSparkles size={14} /> Utilities excluded</span></div><button className="hero-action pick-button" disabled={rolling} onClick={start}>{rolling ? <><RefreshCw size={16} className="spin-icon" /> Shuffling…</> : <><Dices size={16} /> {winner ? 'Spin again' : 'Spin the wheel'}</>}</button>{error ? <div className="scan-message scan-error"><X size={14} /> {error}</div> : null}</div></section>
+  return (
+    <section className="pick-panel">
+      <div className="pick-orbit">
+        <div className="pick-orbit-ring" />
+        <div className="pick-card-window">
+          {shown ? (
+            <PosterImage game={shown} className={cn('pick-poster', rolling && 'pick-poster-rolling')} />
+          ) : (
+            <div className="pick-placeholder">
+              <Dices size={36} />
+              <span>Ready when you are</span>
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="pick-copy">
+        <div className="eyebrow">
+          <span>LOCAL RANDOMIZER</span>
+          <span className="eyebrow-line" />
+        </div>
+        <h2>{winner ? 'Your next session' : 'Today’s Pick'}</h2>
+        <p>
+          {winner
+            ? `${winner.canonical_title} is installed, owned, and ready for a focused session.`
+            : 'A private roulette wheel for the games already installed on your connected drives.'}
+        </p>
+        <div className="pick-rule">
+          <span><Trophy size={14} /> Installed only</span>
+          <span><WandSparkles size={14} /> Utilities excluded</span>
+        </div>
+
+        <div className="pick-actions-row">
+          {winner ? (
+            <>
+              <button
+                type="button"
+                className={cn('hero-action pick-button', isGamepadMode && isFocused && 'gamepad-focused')}
+                onClick={() => onLaunch?.(winner)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+              >
+                {isGamepadMode && (
+                  <GamepadGlyph button="A" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} />
+                )}
+                <Play size={16} />
+                <span>Play Now</span>
+              </button>
+
+              <button
+                type="button"
+                className="outline-button pick-secondary-btn"
+                disabled={rolling}
+                onClick={start}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+              >
+                {isGamepadMode && (
+                  <GamepadGlyph button="X" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} />
+                )}
+                <Dices size={15} />
+                <span>Spin Again</span>
+              </button>
+
+              <button
+                type="button"
+                className="outline-button pick-secondary-btn"
+                onClick={() => onSelect?.(winner, 'today')}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+              >
+                {isGamepadMode && (
+                  <GamepadGlyph button="Y" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} />
+                )}
+                <span>Game Details</span>
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className={cn('hero-action pick-button', isGamepadMode && isFocused && 'gamepad-focused')}
+              disabled={rolling}
+              onClick={start}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+            >
+              {isGamepadMode && (
+                <GamepadGlyph button="A" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} />
+              )}
+              {rolling ? (
+                <>
+                  <RefreshCw size={16} className="spin-icon" />
+                  <span>Shuffling…</span>
+                </>
+              ) : (
+                <>
+                  <Dices size={16} />
+                  <span>Spin the wheel</span>
+                </>
+              )}
+            </button>
+          )}
+        </div>
+
+        {error ? <div className="scan-message scan-error"><X size={14} /> {error}</div> : null}
+      </div>
+    </section>
+  )
 }
 
 function ArtworkManager({ onRefresh, onCancel }) {
@@ -2871,7 +3003,13 @@ function PurgeConfirmModal({ open, busy, onClose, onConfirm }) {
   return <div className="modal-backdrop purge-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !busy && onClose()}><div className="purge-modal"><div className="purge-icon"><AlertTriangle size={25} /></div><div><div className="eyebrow"><span>DANGER ZONE</span><span className="eyebrow-line" /></div><h2>Purge library?</h2><p>Are you sure? This will delete all records from your library. Physical poster, hero, and icon files in the local artwork cache will be preserved.</p></div><div className="editor-footer"><button className="outline-button" disabled={busy} onClick={onClose}>Cancel</button><button className="danger-button" disabled={busy} onClick={onConfirm}><Trash2 size={14} /> {busy ? 'Purging…' : 'Yes, purge database'}</button></div></div></div>
 }
 
-function ConfirmActionModal({ config, onClose }) {
+function ConfirmActionModal({
+  config,
+  onClose,
+  isGamepadMode = false,
+  connectedGamepad = '',
+  gamepadGlyphStyle = 'auto',
+}) {
   const [busy, setBusy] = useState(false)
   useEffect(() => {
     if (!config) return
@@ -2930,7 +3068,10 @@ function ConfirmActionModal({ config, onClose }) {
         </div>
         <div className="editor-footer">
           <button className="outline-button" disabled={busy} onClick={handleCancel}>
-            {cancelText}
+            {connectedGamepad && (
+              <GamepadGlyph button="B" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} />
+            )}
+            <span>{cancelText}</span>
           </button>
           <button
             className={isDanger ? 'danger-button' : 'primary-button'}
@@ -2938,8 +3079,14 @@ function ConfirmActionModal({ config, onClose }) {
             autoFocus
             onClick={handleConfirm}
           >
-            {busy ? <RefreshCw size={14} className="spin-icon" /> : <Check size={14} />}
-            {busy ? 'Working…' : confirmText}
+            {busy ? (
+              <RefreshCw size={14} className="spin-icon" />
+            ) : connectedGamepad ? (
+              <GamepadGlyph button="A" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} />
+            ) : (
+              <Check size={14} />
+            )}
+            <span>{busy ? 'Working…' : confirmText}</span>
           </button>
         </div>
       </div>
@@ -3685,7 +3832,15 @@ function HomeSpotlightAndShelf({
                     onClick={() => onLaunch(featured)}
                   >
                     <Play size={14} fill="currentColor" />
-                    <span>{featuredFamilyLock ? 'Play (In Use)' : 'Play Now'}</span>
+                    <span>
+                      {featuredFamilyLock
+                        ? 'Play (In Use)'
+                        : layoutTheme === 'competitive'
+                        ? 'DEPLOY MISSION'
+                        : layoutTheme === 'playful'
+                        ? "Let's Play!"
+                        : 'Play Now'}
+                    </span>
                   </button>
                 ) : (
                   <button
@@ -3694,7 +3849,7 @@ function HomeSpotlightAndShelf({
                     onClick={() => onSelect(featured, 'spotlight')}
                   >
                     <Sparkles size={14} />
-                    <span>Inspect Title</span>
+                    <span>{layoutTheme === 'competitive' ? 'INSPECT INTEL' : 'Inspect Title'}</span>
                   </button>
                 )}
 
@@ -3704,7 +3859,7 @@ function HomeSpotlightAndShelf({
                   onClick={() => onSelect(featured, 'spotlight')}
                 >
                   <Info size={13} />
-                  <span>Game Details</span>
+                  <span>{layoutTheme === 'competitive' ? 'INTEL' : layoutTheme === 'playful' ? 'Details' : 'Game Details'}</span>
                 </button>
 
                 <button
@@ -3714,7 +3869,7 @@ function HomeSpotlightAndShelf({
                   title="Randomize & shuffle spotlight titles"
                 >
                   <Shuffle size={13} />
-                  <span>Shuffle</span>
+                  <span>{layoutTheme === 'competitive' ? 'ROTATE' : layoutTheme === 'playful' ? 'Random' : 'Shuffle'}</span>
                 </button>
               </div>
             </div>
@@ -3838,15 +3993,27 @@ function VirtualGrid({
   gamepadFocusIndex = -1,
   onToggleFavorite,
   familyLocks = {},
+  isBigPictureMode = false,
 }) {
   const gridRef = useRef(null)
-  const [columns, setColumns] = useState(() => (typeof window !== 'undefined' ? (window.innerWidth >= 1180 ? 5 : window.innerWidth >= 880 ? 4 : window.innerWidth >= 600 ? 3 : 2) : 4))
+  const [columns, setColumns] = useState(() => {
+    if (typeof window === 'undefined') return 4
+    const w = window.innerWidth
+    if (isBigPictureMode) {
+      return w >= 1600 ? 5 : w >= 1180 ? 4 : w >= 780 ? 3 : 2
+    }
+    return w >= 1180 ? 5 : w >= 880 ? 4 : w >= 600 ? 3 : 2
+  })
   const [scrollMargin, setScrollMargin] = useState(0)
 
   useEffect(() => {
     const update = () => {
       const width = gridRef.current?.clientWidth || window.innerWidth
-      setColumns(width >= 1180 ? 5 : width >= 880 ? 4 : width >= 600 ? 3 : 2)
+      if (isBigPictureMode) {
+        setColumns(width >= 1600 ? 5 : width >= 1180 ? 4 : width >= 780 ? 3 : 2)
+      } else {
+        setColumns(width >= 1180 ? 5 : width >= 880 ? 4 : width >= 600 ? 3 : 2)
+      }
       const scrollEl = scrollElementRef?.current
       if (gridRef.current && scrollEl) {
         const gridRect = gridRef.current.getBoundingClientRect()
@@ -3866,7 +4033,7 @@ function VirtualGrid({
       observer.disconnect()
       window.removeEventListener('resize', update)
     }
-  }, [scrollElementRef])
+  }, [scrollElementRef, isBigPictureMode])
 
   const rows = useMemo(() => {
     const next = []
@@ -3879,7 +4046,7 @@ function VirtualGrid({
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollElementRef?.current || gridRef.current,
-    estimateSize: () => 360,
+    estimateSize: () => (isBigPictureMode ? 440 : 360),
     overscan: 4,
     scrollMargin,
     initialOffset: initialScrollTop || 0,
@@ -5629,7 +5796,7 @@ function HeroView({
                 </div>
 
                 {/* HowLongToBeat Card */}
-                <div className="cinematic-hltb-sheet" style={{ marginTop: '16px', padding: '16px', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                <div className="cinematic-hltb-sheet dossier-sheet-card" style={{ marginTop: '16px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
                     <h4 className="cinematic-dossier-heading" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span>⏱ HowLongToBeat</span>
@@ -5641,8 +5808,7 @@ function HeroView({
                     </h4>
                     <button
                       type="button"
-                      className="hero-ghost-btn"
-                      style={{ padding: '4px 10px', fontSize: '11px', height: '26px' }}
+                      className="dossier-panel-btn hero-ghost-btn"
                       title="Fetch latest completion estimates from HowLongToBeat"
                       onClick={async (e) => {
                         e.stopPropagation()
@@ -5652,23 +5818,24 @@ function HeroView({
                         } catch {}
                       }}
                     >
+                      <RotateCw size={11} className="spin-icon-on-click" />
                       <span>Sync HLTB</span>
                     </button>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', textAlign: 'center' }}>
-                    <div style={{ padding: '10px 6px', background: 'rgba(0,0,0,0.25)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div className="hltb-stat-box">
                       <div style={{ fontSize: '10px', textTransform: 'uppercase', opacity: 0.6, letterSpacing: '0.05em' }}>Main Story</div>
                       <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--accent, #f59e0b)', marginTop: '4px' }}>
                         {activeGame.hltb_main_hours ? `${activeGame.hltb_main_hours}h` : '—'}
                       </div>
                     </div>
-                    <div style={{ padding: '10px 6px', background: 'rgba(0,0,0,0.25)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div className="hltb-stat-box">
                       <div style={{ fontSize: '10px', textTransform: 'uppercase', opacity: 0.6, letterSpacing: '0.05em' }}>Main + Extra</div>
                       <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--accent, #f59e0b)', marginTop: '4px' }}>
                         {activeGame.hltb_extra_hours ? `${activeGame.hltb_extra_hours}h` : '—'}
                       </div>
                     </div>
-                    <div style={{ padding: '10px 6px', background: 'rgba(0,0,0,0.25)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div className="hltb-stat-box">
                       <div style={{ fontSize: '10px', textTransform: 'uppercase', opacity: 0.6, letterSpacing: '0.05em' }}>100% Complete</div>
                       <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--accent, #f59e0b)', marginTop: '4px' }}>
                         {activeGame.hltb_completionist_hours ? `${activeGame.hltb_completionist_hours}h` : '—'}
@@ -6232,17 +6399,60 @@ function App() {
     })
   }, [])
 
+  const [isBigPictureMode, setIsBigPictureMode] = useState(() => {
+    try {
+      return localStorage.getItem('logpile-big-picture-mode') === 'true'
+    } catch {
+      return false
+    }
+  })
+
+  const handleToggleBigPicture = useCallback((forcedVal) => {
+    setIsBigPictureMode((prev) => {
+      const next = typeof forcedVal === 'boolean' ? forcedVal : !prev
+      try {
+        localStorage.setItem('logpile-big-picture-mode', String(next))
+      } catch {}
+
+      if (window.api?.window?.toggleFullScreen) {
+        window.api.window.isFullScreen?.().then((isFull) => {
+          if (next && !isFull) {
+            window.api.window.toggleFullScreen()
+          } else if (!next && isFull) {
+            window.api.window.toggleFullScreen()
+          }
+        }).catch(() => {
+          window.api.window.toggleFullScreen()
+        })
+      } else if (typeof document !== 'undefined') {
+        if (next && !document.fullscreenElement) {
+          document.documentElement.requestFullscreen?.().catch(() => {})
+        } else if (!next && document.fullscreenElement) {
+          document.exitFullscreen?.().catch(() => {})
+        }
+      }
+      return next
+    })
+  }, [])
+
   const [inAppSearchShortcut, setInAppSearchShortcut] = useState('CommandOrControl+F')
+  const [consoleModeShortcut, setConsoleModeShortcut] = useState('F11')
+  const [allowEscExitConsole, setAllowEscExitConsole] = useState(false)
+
   useEffect(() => {
     let active = true
     api.database?.getLibrarySettings?.().then((settings) => {
       if (!active || !settings) return
       if (settings.searchShortcut) setInAppSearchShortcut(settings.searchShortcut)
+      if (settings.consoleModeShortcut) setConsoleModeShortcut(settings.consoleModeShortcut)
+      if (settings.allowEscExitConsole !== undefined) setAllowEscExitConsole(Boolean(settings.allowEscExitConsole))
     }).catch(() => {})
     const off = api.database?.onUpdated?.(() => {
       api.database?.getLibrarySettings?.().then((settings) => {
         if (!active || !settings) return
         if (settings.searchShortcut) setInAppSearchShortcut(settings.searchShortcut)
+        if (settings.consoleModeShortcut) setConsoleModeShortcut(settings.consoleModeShortcut)
+        if (settings.allowEscExitConsole !== undefined) setAllowEscExitConsole(Boolean(settings.allowEscExitConsole))
       }).catch(() => {})
     })
     return () => {
@@ -6266,22 +6476,16 @@ function App() {
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'j') {
         e.preventDefault()
         setAiDrawerOpen((prev) => !prev)
-      } else if (e.key === 'F11') {
+      } else if (matchesShortcut(e, consoleModeShortcut) || e.key === 'F11' || ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'f' || e.key === 'F'))) {
         e.preventDefault()
-        if (api?.window?.toggleFullScreen) {
-          api.window.toggleFullScreen()
-        } else if (document.fullscreenElement) {
-          document.exitFullscreen().catch(() => {})
-        } else {
-          document.documentElement.requestFullscreen().catch(() => {})
-        }
+        handleToggleBigPicture()
       }
     }
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
-  }, [toggleSidebar, handleToggleSpotlight, inAppSearchShortcut])
+  }, [toggleSidebar, handleToggleSpotlight, inAppSearchShortcut, consoleModeShortcut, handleToggleBigPicture])
 
-  const mainScrollRef = useRef(null); const searchInputRef = useRef(null); const libraryScrollRef = useRef(0); const lastClickedGameIdRef = useRef(null); const navOriginRef = useRef({ view: 'installed', source: 'grid', scrollTop: 0 }); const hasSeededRef = useRef(false); const [restoredGameId, setRestoredGameId] = useState(null); const [games, setGames] = useState([]); const [hiddenGames, setHiddenGames] = useState([]); const [stats, setStats] = useState(() => ({ ...EMPTY_LIBRARY_STATS })); const [query, setQuery] = useState(''); const [debouncedQuery, setDebouncedQuery] = useState(''); const [view, setView] = useState('installed'); const [sourceFilters, setSourceFilters] = useState([]); const [genreFilter, setGenreFilter] = useState('all'); const [backlogFilter, setBacklogFilter] = useState('all'); const [sortKey, setSortKey] = useState('title-asc'); const [viewMode, setViewMode] = useState('grid'); const [activeGame, setActiveGame] = useState(null); const isDetailView = viewMode === 'hero' && Boolean(activeGame);   const [layoutTheme, setLayoutTheme] = useState(() => localStorage.getItem('logpile-layout-theme') || 'cinematic');
+  const mainScrollRef = useRef(null); const spinTodayRef = useRef(null); const searchInputRef = useRef(null); const libraryScrollRef = useRef(0); const lastClickedGameIdRef = useRef(null); const navOriginRef = useRef({ view: 'installed', source: 'grid', scrollTop: 0 }); const hasSeededRef = useRef(false); const [restoredGameId, setRestoredGameId] = useState(null); const [games, setGames] = useState([]); const [hiddenGames, setHiddenGames] = useState([]); const [stats, setStats] = useState(() => ({ ...EMPTY_LIBRARY_STATS })); const [query, setQuery] = useState(''); const [debouncedQuery, setDebouncedQuery] = useState(''); const [view, setView] = useState('installed'); const [sourceFilters, setSourceFilters] = useState([]); const [genreFilter, setGenreFilter] = useState('all'); const [backlogFilter, setBacklogFilter] = useState('all'); const [sortKey, setSortKey] = useState('title-asc'); const [viewMode, setViewMode] = useState('grid'); const [activeGame, setActiveGame] = useState(null); const isDetailView = viewMode === 'hero' && Boolean(activeGame);   const [layoutTheme, setLayoutTheme] = useState(() => localStorage.getItem('logpile-layout-theme') || 'cinematic');
   const [colorPalette, setColorPalette] = useState(() => {
     try {
       return localStorage.getItem('logpile-color-palette') || 'auto';
@@ -6328,6 +6532,36 @@ function App() {
   const [screenshotBusy, setScreenshotBusy] = useState(false)
   const [activeCaptureAction, setActiveCaptureAction] = useState(null)
   const [aiDrawerOpen, setAiDrawerOpen] = useState(false)
+  const [aiInstalled, setAiInstalled] = useState(false)
+  const [aiUserEnabled, setAiUserEnabled] = useState(() => {
+    try {
+      const stored = localStorage.getItem('logpile-ai-enabled')
+      return stored !== null ? stored === 'true' : true
+    } catch {
+      return true
+    }
+  })
+
+  useEffect(() => {
+    let isMounted = true
+    if (window.api?.ai?.getStatus) {
+      window.api.ai.getStatus().then((st) => {
+        if (isMounted && st) {
+          setAiInstalled(Boolean(st.installed))
+        }
+      }).catch(() => {})
+    }
+    return () => { isMounted = false }
+  }, [])
+
+  const handleToggleAiUserEnabled = useCallback((enabled) => {
+    setAiUserEnabled(enabled)
+    try {
+      localStorage.setItem('logpile-ai-enabled', String(enabled))
+    } catch {}
+  }, [])
+
+  const isAiAvailable = aiInstalled && aiUserEnabled
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
   const [settingsModalTab, setSettingsModalTab] = useState('general')
   const [familyLocks, setFamilyLocks] = useState({})
@@ -7310,7 +7544,14 @@ function App() {
     const nextFav = !game.is_favorite
     const updatedGame = { ...game, is_favorite: nextFav }
     setActiveGame((prev) => (prev?.id === game.id ? { ...prev, ...updatedGame } : prev))
-    setGames((prev) => prev.map((g) => (g.id === game.id ? { ...g, ...updatedGame } : g)))
+    setGames((prev) => {
+      const nextGames = prev.map((g) => (g.id === game.id ? { ...g, ...updatedGame } : g))
+      const remainingFavs = nextGames.filter((g) => g.is_favorite && !g.is_utility && !g.is_dlc).length
+      if (remainingFavs === 0 && view === 'favorites') {
+        setView('installed')
+      }
+      return nextGames
+    })
     setNoticeTone('success')
     setNotice(nextFav ? `Added "${game.canonical_title}" to favorites.` : `Removed "${game.canonical_title}" from favorites.`)
     window.setTimeout(() => setNotice(''), 3000)
@@ -7322,7 +7563,7 @@ function App() {
       setNoticeTone('error')
       setNotice(err.message || 'Failed to update favorite.')
     }
-  }, [loadData])
+  }, [loadData, view])
   useEffect(() => { loadData() }, [view, sortKey, qualityFilters]); useEffect(() => { const close = (e) => { setContextMenu(null); if (bragMenuRef.current && bragMenuRef.current.contains(e.target)) return; if (bragDropdownRef.current && bragDropdownRef.current.contains(e.target)) return; setScreenshotMenuOpen(false); }; window.addEventListener('pointerdown', close); window.addEventListener('click', close); window.addEventListener('contextmenu', close); window.addEventListener('scroll', close, true); return () => { window.removeEventListener('pointerdown', close); window.removeEventListener('click', close); window.removeEventListener('contextmenu', close); window.removeEventListener('scroll', close, true) } }, []);
   useEffect(() => {
     if (!screenshotMenuOpen) return
@@ -7471,25 +7712,25 @@ function App() {
         } else {
           window.location.reload()
         }
-      } else if (e.key === 'F11') {
+      } else if (matchesShortcut(e, consoleModeShortcut) || e.key === 'F11' || ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'f' || e.key === 'F'))) {
         e.preventDefault()
-        if (window.api?.window?.toggleFullScreen) {
-          window.api.window.toggleFullScreen()
-        } else if (document.fullscreenElement) {
-          document.exitFullscreen().catch(() => {})
-        } else {
-          document.documentElement.requestFullscreen().catch(() => {})
-        }
-      } else if (e.key === 'Escape' && isDetailView) {
-        if (document.querySelector('.lightbox-backdrop, .modal-backdrop, .hero-dropdown-menu, .status-dropdown-menu, .custom-dropdown-portal, .art-context-menu')) {
+        handleToggleBigPicture()
+      } else if (e.key === 'Escape') {
+        if (document.querySelector('.lightbox-backdrop, .modal-backdrop, .hero-dropdown-menu, .status-dropdown-menu, .custom-dropdown-portal, .art-context-menu, .settings-modal-backdrop')) {
           return
         }
-        handleBackToLibrary()
+        if (isDetailView) {
+          playBackClick()
+          handleBackToLibrary()
+        } else if (isBigPictureMode && allowEscExitConsole) {
+          playBackClick()
+          handleToggleBigPicture(false)
+        }
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isDetailView, handleBackToLibrary])
+  }, [isDetailView, handleBackToLibrary, isBigPictureMode, handleToggleBigPicture, consoleModeShortcut, allowEscExitConsole])
   const genres = useMemo(() => [...new Set(games.flatMap((game) => String(game.genres || game.genre || '').split(',').map((genre) => genre.trim()).filter(Boolean)))].sort(), [games]); const sourceOptions = useMemo(() => sourceOptionsForGames(games), [games])
   const sortOptions = useMemo(() => [
     { value: 'title-asc', label: 'Title A–Z' },
@@ -7572,7 +7813,7 @@ function App() {
   }, [])
   const filteredGames = useMemo(() => {
     let result = view === 'hidden' ? strictTitleSearch(hiddenGames, debouncedQuery) : strictTitleSearch(games, debouncedQuery)
-    if (view === 'installed') result = result.filter((game) => game.is_installed && !game.is_utility && !game.is_dlc)
+    if (view === 'installed' || view === 'today') result = result.filter((game) => game.is_installed && !game.is_utility && !game.is_dlc)
     if (view === 'favorites') result = result.filter((game) => Boolean(game.is_favorite) && !game.is_utility && !game.is_dlc)
     if (view === 'ready') result = result.filter((game) => !game.is_installed && !game.is_utility && !game.is_dlc)
     if (view === 'utilities') result = result.filter((game) => game.is_utility)
@@ -7900,7 +8141,7 @@ function App() {
     document.documentElement.setAttribute('data-mode', 'dark')
     document.documentElement.setAttribute('data-layout', layoutTheme)
     document.documentElement.setAttribute('data-palette', colorPalette)
-    document.documentElement.className = `layout-${layoutTheme}`
+    document.documentElement.className = `layout-${layoutTheme}${isBigPictureMode ? ' mode-big-picture' : ''}`
     const liveVars = themeVars(layoutTheme, colorPalette)
     Object.entries(liveVars).forEach(([k, v]) => {
       document.documentElement.style.setProperty(k, v)
@@ -7908,7 +8149,15 @@ function App() {
     try {
       window.api?.theme?.save?.({ layoutTheme, colorPalette })
     } catch {}
-  }, [layoutTheme, colorPalette])
+  }, [layoutTheme, colorPalette, isBigPictureMode])
+
+  useEffect(() => {
+    if (isBigPictureMode) {
+      document.documentElement.classList.add('mode-big-picture')
+    } else {
+      document.documentElement.classList.remove('mode-big-picture')
+    }
+  }, [isBigPictureMode])
 
   useEffect(() => {
     const savedCss = getCustomCss()
@@ -8229,6 +8478,10 @@ function App() {
       setNoticeTone('info')
       setNotice(`🎙️ "${data.text}"`)
 
+      if (aiDrawerOpen) {
+        return
+      }
+
       try {
         const aiStatus = await window.api?.ai?.getStatus?.()
         if (aiStatus && !aiStatus.installed && !aiStatus.ready) {
@@ -8297,7 +8550,7 @@ function App() {
   // --- 2D Spatial Focus Engine State ---
   const [focusZone, setFocusZone] = useState('grid') // 'grid' | 'sidebar' | 'topbar' | 'spotlight' | 'jump_in' | 'dossier' | 'settings'
   const [sidebarFocusIndex, setSidebarFocusIndex] = useState(0)
-  const [topbarFocusIndex, setTopbarFocusIndex] = useState(0) // 0: search, 1: brag, 2: theme
+  const [topbarFocusIndex, setTopbarFocusIndex] = useState(0) // 0: search, 1: brag, 2: console, 3: theme
   const [bragFocusIndex, setBragFocusIndex] = useState(0)
   const [themeMenuOpen, setThemeMenuOpen] = useState(false)
   const [themeFocusIndex, setThemeFocusIndex] = useState(0)
@@ -8308,7 +8561,7 @@ function App() {
   const handleGamepadNavigateRef = useRef(null)
   const handleGamepadActionRef = useRef(null)
 
-  const { connectedGamepad, isGamepadMode } = useGamepad({
+  const { connectedGamepad, isGamepadMode, activateGamepadMode } = useGamepad({
     enabled: !isGameRunning,
     onNavigate: (dir) => handleGamepadNavigateRef.current?.(dir),
     onAction: (code) => handleGamepadActionRef.current?.(code),
@@ -8359,6 +8612,16 @@ function App() {
     } catch {}
   }, [])
 
+  const [consoleAudioEnabled, setConsoleAudioEnabledState] = useState(() => isConsoleAudioEnabled())
+
+  const handleToggleConsoleAudio = useCallback((enabled) => {
+    setConsoleAudioEnabledState(enabled)
+    setConsoleAudioEnabled(enabled)
+    if (enabled) {
+      playSelectChime()
+    }
+  }, [])
+
   const [oskOpen, setOskOpen] = useState(false)
   const [oskRow, setOskRow] = useState(1) // Row 1: QWERTY
   const [oskCol, setOskCol] = useState(0) // 'Q'
@@ -8405,9 +8668,11 @@ function App() {
   const allSidebarNavItems = useMemo(() => {
     const list = [
       { id: 'installed', key: 'installed', action: () => { setSidebarView('installed'); setFocusZone('grid'); setGamepadIndex(0); } },
-      { id: 'favorites', key: 'favorites', action: () => { setSidebarView('favorites'); setFocusZone('grid'); setGamepadIndex(0); } },
-      { id: 'all', key: 'all', action: () => { setSidebarView('all'); setFocusZone('grid'); setGamepadIndex(0); } },
     ]
+    if (displayFavoriteGames > 0) {
+      list.push({ id: 'favorites', key: 'favorites', action: () => { setSidebarView('favorites'); setFocusZone('grid'); setGamepadIndex(0); } })
+    }
+    list.push({ id: 'all', key: 'all', action: () => { setSidebarView('all'); setFocusZone('grid'); setGamepadIndex(0); } })
     if (workspaceItems && workspaceItems.length) {
       workspaceItems.forEach((w) => {
         list.push({ id: w.key, key: w.key, action: () => { setSidebarView(w.key); setFocusZone('grid'); setGamepadIndex(0); } })
@@ -8415,7 +8680,9 @@ function App() {
     }
     list.push({ id: 'today', key: 'today', action: () => { setSidebarView('today'); setFocusZone('grid'); setGamepadIndex(0); } })
     list.push({ id: 'dashboard', key: 'dashboard', action: () => { setSidebarView('dashboard'); setFocusZone('grid'); setGamepadIndex(0); } })
-    list.push({ id: 'ai_companion', key: 'ai_companion', action: () => setAiDrawerOpen((prev) => !prev) })
+    if (isAiAvailable) {
+      list.push({ id: 'ai_companion', key: 'ai_companion', action: () => setAiDrawerOpen((prev) => !prev) })
+    }
 
     list.push({ id: 'source_all', key: 'source_all', action: () => { setSourceFilters([]); setViewMode('grid'); if (view === 'system' || view === 'today') setSidebarView('all'); setFocusZone('grid'); setGamepadIndex(0); } })
     if (sourceOptions && sourceOptions.length) {
@@ -8425,7 +8692,7 @@ function App() {
     }
     list.push({ id: 'settings', key: 'settings', action: () => handleOpenSettings('general') })
     return list
-  }, [workspaceItems, sourceOptions, view, toggleSource, setSidebarView, setAiDrawerOpen, handleOpenSettings])
+  }, [workspaceItems, sourceOptions, view, toggleSource, setSidebarView, setAiDrawerOpen, handleOpenSettings, displayFavoriteGames, isAiAvailable])
 
   const isSidebarItemFocused = useCallback((id) => {
     return isGamepadMode && focusZone === 'sidebar' && allSidebarNavItems[sidebarFocusIndex]?.id === id
@@ -8476,8 +8743,11 @@ function App() {
   const getGridColumns = useCallback(() => {
     if (typeof window === 'undefined') return 4
     const w = window.innerWidth
+    if (isBigPictureMode) {
+      return w >= 1600 ? 5 : w >= 1180 ? 4 : w >= 780 ? 3 : 2
+    }
     return w >= 1180 ? 5 : w >= 880 ? 4 : w >= 600 ? 3 : 2
-  }, [])
+  }, [isBigPictureMode])
 
   const bragMenuItems = useMemo(() => [
     { id: 'fullpage', action: handleCaptureFullPage },
@@ -8490,12 +8760,26 @@ function App() {
   ], [handleCaptureFullPage, handleCaptureScreen, handleCaptureFilteredShowcase, handleOpenCapturesFolder])
 
   const handleGamepadNavigate = useCallback((direction) => {
+    playNavTick()
+    if (aiDrawerOpen) {
+      if (direction === 'up' || direction === 'down' || direction === 'left' || direction === 'right') {
+        window.dispatchEvent(new CustomEvent('logpile-ai-gamepad-navigate', { detail: { direction } }))
+      }
+      return
+    }
     // Zone: On-Screen Virtual Couch Keyboard Navigation
     if (oskOpen) {
       const totalRows = KEYBOARD_LAYOUT.length
-      const currentRowLength = KEYBOARD_LAYOUT[oskRow].length
+      const currentRowLength = KEYBOARD_LAYOUT[oskRow]?.length || 1
 
       if (direction === 'up') {
+        if (oskRow === -1) {
+          return
+        }
+        if (oskRow === 0) {
+          setOskRow(-1)
+          return
+        }
         if (oskRow > 0) {
           const prevRow = oskRow - 1
           const prevRowLength = KEYBOARD_LAYOUT[prevRow].length
@@ -8513,6 +8797,11 @@ function App() {
       }
 
       if (direction === 'down') {
+        if (oskRow === -1) {
+          setOskRow(0)
+          setOskCol((prev) => Math.min(KEYBOARD_LAYOUT[0].length - 1, Math.max(0, prev ?? 9)))
+          return
+        }
         if (oskRow < totalRows - 1) {
           const nextRow = oskRow + 1
           let nextCol = oskCol
@@ -8532,11 +8821,13 @@ function App() {
       }
 
       if (direction === 'left') {
+        if (oskRow === -1) return
         setOskCol((prev) => (prev > 0 ? prev - 1 : currentRowLength - 1))
         return
       }
 
       if (direction === 'right') {
+        if (oskRow === -1) return
         setOskCol((prev) => (prev < currentRowLength - 1 ? prev + 1 : 0))
         return
       }
@@ -8753,8 +9044,8 @@ function App() {
 
     const cols = getGridColumns()
     const total = filteredGames.length
-    const isSpotlightVisible = isHomeView && !isSpotlightCollapsed && Boolean(spotlightState.featured)
-    const hasJumpIn = !isSpotlightCollapsed && Boolean(spotlightState.suggested && spotlightState.suggested.length >= 2)
+    const isSpotlightVisible = !isBigPictureMode && isHomeView && !isSpotlightCollapsed && Boolean(spotlightState.featured)
+    const hasJumpIn = !isBigPictureMode && !isSpotlightCollapsed && Boolean(spotlightState.suggested && spotlightState.suggested.length >= 2)
     const numCandidates = spotlightState.candidates?.length || 5
     const numSuggested = spotlightState.suggested?.length || 0
 
@@ -8797,7 +9088,7 @@ function App() {
           setTopbarFocusIndex((prev) => Math.max(0, prev - 1))
         }
       } else if (direction === 'right') {
-        setTopbarFocusIndex((prev) => Math.min(2, prev + 1))
+        setTopbarFocusIndex((prev) => Math.min(3, prev + 1))
       } else if (direction === 'down') {
         if (isSpotlightVisible) {
           setFocusZone('spotlight')
@@ -8838,7 +9129,7 @@ function App() {
           setTopbarFocusIndex(0)
         } else if (spotlightFocusIndex === 3) {
           setFocusZone('topbar')
-          setTopbarFocusIndex(2)
+          setTopbarFocusIndex(3)
         } else {
           setSpotlightFocusIndex((prev) => prev - 1)
         }
@@ -8890,7 +9181,7 @@ function App() {
     }
 
     // Zone: Grid Navigation
-    if (total === 0) {
+    if (total === 0 || view === 'today') {
       if (direction === 'left') setFocusZone('sidebar')
       else if (direction === 'up') {
         if (hasJumpIn) {
@@ -8909,6 +9200,25 @@ function App() {
             mainScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' })
           }
         }
+      }
+      return
+    }
+
+    if (isBigPictureMode) {
+      if (total === 0) return
+      const isVerticalStage = layoutTheme === 'atmospheric' || layoutTheme === 'competitive'
+      if (direction === 'left' || (isVerticalStage && direction === 'up')) {
+        if (isVerticalStage && direction === 'up' && gamepadIndex <= 0) {
+          setFocusZone('topbar')
+          setTopbarFocusIndex(0)
+        } else {
+          setGamepadIndex((prev) => (prev <= 0 ? total - 1 : prev - 1))
+        }
+      } else if (direction === 'right' || (isVerticalStage && direction === 'down')) {
+        setGamepadIndex((prev) => (prev >= total - 1 ? 0 : prev + 1))
+      } else if (direction === 'up') {
+        setFocusZone('topbar')
+        setTopbarFocusIndex(0)
       }
       return
     }
@@ -8952,26 +9262,108 @@ function App() {
     spotlightFocusIndex, jumpInFocusIndex, dossierSection, dossierActionIndex, dossierTabIndex,
     dossierActiveTab, dossierContentRow, dossierContentIndex, dossierLightboxIndex,
     settingsSection, settingsCategoryIndex, settingsContentIndex, SETTINGS_TAB_IDS,
-    oskOpen, oskRow, oskCol
+    oskOpen, oskRow, oskCol, isBigPictureMode, aiDrawerOpen, layoutTheme, isBigPictureMode, aiDrawerOpen, layoutTheme
   ])
 
   const handleGamepadAction = useCallback((code) => {
     const MAIN_VIEWS = ['installed', 'favorites', 'ready', 'all', 'today', 'system']
 
-    if (code === 'START' || code === 'GUIDE') {
+    if (aiDrawerOpen) {
+      if (code === 'B' || code === 'START' || code === 'GUIDE') {
+        setAiDrawerOpen(false)
+        if (isBigPictureMode) setFocusZone('grid')
+        return
+      }
+      if (code === 'R3') {
+        toggleVoiceListening()
+        return
+      }
+      if (code === 'X') {
+        window.dispatchEvent(new CustomEvent('logpile-ai-toggle-tts'))
+        return
+      }
+      if (code === 'Y') {
+        window.dispatchEvent(new CustomEvent('logpile-ai-new-chat'))
+        return
+      }
+      if (code === 'A') {
+        window.dispatchEvent(new CustomEvent('logpile-ai-gamepad-action', { detail: { action: 'SELECT' } }))
+        return
+      }
+      return
+    }
+
+    if (code === 'B') {
+      playBackClick()
+    } else if (code === 'A' || code === 'X' || code === 'Y') {
+      playSelectChime()
+    } else if (code === 'LB' || code === 'RB' || code === 'LT' || code === 'RT') {
+      playNavTick()
+    }
+
+    if (confirmModal) {
+      if (code === 'A') {
+        confirmModal.onConfirm?.()
+        setConfirmModal(null)
+        return
+      }
+      if (code === 'B') {
+        confirmModal.onCancel?.()
+        setConfirmModal(null)
+        return
+      }
+      return
+    }
+
+    if (code === 'GUIDE') {
+      if (oskOpen) {
+        setOskOpen(false)
+        return
+      }
+      if (settingsModalOpen) {
+        setSettingsModalOpen(false)
+        return
+      }
+      if (aiDrawerOpen) {
+        setAiDrawerOpen(false)
+        return
+      }
+      if (!isBigPictureMode) {
+        handleToggleBigPicture(true)
+      } else {
+        setConfirmModal({
+          eyebrow: 'CONSOLE MODE',
+          title: 'Return to Desktop?',
+          message: 'Exit Big Picture Console Mode and return to the desktop window?',
+          confirmText: 'Return to Desktop',
+          cancelText: 'Stay in Console',
+          onConfirm: () => handleToggleBigPicture(false),
+        })
+      }
+      return
+    }
+
+    if (code === 'START') {
       if (oskOpen) {
         setOskOpen(false)
         setFocusZone('grid')
         setGamepadIndex(0)
         return
       }
-      if (api?.window?.toggleFullScreen) {
-        api.window.toggleFullScreen()
-      } else if (document.fullscreenElement) {
-        document.exitFullscreen().catch(() => {})
-      } else {
-        document.documentElement.requestFullscreen().catch(() => {})
+      if (settingsModalOpen) {
+        setSettingsModalOpen(false)
+        setFocusZone('grid')
+        setSettingsSection('categories')
+        setSettingsCategoryIndex(0)
+        return
       }
+      if (aiDrawerOpen) {
+        setAiDrawerOpen(false)
+        setFocusZone('grid')
+        return
+      }
+      // Open settings directly on the themes tab for instant theme changing and console settings
+      handleOpenSettings(isBigPictureMode ? 'themes' : 'general')
       return
     }
 
@@ -8979,8 +9371,13 @@ function App() {
     if (code === 'B') {
       if (oskOpen) {
         setOskOpen(false)
-        setFocusZone('topbar')
-        setTopbarFocusIndex(0)
+        if (isBigPictureMode) {
+          setFocusZone('grid')
+          setGamepadIndex(0)
+        } else {
+          setFocusZone('topbar')
+          setTopbarFocusIndex(0)
+        }
         return
       }
       if (settingsModalOpen) {
@@ -9041,6 +9438,12 @@ function App() {
     // Primary Action: A / Cross
     if (code === 'A') {
       if (oskOpen) {
+        if (oskRow === -1) {
+          setOskOpen(false)
+          setFocusZone('grid')
+          setGamepadIndex(0)
+          return
+        }
         const currentKey = KEYBOARD_LAYOUT[oskRow]?.[oskCol]
         if (typeof currentKey === 'string') {
           const nextQ = query + currentKey
@@ -9214,6 +9617,8 @@ function App() {
           setBragFocusIndex(0)
           toggleBragMenu()
         } else if (topbarFocusIndex === 2) {
+          handleToggleBigPicture(true)
+        } else if (topbarFocusIndex === 3) {
           const currentIdx = allThemesList.findIndex((t) => t.value === layoutTheme)
           setThemeFocusIndex(currentIdx >= 0 ? currentIdx : 0)
           setThemeMenuOpen((prev) => !prev)
@@ -9251,14 +9656,31 @@ function App() {
       if (focusZone === 'jump_in') {
         const game = spotlightState.suggested[jumpInFocusIndex]
         if (game) {
-          handleSelectGame(game, 'shelf')
+          if (game.is_installed) {
+            handleLaunch(game)
+          } else {
+            handleSelectGame(game, 'shelf')
+          }
         }
         return
       }
       if (focusZone === 'grid') {
+        if (view === 'today') {
+          const spinObj = spinTodayRef.current
+          if (spinObj?.winner) {
+            handleLaunch(spinObj.winner)
+          } else {
+            spinObj?.spin?.()
+          }
+          return
+        }
         const currentGame = filteredGames[gamepadIndex] || activeGame
         if (currentGame) {
-          handleSelectGame(currentGame)
+          if (currentGame.is_installed || isBigPictureMode) {
+            handleLaunch(currentGame)
+          } else {
+            handleSelectGame(currentGame)
+          }
         }
         return
       }
@@ -9298,11 +9720,7 @@ function App() {
 
     if (isDetailView) {
       if (code === 'X' && activeGame) {
-        if (activeGame.is_installed) {
-          handleLaunch(activeGame)
-        } else {
-          cycleGameStatus(activeGame)
-        }
+        cycleGameStatus(activeGame)
         return
       }
       if (code === 'Y' && activeGame) {
@@ -9332,6 +9750,10 @@ function App() {
       }
     } else {
       if (code === 'X') {
+        if (view === 'today') {
+          spinTodayRef.current?.spin?.()
+          return
+        }
         if (focusZone === 'topbar' && topbarFocusIndex === 0) {
           if (query) {
             setQuery('')
@@ -9339,25 +9761,32 @@ function App() {
           }
           return
         }
-        if (focusZone === 'spotlight' && spotlightState.featured?.is_installed) {
-          handleLaunch(spotlightState.featured)
+        if (focusZone === 'spotlight' && spotlightState.featured) {
+          handleSelectGame(spotlightState.featured, 'spotlight')
           return
         }
         if (focusZone === 'jump_in') {
           const game = spotlightState.suggested[jumpInFocusIndex]
-          if (game?.is_installed) {
-            handleLaunch(game)
+          if (game) {
+            handleSelectGame(game, 'shelf')
             return
           }
         }
         const currentGame = filteredGames[gamepadIndex] || activeGame
         if (currentGame) {
-          cycleGameStatus(currentGame)
+          handleSelectGame(currentGame)
         }
         return
       }
       if (code === 'Y') {
-        if (focusZone === 'topbar' && topbarFocusIndex === 2) {
+        if (view === 'today') {
+          const spinObj = spinTodayRef.current
+          if (spinObj?.winner) {
+            handleSelectGame(spinObj.winner, 'today')
+          }
+          return
+        }
+        if (focusZone === 'topbar' && topbarFocusIndex === 3) {
           const curIdx = allThemesList.findIndex((t) => t.value === layoutTheme)
           const nextIdx = (curIdx + 1) % allThemesList.length
           handleLayoutThemeChange(allThemesList[nextIdx].value)
@@ -9380,21 +9809,41 @@ function App() {
         }
         return
       }
-      if (code === 'LB') {
-        setView((prev) => {
-          const idx = MAIN_VIEWS.indexOf(prev)
-          const nextIdx = idx >= 0 ? (idx - 1 + MAIN_VIEWS.length) % MAIN_VIEWS.length : 0
-          return MAIN_VIEWS[nextIdx]
-        })
-        setGamepadIndex(0)
-        return
-      }
-      if (code === 'RB') {
-        setView((prev) => {
-          const idx = MAIN_VIEWS.indexOf(prev)
-          const nextIdx = idx >= 0 ? (idx + 1) % MAIN_VIEWS.length : 1
-          return MAIN_VIEWS[nextIdx]
-        })
+      if (code === 'LB' || code === 'RB') {
+        const consoleCategories = ['installed']
+        if (displayFavoriteGames > 0) consoleCategories.push('favorites')
+        consoleCategories.push('all', 'today', 'search')
+        if (isAiAvailable) consoleCategories.push('ai_companion')
+
+        const desktopCategories = ['installed']
+        if (displayFavoriteGames > 0) desktopCategories.push('favorites')
+        desktopCategories.push('all', 'today')
+
+        const CATEGORY_LIST = isBigPictureMode ? consoleCategories : desktopCategories
+
+        const curIdx = CATEGORY_LIST.indexOf(view)
+        const safeIdx = curIdx >= 0 ? curIdx : 0
+        const nextIdx = code === 'RB'
+          ? (safeIdx + 1) % CATEGORY_LIST.length
+          : (safeIdx - 1 + CATEGORY_LIST.length) % CATEGORY_LIST.length
+        const nextCategory = CATEGORY_LIST[nextIdx]
+
+        if (nextCategory === 'search') {
+          if (view !== 'all' && view !== 'installed') setView('all')
+          setOskOpen(true)
+          setOskRow(1)
+          setOskCol(0)
+          setFocusZone('osk')
+          return
+        }
+
+        if (nextCategory === 'ai_companion') {
+          setAiDrawerOpen(true)
+          return
+        }
+
+        setSidebarView(nextCategory)
+        setFocusZone('grid')
         setGamepadIndex(0)
         return
       }
@@ -9414,11 +9863,135 @@ function App() {
     dossierActiveTab, dossierContentRow, dossierContentIndex, dossierLightboxIndex,
     handleSnapHero, setAiDrawerOpen, setEditorGame,
     settingsSection, settingsCategoryIndex, settingsContentIndex, SETTINGS_TAB_IDS,
-    oskOpen, oskRow, oskCol
+    oskOpen, oskRow, oskCol, isBigPictureMode, aiDrawerOpen, handleOpenSettings,
+    displayFavoriteGames, isAiAvailable, confirmModal, handleToggleBigPicture
   ])
 
   handleGamepadNavigateRef.current = handleGamepadNavigate
   handleGamepadActionRef.current = handleGamepadAction
+
+  // Multimodal Physical Keyboard Navigation Coordinator (Living Room & Couch Ergonomics)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // 1. If currently inside an editable element
+      if (e.target && e.target.matches('input, textarea, select, [contenteditable="true"]')) {
+        if (e.key === 'Escape') {
+          e.target.blur()
+        }
+        return
+      }
+
+      // 2. Ignore if modal dialogs that capture keys are active
+      if (document.querySelector('.lightbox-backdrop, .modal-backdrop, .art-context-menu')) {
+        return
+      }
+
+      // 3. Arrow Keys -> Spatial Navigation
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        activateGamepadMode?.()
+        handleGamepadNavigateRef.current?.('up')
+        return
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        activateGamepadMode?.()
+        handleGamepadNavigateRef.current?.('down')
+        return
+      }
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        activateGamepadMode?.()
+        handleGamepadNavigateRef.current?.('left')
+        return
+      }
+      if (e.key === 'ArrowRight') {
+        e.preventDefault()
+        activateGamepadMode?.()
+        handleGamepadNavigateRef.current?.('right')
+        return
+      }
+
+      // 4. Enter / Space -> Select / Launch (Action A)
+      if (e.key === 'Enter') {
+        if (!e.target.closest('button, a, select')) {
+          e.preventDefault()
+          activateGamepadMode?.()
+          handleGamepadActionRef.current?.('A')
+          return
+        }
+      }
+      if (e.key === ' ') {
+        if (!e.target.closest('button, a, input, select, textarea')) {
+          e.preventDefault()
+          activateGamepadMode?.()
+          handleGamepadActionRef.current?.('A')
+          return
+        }
+      }
+
+      // 5. Bumper Cycling: [ and ] -> LB / RB
+      if (e.key === '[') {
+        e.preventDefault()
+        activateGamepadMode?.()
+        handleGamepadActionRef.current?.('LB')
+        return
+      }
+      if (e.key === ']') {
+        e.preventDefault()
+        activateGamepadMode?.()
+        handleGamepadActionRef.current?.('RB')
+        return
+      }
+
+      // 6. Trigger Game Cycling: PageUp / PageDown -> LT / RT
+      if (e.key === 'PageUp') {
+        e.preventDefault()
+        activateGamepadMode?.()
+        handleGamepadActionRef.current?.('LT')
+        return
+      }
+      if (e.key === 'PageDown') {
+        e.preventDefault()
+        activateGamepadMode?.()
+        handleGamepadActionRef.current?.('RT')
+        return
+      }
+
+      // 7. Quick Actions: X and Y shortcuts when in directional focus mode
+      if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (e.key === 'x' || e.key === 'X') {
+          if (isGamepadMode || isBigPictureMode) {
+            e.preventDefault()
+            activateGamepadMode?.()
+            handleGamepadActionRef.current?.('X')
+            return
+          }
+        }
+        if (e.key === 'y' || e.key === 'Y') {
+          if (isGamepadMode || isBigPictureMode) {
+            e.preventDefault()
+            activateGamepadMode?.()
+            handleGamepadActionRef.current?.('Y')
+            return
+          }
+        }
+      }
+
+      // 8. Direct alphanumeric typing to search (in main library views)
+      if (!isDetailView && !settingsModalOpen && !oskOpen) {
+        if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1 && /^[a-zA-Z0-9]$/.test(e.key)) {
+          if (searchInputRef.current && document.activeElement !== searchInputRef.current) {
+            searchInputRef.current.focus()
+            // Do not preventDefault: let the character naturally enter the search box
+          }
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [activateGamepadMode, isDetailView, settingsModalOpen, oskOpen, isGamepadMode, isBigPictureMode])
 
   // 2D Spatial Focus Auto-Scroll Coordinator
   useEffect(() => {
@@ -9571,7 +10144,56 @@ function App() {
         <div className="global-detail-backdrop-gradient" />
       </div>
     )}
-    <header className="titlebar">
+    {isBigPictureMode ? (
+      <ConsoleTelemetryBar
+        layoutTheme={layoutTheme}
+        connectedGamepad={connectedGamepad}
+        gamepadGlyphStyle={gamepadGlyphStyle}
+        onExitBigPicture={() => handleToggleBigPicture(false)}
+        themeLogo={THEME_LOGOS[layoutTheme] || logoDark}
+        isDetailView={isDetailView}
+        activeGameTitle={activeGame?.canonical_title || ''}
+        currentView={view}
+        isAiDrawerOpen={aiDrawerOpen}
+        hasFavorites={displayFavoriteGames > 0}
+        isAiAvailable={isAiAvailable}
+        consoleModeShortcut={consoleModeShortcut}
+        allowEscExitConsole={allowEscExitConsole}
+        isGamepadMode={isGamepadMode}
+        searchQuery={query}
+        onSearchQueryChange={(val) => {
+          setQuery(val)
+          setDebouncedQuery(val)
+          if (view === 'system' || view === 'today' || view === 'about') setSidebarView('all')
+        }}
+        onViewChange={(newView) => {
+          if (newView === 'search') {
+            if (view !== 'all' && view !== 'installed') setView('all')
+            setOskOpen(true)
+            setOskRow(1)
+            setOskCol(0)
+            setFocusZone('osk')
+          } else if (newView === 'ai_companion') {
+            setAiDrawerOpen((prev) => !prev)
+          } else if (newView === 'settings') {
+            handleOpenSettings('themes')
+          } else {
+            setView(newView)
+            setFocusZone('grid')
+            setGamepadIndex(0)
+          }
+        }}
+        onOpenSearch={() => {
+          if (view !== 'all' && view !== 'installed') setView('all')
+          setOskOpen(true)
+          setOskRow(1)
+          setOskCol(0)
+          setFocusZone('osk')
+        }}
+        onOpenSettings={() => handleOpenSettings('themes')}
+      />
+    ) : (
+      <header className="titlebar">
       <div className="drag-region">
         {isDetailView ? (
           <div className="titlebar-detail-nav">
@@ -9630,18 +10252,20 @@ function App() {
               autoComplete="off"
               spellCheck="false"
             />
-            <button
-              type="button"
-              className="titlebar-ai-spark-btn"
-              onClick={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                setAiDrawerOpen((prev) => !prev)
-              }}
-              title="Gaming AI Companion (Ctrl+J)"
-            >
-              <Sparkles size={13} />
-            </button>
+            {isAiAvailable && (
+              <button
+                type="button"
+                className="titlebar-ai-spark-btn"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  setAiDrawerOpen((prev) => !prev)
+                }}
+                title="Gaming AI Companion (Ctrl+J)"
+              >
+                <Sparkles size={13} />
+              </button>
+            )}
             <button
               type="button"
               className={cn('titlebar-voice-btn', isVoiceListening && 'active-listening')}
@@ -9842,10 +10466,23 @@ function App() {
             document.body
           )}
         </div>
+        <button
+          type="button"
+          className={cn(
+            "outline-button titlebar-console-btn",
+            isGamepadMode && focusZone === 'topbar' && topbarFocusIndex === 2 && "gamepad-focused"
+          )}
+          onClick={() => handleToggleBigPicture(true)}
+          title="Switch to Big Picture Console Mode (F11 / Ctrl+Shift+F)"
+          aria-label="Big Picture Console Mode"
+        >
+          <Tv size={13} className="titlebar-console-icon" />
+          <span className="hidden sm:inline">Console Mode</span>
+        </button>
         <SanctuaryControls
           layoutTheme={layoutTheme}
           setLayoutTheme={handleLayoutThemeChange}
-          isFocused={isGamepadMode && focusZone === 'topbar' && topbarFocusIndex === 2}
+          isFocused={isGamepadMode && focusZone === 'topbar' && topbarFocusIndex === 3}
           isMenuOpen={themeMenuOpen}
           onOpenChange={setThemeMenuOpen}
           themeFocusIndex={themeFocusIndex}
@@ -9853,8 +10490,9 @@ function App() {
         <WindowControls />
       </div>
     </header>
+    )}
     <div className="app-body">
-      {!isDetailView && (
+      {!isDetailView && !isBigPictureMode && (
         <aside className={cn("sidebar", sidebarCollapsed && "is-collapsed")}>
         <div className="sidebar-top">
           {!sidebarCollapsed && <span className="sidebar-top-title">LIBRARY</span>}
@@ -9887,15 +10525,17 @@ function App() {
               <span>Installed</span>
               <em>{displayInstalledGames}</em>
             </button>
-            <button
-              className={cn('nav-item', view === 'favorites' && 'active', isSidebarItemFocused('favorites') && 'gamepad-focused')}
-              onClick={() => setSidebarView('favorites')}
-              title="Favorites"
-            >
-              <Star size={15} className={view === 'favorites' ? 'text-amber-400 fill-amber-400' : 'text-amber-400'} />
-              <span>Favorites</span>
-              <em>{displayFavoriteGames}</em>
-            </button>
+            {displayFavoriteGames > 0 && (
+              <button
+                className={cn('nav-item', view === 'favorites' && 'active', isSidebarItemFocused('favorites') && 'gamepad-focused')}
+                onClick={() => setSidebarView('favorites')}
+                title="Favorites"
+              >
+                <Star size={15} className={view === 'favorites' ? 'text-amber-400 fill-amber-400' : 'text-amber-400'} />
+                <span>Favorites</span>
+                <em>{displayFavoriteGames}</em>
+              </button>
+            )}
             <button
               className={cn('nav-item', view === 'all' && 'active', isSidebarItemFocused('all') && 'gamepad-focused')}
               onClick={() => setSidebarView('all')}
@@ -9936,14 +10576,16 @@ function App() {
               <LayoutDashboard size={15} />
               <span>Dashboard</span>
             </button>
-            <button
-              className={cn('nav-item nav-item-ai', aiDrawerOpen && 'active', isSidebarItemFocused('ai_companion') && 'gamepad-focused')}
-              onClick={() => setAiDrawerOpen((prev) => !prev)}
-              title="Gaming AI Companion (Ctrl+J)"
-            >
-              <Sparkles size={15} style={{ color: 'var(--accent, #d6ff4b)' }} />
-              <span>AI Companion</span>
-            </button>
+            {isAiAvailable && (
+              <button
+                className={cn('nav-item nav-item-ai', aiDrawerOpen && 'active', isSidebarItemFocused('ai_companion') && 'gamepad-focused')}
+                onClick={() => setAiDrawerOpen((prev) => !prev)}
+                title="Gaming AI Companion (Ctrl+J)"
+              >
+                <Sparkles size={15} style={{ color: 'var(--accent, #d6ff4b)' }} />
+                <span>AI Companion</span>
+              </button>
+            )}
           </div>
 
           <div className="nav-divider" />
@@ -9987,21 +10629,7 @@ function App() {
         </div>
       </aside>
       )}
-      <main className="main-content"><div ref={mainScrollRef} className={cn('main-scroll', isDetailView && 'main-scroll-fullbleed')}><ErrorBoundary key={`${view}-${viewMode}-${activeGame?.id || 'none'}`} fallback={({ error, reset }) => <TabErrorFallback error={error} reset={reset} onBack={handleBackToLibrary} />}>{isDetailView ? <HeroView games={filteredGames} activeGame={activeGame || filteredGames[0]} familyLocks={familyLocks} onSelect={setActiveGame} onLaunch={handleLaunch} onBack={handleBackToLibrary} onEdit={setEditorGame} onHideGame={(game) => updateHiddenState(game, true)} onMoveCategory={moveCategory} onContextMenu={handleCardContextMenu} isCinematicTheme={layoutTheme === 'cinematic'} layoutTheme={layoutTheme} scrollContainerRef={mainScrollRef} onIdleChange={setIsDetailHudIdle} onScrollStateChange={setIsDetailScrolled} onSnapHero={handleSnapHero} onAskAi={(g) => { if (g) setActiveGame(g); setAiDrawerOpen(true); }} onToggleFavorite={async (game) => {
-  const nextFav = !game.is_favorite
-  try {
-    await api.database.updateGameMetadata(game.id, { is_favorite: nextFav })
-    const updated = { ...game, is_favorite: nextFav }
-    setActiveGame(updated)
-    setNoticeTone('success')
-    setNotice(nextFav ? `Added "${game.canonical_title}" to favorites.` : `Removed "${game.canonical_title}" from favorites.`)
-    window.setTimeout(() => setNotice(''), 3000)
-    await loadData({ preserveScroll: true })
-  } catch (err) {
-    setNoticeTone('error')
-    setNotice(err.message || 'Failed to update favorite.')
-  }
-}} onUpdateStatus={async (game, newStatus) => {
+      <main className="main-content"><div ref={mainScrollRef} className={cn('main-scroll', isDetailView && 'main-scroll-fullbleed', isBigPictureMode && !isDetailView && 'console-stage-scroll-host')}><ErrorBoundary key={`${view}-${viewMode}-${activeGame?.id || 'none'}`} fallback={({ error, reset }) => <TabErrorFallback error={error} reset={reset} onBack={handleBackToLibrary} />}>{isDetailView ? <HeroView games={filteredGames} activeGame={activeGame || filteredGames[0]} familyLocks={familyLocks} onSelect={setActiveGame} onLaunch={handleLaunch} onBack={handleBackToLibrary} onEdit={setEditorGame} onHideGame={(game) => updateHiddenState(game, true)} onMoveCategory={moveCategory} onContextMenu={handleCardContextMenu} isCinematicTheme={layoutTheme === 'cinematic'} layoutTheme={layoutTheme} scrollContainerRef={mainScrollRef} onIdleChange={setIsDetailHudIdle} onScrollStateChange={setIsDetailScrolled} onSnapHero={handleSnapHero} onAskAi={isAiAvailable ? ((g) => { if (g) setActiveGame(g); setAiDrawerOpen(true); }) : null} onToggleFavorite={handleToggleFavorite} onUpdateStatus={async (game, newStatus) => {
   const allowed = ['unplayed', 'playing', 'paused', 'completed']
   if (!allowed.includes(newStatus)) return
 
@@ -10181,7 +10809,47 @@ onDossierInfo={(info) => {
             onRefresh={fetchSystemHealthAndActivity}
           />
         </>
-      ) : view === 'today' ? <section className="library-section today-section"><div className="section-header compact"><div><div className="eyebrow"><span>DAILY ROTATION</span><span className="eyebrow-line" /></div><h2>Today’s Pick</h2><p>One installed, non-utility title selected from your local library.</p></div></div><RoulettePanel onWinner={handlePickWinner} /></section> : <section className="library-section library-pure-games">{isHomeView && (
+      ) : isBigPictureMode ? (
+        <ConsoleStageView
+          games={filteredGames}
+          focusedIndex={gamepadIndex}
+          onIndexChange={setGamepadIndex}
+          onLaunch={handleLaunch}
+          onSelect={handleSelectGame}
+          onToggleFavorite={handleToggleFavorite}
+          layoutTheme={layoutTheme}
+          connectedGamepad={connectedGamepad}
+          gamepadGlyphStyle={gamepadGlyphStyle}
+          isGamepadMode={isGamepadMode}
+          isFocused={focusZone === 'grid'}
+          isTodayPickMode={view === 'today'}
+          onWinnerPick={handlePickWinner}
+          spinTriggerRef={spinTodayRef}
+        />
+      ) : view === 'today' ? (
+        <section className="library-section today-section">
+          <div className="section-header compact">
+            <div>
+              <div className="eyebrow">
+                <span>DAILY ROTATION</span>
+                <span className="eyebrow-line" />
+              </div>
+              <h2>Today’s Pick</h2>
+              <p>One installed, non-utility title selected from your local library.</p>
+            </div>
+          </div>
+          <RoulettePanel
+            onWinner={handlePickWinner}
+            isGamepadMode={isGamepadMode}
+            isFocused={focusZone === 'grid'}
+            connectedGamepad={connectedGamepad}
+            gamepadGlyphStyle={gamepadGlyphStyle}
+            onLaunch={handleLaunch}
+            onSelect={handleSelectGame}
+            spinTriggerRef={spinTodayRef}
+          />
+        </section>
+      ) : <section className="library-section library-pure-games">{isHomeView && (
   <ErrorBoundary fallback={null}>
     <HomeSpotlightAndShelf
       games={games}
@@ -10200,7 +10868,23 @@ onDossierInfo={(info) => {
       onSpotlightStateChange={setSpotlightState}
     />
   </ErrorBoundary>
-)}<div className="library-top-bar">
+)}{isBigPictureMode && !isDetailView ? (
+  <div className="console-section-header">
+    <div className="console-section-title-wrap">
+      <span className="console-section-eyebrow">
+        {layoutTheme === 'kinetic' ? '// SECTOR: ' : layoutTheme === 'competitive' ? 'ROSTER DIVISION // ' : layoutTheme === 'playful' ? '🎮 ' : ''}
+        {view === 'installed' ? 'READY TO LAUNCH' : view === 'favorites' ? 'STARRED PICKS' : view === 'today' ? "TODAY'S SELECTION" : 'ALL GAMES'}
+      </span>
+      <h2 className="console-section-title">
+        {view === 'installed' ? 'Installed Games' : view === 'favorites' ? 'Favorite Games' : view === 'today' ? "Today's Pick" : 'Complete Library'}
+      </h2>
+    </div>
+    <span className="console-section-count">
+      {filteredGames.length} {filteredGames.length === 1 ? 'title' : 'titles'}
+    </span>
+  </div>
+) : (
+<div className="library-top-bar">
   <div
     className="library-top-bar-left"
     onWheel={(e) => {
@@ -10291,6 +10975,7 @@ onDossierInfo={(info) => {
     </button>
   </div>
 </div>
+)}
 {(aiFilterOpen || aiFilter) && (
   <div
     className="smart-ai-filter-bar"
@@ -10478,8 +11163,60 @@ onDossierInfo={(info) => {
     </div>
   </div>
 )}
-{selectMode ? <div className="bulk-action-bar"><span><Check size={14} /> {selectedIds.length} selected · {filteredRecordIds.length} filtered</span><div className="bulk-action-group"><button className="outline-button" disabled={bulkBusy || !filteredRecordIds.length} onClick={selectAllFiltered}><Check size={14} /> Select All Filtered</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={deselectAll}><X size={14} /> Deselect All</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={() => handleBulkMove('dlc')}><PackageOpen size={14} /> Move to DLC</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleBulkHide}><EyeOff size={14} /> Hide from Library</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleRefetchSelected}><RefreshCw size={14} /> Re-fetch Artwork</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleExportSelected}><FileDown size={14} /> Export Selected to CSV</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={() => setBulkEditOpen(true)}><SlidersHorizontal size={14} /> Edit Selected</button><button className="danger-button" disabled={bulkBusy || !selectedIds.length} onClick={handleDeleteSelected}><Trash2 size={14} /> Delete Selected</button></div></div> : null}{notice ? <div className={cn('notice', noticeTone === 'error' && 'notice-error', noticeTone === 'warning' && 'notice-warning')}>{noticeTone === 'error' ? <X size={14} /> : noticeTone === 'warning' ? <AlertTriangle size={14} /> : <Check size={14} />} {notice}</div> : null}{loading && !filteredGames.length && !showIntro ? <div className="empty-state"><div className="loader" /> Loading and indexing your library…</div> : filteredGames.length ? <ErrorBoundary><VirtualGrid games={filteredGames} familyLocks={familyLocks} onLaunch={handleLaunch} onSelect={handleSelectGame} onHideGame={(game) => updateHiddenState(game, true)} onMoveCategory={moveCategory} onEditGame={setEditorGame} onContextMenu={handleCardContextMenu} onArtworkChanged={handleArtworkChanged} onArtworkError={handleArtworkError} selectMode={selectMode} selectedIds={selectedIds} onToggleSelect={toggleGameSelection} scrollElementRef={mainScrollRef} onImageError={handleImageError} initialScrollTop={activeGame?.id === lastClickedGameIdRef.current ? libraryScrollRef.current : 0} restoreGameId={activeGame?.id || lastClickedGameIdRef.current} restoredGameId={restoredGameId} gamepadFocusIndex={isGamepadMode && focusZone === 'grid' ? gamepadIndex : -1} onToggleFavorite={handleToggleFavorite} /></ErrorBoundary> : (!games.length && !query && !sourceFilters.length && genreFilter === 'all' && backlogFilter === 'all' && !qualityFilters.length) ? <div className="empty-state"><strong>Your library is empty.</strong><span>Click Scan & import (top right) to add your games.</span></div> : <div className="empty-state"><Search size={21} /><span>No titles match {query ? `"${query}"` : aiFilter ? `AI filter "${aiFilter.originalQuery || 'custom'}"` : 'these filters'}.</span>{aiFilter ? (<button type="button" className="outline-button" style={{ marginTop: '10px', borderColor: 'rgba(239, 68, 68, 0.4)', color: '#f87171', display: 'inline-flex', alignItems: 'center', gap: '6px' }} onClick={handleClearAiFilter}><X size={14} /><span>Clear Smart AI Filter</span></button>) : null}{query ? (<button type="button" className="outline-button" style={{ marginTop: '10px', borderColor: 'var(--accent, #d6ff4b)', color: 'var(--accent, #d6ff4b)', display: 'inline-flex', alignItems: 'center', gap: '6px' }} onClick={() => setAiDrawerOpen(true)}><Sparkles size={14} /><span>Ask AI Companion about "{query}"</span></button>) : null}</div>}</section>}</ErrorBoundary></div><footer className="statusbar"><span className="statusbar-item statusbar-terminal"><TerminalSquare size={13} style={{ color: 'var(--accent, #d6ff4b)', opacity: 0.9 }} /> {scannerStatus ? <span className="inline-flex items-center gap-1.5"><span className="pulse-dot" /> {scannerStatus}</span> : 'Ready'}</span>{globalSyncRunning && (<span className="statusbar-item statusbar-sync-active" title="Artwork & metadata sync in progress"><span className="pulse-dot" /><span>{globalSyncProgress?.gameTitle ? `Syncing: ${globalSyncProgress.gameTitle} (${globalSyncProgress.current}/${globalSyncProgress.total})${globalSyncProgress.formattedTransfer ? ` • ${globalSyncProgress.formattedTransfer}` : ''}` : (globalSyncProgress?.message || `Syncing artwork (${globalSyncProgress?.current || 0}/${globalSyncProgress?.total || 0})...`)}</span><button type="button" onClick={handleCancelGlobalSync} className="statusbar-cancel-btn" title="Cancel sync immediately"><X size={11} /> Cancel</button></span>)}{guideSyncStatus?.running && (<span className="statusbar-item statusbar-sync-active" title="Strategy guides downloading from StrategyWiki in progress"><span className="pulse-dot" /><span>{guideSyncStatus.progress?.title ? `Downloading Guides: ${guideSyncStatus.progress.title} (${guideSyncStatus.progress.current}/${guideSyncStatus.progress.total})` : 'Downloading Guides from StrategyWiki...'}</span><button type="button" onClick={() => window.api?.guides?.cancelBatch?.()} className="statusbar-cancel-btn" title="Cancel guide download"><X size={11} /> Cancel</button></span>)}<span className="statusbar-item statusbar-storage"><HardDrive size={11} style={{ color: 'var(--accent, #d6ff4b)', opacity: 0.85 }} /> Offline · Local storage</span>{isVoiceListening && (<span className="statusbar-item statusbar-voice-listening" style={{ color: 'var(--accent, #d6ff4b)' }}><span className="pulse-dot" style={{ background: 'var(--accent, #d6ff4b)', boxShadow: '0 0 8px var(--accent-glow, rgba(214, 255, 75, 0.6))' }} /> Listening (PTT)...</span>)}{connectedGamepad && (<><span className="statusbar-item statusbar-gamepad" title={`Connected Controller: ${connectedGamepad}`}><Gamepad2 size={12} style={{ color: 'var(--accent, #d6ff4b)' }} /><span>{connectedGamepad}</span></span><span className="statusbar-item statusbar-shortcuts" title="Controller Navigation Shortcuts"><span className="statusbar-shortcut-item"><GamepadGlyph button="A" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> Select</span><span className="statusbar-shortcut-item"><GamepadGlyph button="B" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> {isDetailView ? 'Library' : 'Back'}</span><span className="statusbar-shortcut-item"><GamepadGlyph button="X" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> {isDetailView ? 'Launch' : 'Status'}</span><span className="statusbar-shortcut-item"><GamepadGlyph button="Y" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> Fav</span><span className="statusbar-shortcut-item"><GamepadGlyph button="LB/RB" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> {isDetailView ? 'Tabs' : 'Views'}</span>{isDetailView && <span className="statusbar-shortcut-item"><GamepadGlyph button="LT/RT" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> Games</span>}</span></>)}<span className="statusbar-item statusbar-version">Version 1.3.7</span></footer></main>
-    </div><VirtualKeyboard isOpen={oskOpen} value={query} onChange={(val) => { setQuery(val); setDebouncedQuery(val); if (view === 'system' || view === 'today' || view === 'about') setSidebarView('all'); }} onDone={() => { setOskOpen(false); setFocusZone('grid'); setGamepadIndex(0); }} onClose={() => { setOskOpen(false); setFocusZone('topbar'); setTopbarFocusIndex(0); }} activeRow={oskRow} activeCol={oskCol} matchCount={filteredGames.length} isGamepadMode={isGamepadMode} gamepadGlyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /><SettingsModal isOpen={settingsModalOpen} onClose={() => setSettingsModalOpen(false)} initialTab={settingsModalTab} isGamepadMode={isGamepadMode} settingsSection={settingsSection} settingsCategoryIndex={settingsCategoryIndex} settingsContentIndex={settingsContentIndex} onSettingsTabChange={(tabId) => { setSettingsModalTab(tabId); const idx = SETTINGS_TAB_IDS.indexOf(tabId); if (idx >= 0) setSettingsCategoryIndex(idx); }} gamepadGlyphStyle={gamepadGlyphStyle} onGamepadGlyphStyleChange={handleGamepadGlyphStyleChange} stats={stats} health={libraryHealth} backupsList={backupsList} backupBusy={backupBusy} restoreBusy={restoreBusy} onBackupNow={handleBackupNow} onOpenBackupsFolder={handleOpenBackupsFolder} onOpenBackupsManager={handleOpenBackupsManager} onExport={handleExport} onBackupCache={handleBackupCache} onRestoreCache={handleRestoreCache} onPurge={() => setPurgeOpen(true)} onRefresh={() => loadData({ preserveScroll: true })} connectedGamepad={connectedGamepad} hiddenGames={hiddenGames} onRestoreHidden={(game) => updateHiddenState(game, false)} activityLog={activityLog} activityLoading={activityLoading} onRefreshActivity={fetchSystemHealthAndActivity} layoutTheme={layoutTheme} onLayoutThemeChange={handleLayoutThemeChange} colorPalette={colorPalette} onColorPaletteChange={handleColorPaletteChange} onTriggerIntroPreview={() => { setSettingsModalOpen(false); setShowIntro(true); }} /><AiAssistantDrawer open={aiDrawerOpen} onClose={() => setAiDrawerOpen(false)} activeGame={activeGame} layoutTheme={layoutTheme} games={games} onAction={handleAiAction} isVoiceListening={isVoiceListening} onToggleVoice={toggleVoiceListening} /><ScanImportPanel open={scanOpen} onClose={() => setScanOpen(false)} onRefresh={loadData} /><GameEditorModal game={editorGame} onClose={() => setEditorGame(null)} onSaved={handleEditorSaved} /><PurgeConfirmModal open={purgeOpen} busy={purgeBusy} onClose={() => setPurgeOpen(false)} onConfirm={handlePurge} /><BulkEditModal open={bulkEditOpen} count={selectedIds.length} busy={bulkBusy} onClose={() => setBulkEditOpen(false)} onApply={handleBulkApply} /><ContextMenu menu={contextMenu} menuRef={contextMenuRef} onClose={() => setContextMenu(null)} onMoveCategory={moveCategory} onEditGame={setEditorGame} onHideGame={(game) => updateHiddenState(game, true)} onArtworkChanged={handleArtworkChanged} onArtworkError={handleArtworkError} onToggleFavorite={handleToggleFavorite} /><ConfirmActionModal config={confirmModal} onClose={() => setConfirmModal(null)} />{checkpointPrompt && (
+{selectMode ? <div className="bulk-action-bar"><span><Check size={14} /> {selectedIds.length} selected · {filteredRecordIds.length} filtered</span><div className="bulk-action-group"><button className="outline-button" disabled={bulkBusy || !filteredRecordIds.length} onClick={selectAllFiltered}><Check size={14} /> Select All Filtered</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={deselectAll}><X size={14} /> Deselect All</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={() => handleBulkMove('dlc')}><PackageOpen size={14} /> Move to DLC</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleBulkHide}><EyeOff size={14} /> Hide from Library</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleRefetchSelected}><RefreshCw size={14} /> Re-fetch Artwork</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={handleExportSelected}><FileDown size={14} /> Export Selected to CSV</button><button className="outline-button" disabled={bulkBusy || !selectedIds.length} onClick={() => setBulkEditOpen(true)}><SlidersHorizontal size={14} /> Edit Selected</button><button className="danger-button" disabled={bulkBusy || !selectedIds.length} onClick={handleDeleteSelected}><Trash2 size={14} /> Delete Selected</button></div></div> : null}{notice ? <div className={cn('notice', noticeTone === 'error' && 'notice-error', noticeTone === 'warning' && 'notice-warning')}>{noticeTone === 'error' ? <X size={14} /> : noticeTone === 'warning' ? <AlertTriangle size={14} /> : <Check size={14} />} {notice}</div> : null}{loading && !filteredGames.length && !showIntro ? <div className="empty-state"><div className="loader" /> Loading and indexing your library…</div> : filteredGames.length ? <ErrorBoundary><VirtualGrid games={filteredGames} familyLocks={familyLocks} onLaunch={handleLaunch} onSelect={handleSelectGame} onHideGame={(game) => updateHiddenState(game, true)} onMoveCategory={moveCategory} onEditGame={setEditorGame} onContextMenu={handleCardContextMenu} onArtworkChanged={handleArtworkChanged} onArtworkError={handleArtworkError} selectMode={selectMode} selectedIds={selectedIds} onToggleSelect={toggleGameSelection} scrollElementRef={mainScrollRef} onImageError={handleImageError} initialScrollTop={activeGame?.id === lastClickedGameIdRef.current ? libraryScrollRef.current : 0} restoreGameId={activeGame?.id || lastClickedGameIdRef.current} restoredGameId={restoredGameId} gamepadFocusIndex={isGamepadMode && focusZone === 'grid' ? gamepadIndex : -1} onToggleFavorite={handleToggleFavorite} isBigPictureMode={isBigPictureMode} /></ErrorBoundary> : (!games.length && !query && !sourceFilters.length && genreFilter === 'all' && backlogFilter === 'all' && !qualityFilters.length) ? <div className="empty-state"><strong>Your library is empty.</strong><span>Click Scan & import (top right) to add your games.</span></div> : <div className="empty-state"><Search size={21} /><span>No titles match {query ? `"${query}"` : aiFilter ? `AI filter "${aiFilter.originalQuery || 'custom'}"` : 'these filters'}.</span>{aiFilter ? (<button type="button" className="outline-button" style={{ marginTop: '10px', borderColor: 'rgba(239, 68, 68, 0.4)', color: '#f87171', display: 'inline-flex', alignItems: 'center', gap: '6px' }} onClick={handleClearAiFilter}><X size={14} /><span>Clear Smart AI Filter</span></button>) : null}{query ? (<button type="button" className="outline-button" style={{ marginTop: '10px', borderColor: 'var(--accent, #d6ff4b)', color: 'var(--accent, #d6ff4b)', display: 'inline-flex', alignItems: 'center', gap: '6px' }} onClick={() => setAiDrawerOpen(true)}><Sparkles size={14} /><span>Ask AI Companion about "{query}"</span></button>) : null}</div>}</section>}</ErrorBoundary></div>{isBigPictureMode ? (
+  <footer className="console-hud-footer">
+    <div className="console-hud-shortcuts">
+      <span className="console-hud-item">
+        <GamepadGlyph button="A" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} />
+        <span>{isDetailView ? 'Launch' : 'Play Now'}</span>
+      </span>
+      <span className="console-hud-item">
+        <GamepadGlyph button="B" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} />
+        <span>{isDetailView ? 'Library' : 'Back / Desktop'}</span>
+      </span>
+      <span className="console-hud-item">
+        <GamepadGlyph button="X" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} />
+        <span>{isDetailView ? 'Status' : 'Details'}</span>
+      </span>
+      <span className="console-hud-item">
+        <GamepadGlyph button="Y" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} />
+        <span>Favorite</span>
+      </span>
+      <span className="console-hud-item">
+        <GamepadGlyph button="LB/RB" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} />
+        <span>{isDetailView ? 'Tabs' : 'Category'}</span>
+      </span>
+      <span className="console-hud-item">
+        <GamepadGlyph button="START" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} />
+        <span>Settings</span>
+      </span>
+      {isDetailView && (
+        <span className="console-hud-item">
+          <GamepadGlyph button="LT/RT" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} />
+          <span>Games</span>
+        </span>
+      )}
+    </div>
+  </footer>
+) : (
+  <footer className="statusbar"><span className="statusbar-item statusbar-terminal"><TerminalSquare size={13} style={{ color: 'var(--accent, #d6ff4b)', opacity: 0.9 }} /> {scannerStatus ? <span className="inline-flex items-center gap-1.5"><span className="pulse-dot" /> {scannerStatus}</span> : 'Ready'}</span>{globalSyncRunning && (<span className="statusbar-item statusbar-sync-active" title="Artwork & metadata sync in progress"><span className="pulse-dot" /><span>{globalSyncProgress?.gameTitle ? `Syncing: ${globalSyncProgress.gameTitle} (${globalSyncProgress.current}/${globalSyncProgress.total})${globalSyncProgress.formattedTransfer ? ` • ${globalSyncProgress.formattedTransfer}` : ''}` : (globalSyncProgress?.message || `Syncing artwork (${globalSyncProgress?.current || 0}/${globalSyncProgress?.total || 0})...`)}</span><button type="button" onClick={handleCancelGlobalSync} className="statusbar-cancel-btn" title="Cancel sync immediately"><X size={11} /> Cancel</button></span>)}{guideSyncStatus?.running && (<span className="statusbar-item statusbar-sync-active" title="Strategy guides downloading from StrategyWiki in progress"><span className="pulse-dot" /><span>{guideSyncStatus.progress?.title ? `Downloading Guides: ${guideSyncStatus.progress.title} (${guideSyncStatus.progress.current}/${guideSyncStatus.progress.total})` : 'Downloading Guides from StrategyWiki...'}</span><button type="button" onClick={() => window.api?.guides?.cancelBatch?.()} className="statusbar-cancel-btn" title="Cancel guide download"><X size={11} /> Cancel</button></span>)}<span className="statusbar-item statusbar-storage"><HardDrive size={11} style={{ color: 'var(--accent, #d6ff4b)', opacity: 0.85 }} /> Offline · Local storage</span>{isVoiceListening && (<span className="statusbar-item statusbar-voice-listening" style={{ color: 'var(--accent, #d6ff4b)' }}><span className="pulse-dot" style={{ background: 'var(--accent, #d6ff4b)', boxShadow: '0 0 8px var(--accent-glow, rgba(214, 255, 75, 0.6))' }} /> Listening (PTT)...</span>)}{connectedGamepad && (<><span className="statusbar-item statusbar-gamepad" title={`Connected Controller: ${connectedGamepad}`}><Gamepad2 size={12} style={{ color: 'var(--accent, #d6ff4b)' }} /><span>{connectedGamepad}</span></span><span className="statusbar-item statusbar-shortcuts" title="Controller Navigation Shortcuts"><span className="statusbar-shortcut-item"><GamepadGlyph button="A" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> Select</span><span className="statusbar-shortcut-item"><GamepadGlyph button="B" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> {isDetailView ? 'Library' : 'Back'}</span><span className="statusbar-shortcut-item"><GamepadGlyph button="X" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> {isDetailView ? 'Launch' : 'Status'}</span><span className="statusbar-shortcut-item"><GamepadGlyph button="Y" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> Fav</span><span className="statusbar-shortcut-item"><GamepadGlyph button="LB/RB" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> {isDetailView ? 'Tabs' : 'Views'}</span>{isDetailView && <span className="statusbar-shortcut-item"><GamepadGlyph button="LT/RT" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> Games</span>}</span></>)}<span className="statusbar-item statusbar-version">Version 1.3.9</span></footer>
+)}</main>
+    </div><VirtualKeyboard isOpen={oskOpen} value={query} onChange={(val) => { setQuery(val); setDebouncedQuery(val); setGamepadIndex(0); if (view === 'system' || view === 'today' || view === 'about') setSidebarView('all'); }} onDone={() => { setOskOpen(false); setFocusZone('grid'); setGamepadIndex(0); }} onClose={() => { setOskOpen(false); setFocusZone('grid'); setGamepadIndex(0); }} activeRow={oskRow} activeCol={oskCol} matchCount={filteredGames.length} isGamepadMode={isGamepadMode} gamepadGlyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /><SettingsModal isOpen={settingsModalOpen} onClose={() => setSettingsModalOpen(false)} initialTab={settingsModalTab} isGamepadMode={isGamepadMode} settingsSection={settingsSection} settingsCategoryIndex={settingsCategoryIndex} settingsContentIndex={settingsContentIndex} onSettingsTabChange={(tabId) => { setSettingsModalTab(tabId); const idx = SETTINGS_TAB_IDS.indexOf(tabId); if (idx >= 0) setSettingsCategoryIndex(idx); }} gamepadGlyphStyle={gamepadGlyphStyle} onGamepadGlyphStyleChange={handleGamepadGlyphStyleChange} consoleAudioEnabled={consoleAudioEnabled} onToggleConsoleAudio={handleToggleConsoleAudio} stats={stats} health={libraryHealth} backupsList={backupsList} backupBusy={backupBusy} restoreBusy={restoreBusy} onBackupNow={handleBackupNow} onOpenBackupsFolder={handleOpenBackupsFolder} onOpenBackupsManager={handleOpenBackupsManager} onExport={handleExport} onBackupCache={handleBackupCache} onRestoreCache={handleRestoreCache} onPurge={() => setPurgeOpen(true)} onRefresh={() => loadData({ preserveScroll: true })} connectedGamepad={connectedGamepad} hiddenGames={hiddenGames} onRestoreHidden={(game) => updateHiddenState(game, false)} activityLog={activityLog} activityLoading={activityLoading} onRefreshActivity={fetchSystemHealthAndActivity} layoutTheme={layoutTheme} onLayoutThemeChange={handleLayoutThemeChange} colorPalette={colorPalette} onColorPaletteChange={handleColorPaletteChange} onTriggerIntroPreview={() => { setSettingsModalOpen(false); setShowIntro(true); }} aiUserEnabled={aiUserEnabled} onToggleAiUserEnabled={handleToggleAiUserEnabled} aiInstalled={aiInstalled} isBigPictureMode={isBigPictureMode} onExitBigPicture={() => handleToggleBigPicture(false)} /><AiAssistantDrawer
+        open={aiDrawerOpen}
+        onClose={() => setAiDrawerOpen(false)}
+        activeGame={activeGame}
+        layoutTheme={layoutTheme}
+        games={games}
+        onAction={handleAiAction}
+        isVoiceListening={isVoiceListening}
+        onToggleVoice={toggleVoiceListening}
+        isBigPictureMode={isBigPictureMode}
+        connectedGamepad={connectedGamepad}
+        gamepadGlyphStyle={gamepadGlyphStyle}
+        onOpenOsk={() => {
+          setOskOpen(true)
+        }}
+      /><ScanImportPanel open={scanOpen} onClose={() => setScanOpen(false)} onRefresh={loadData} /><GameEditorModal game={editorGame} onClose={() => setEditorGame(null)} onSaved={handleEditorSaved} /><PurgeConfirmModal open={purgeOpen} busy={purgeBusy} onClose={() => setPurgeOpen(false)} onConfirm={handlePurge} /><BulkEditModal open={bulkEditOpen} count={selectedIds.length} busy={bulkBusy} onClose={() => setBulkEditOpen(false)} onApply={handleBulkApply} /><ContextMenu menu={contextMenu} menuRef={contextMenuRef} onClose={() => setContextMenu(null)} onMoveCategory={moveCategory} onEditGame={setEditorGame} onHideGame={(game) => updateHiddenState(game, true)} onArtworkChanged={handleArtworkChanged} onArtworkError={handleArtworkError} onToggleFavorite={handleToggleFavorite} /><ConfirmActionModal config={confirmModal} onClose={() => setConfirmModal(null)} isGamepadMode={isGamepadMode} connectedGamepad={connectedGamepad} gamepadGlyphStyle={gamepadGlyphStyle} />{checkpointPrompt && (
   <div
     className="checkpoint-note-toast"
     style={{

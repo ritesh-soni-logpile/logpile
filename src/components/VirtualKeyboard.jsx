@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useEffect, useRef } from 'react'
 import { Search, X, CornerDownLeft, Space, Delete, Check } from 'lucide-react'
 import { GamepadGlyph } from './GamepadGlyph'
 
@@ -33,6 +33,66 @@ export function VirtualKeyboard({
   gamepadGlyphStyle = 'auto',
   connectedGamepad = '',
 }) {
+  const inputRef = useRef(null)
+
+  // Listen to physical keyboard events so physical keyboard works simultaneously with on-screen keyboard!
+  useEffect(() => {
+    if (!isOpen) return
+
+    // Auto-focus physical input when opened
+    const timer = setTimeout(() => {
+      inputRef.current?.focus()
+    }, 50)
+
+    const handlePhysicalKeyDown = (e) => {
+      // Don't intercept when user is typing in another active input element
+      if (document.activeElement === inputRef.current) {
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          onClose?.()
+        } else if (e.key === 'Enter') {
+          e.preventDefault()
+          onDone?.()
+        }
+        return
+      }
+
+      // Ignore standard shortcut modifiers (Ctrl, Alt, Meta)
+      if (e.ctrlKey || e.altKey || e.metaKey) return
+
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose?.()
+        return
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        onDone?.()
+        return
+      }
+      if (e.key === 'Backspace') {
+        e.preventDefault()
+        onChange?.(value.slice(0, -1))
+        return
+      }
+      if (e.key === ' ' || e.code === 'Space') {
+        e.preventDefault()
+        onChange?.(value + ' ')
+        return
+      }
+      if (e.key && e.key.length === 1) {
+        e.preventDefault()
+        onChange?.(value + e.key)
+      }
+    }
+
+    window.addEventListener('keydown', handlePhysicalKeyDown)
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('keydown', handlePhysicalKeyDown)
+    }
+  }, [isOpen, value, onChange, onDone, onClose])
+
   if (!isOpen) return null
 
   const handleKeyPress = (keyItem) => {
@@ -64,22 +124,32 @@ export function VirtualKeyboard({
       }}
     >
       <div className="osk-container">
-        {/* Live Search Input Header Display */}
-        <div className="osk-input-display">
+        {/* Live Search Input Header Display with physical typing support */}
+        <div className="osk-input-display" onClick={() => inputRef.current?.focus()}>
           <Search size={18} className="osk-input-icon" />
-          <div className="osk-input-text-wrap">
-            {value ? (
-              <span className="osk-input-text">
-                {value}
-                <span className="osk-cursor">|</span>
-              </span>
-            ) : (
-              <span className="osk-placeholder">
-                Search games, franchises, or genres...
-                <span className="osk-cursor">|</span>
-              </span>
-            )}
-          </div>
+          <input
+            ref={inputRef}
+            type="text"
+            className="osk-input-field"
+            value={value}
+            onChange={(e) => onChange?.(e.target.value)}
+            placeholder="Search games, franchises, or genres..."
+            autoFocus
+          />
+          {value ? (
+            <button
+              type="button"
+              className="osk-clear-text-btn"
+              onClick={(e) => {
+                e.stopPropagation()
+                onChange?.('')
+                inputRef.current?.focus()
+              }}
+              title="Clear input"
+            >
+              <X size={14} />
+            </button>
+          ) : null}
           {matchCount !== null && (
             <span className="osk-match-badge">
               {matchCount} {matchCount === 1 ? 'title' : 'titles'} found
@@ -87,10 +157,11 @@ export function VirtualKeyboard({
           )}
           <button
             type="button"
-            className="osk-close-btn"
+            className={`osk-close-btn ${isGamepadMode && activeRow === -1 ? 'gamepad-focused osk-key-focused' : ''}`}
             onClick={onClose}
-            title="Close Keyboard (B / Circle)"
+            title="Close Keyboard (B / Esc)"
             aria-label="Close Keyboard"
+            tabIndex={-1}
           >
             <X size={16} />
           </button>

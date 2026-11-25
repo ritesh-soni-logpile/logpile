@@ -10,12 +10,12 @@
 [![AlternativeTo](https://img.shields.io/badge/AlternativeTo-Listed-267ecb?style=for-the-badge)](https://alternativeto.net/software/logpile-desktop/about/)
 
 <p align="center">
-  <a href="https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.7/Logpile.Setup.1.3.7.exe">
-    <img src="https://img.shields.io/badge/Download-Installer%20(.exe)%20--%20v1.3.7-2ea44f?style=for-the-badge&logo=windows" alt="Download Installer" />
+  <a href="https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.9/Logpile.Setup.1.3.9.exe">
+    <img src="https://img.shields.io/badge/Download-Installer%20(.exe)%20--%20v1.3.9-2ea44f?style=for-the-badge&logo=windows" alt="Download Installer" />
   </a>
   &nbsp;&nbsp;
-  <a href="https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.7/Logpile-v1.3.7-Portable.zip">
-    <img src="https://img.shields.io/badge/Download-Portable%20(.zip)%20--%20v1.3.7-0969da?style=for-the-badge&logo=zip" alt="Download Portable" />
+  <a href="https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.9/Logpile-v1.3.9-Portable.zip">
+    <img src="https://img.shields.io/badge/Download-Portable%20(.zip)%20--%20v1.3.9-0969da?style=for-the-badge&logo=zip" alt="Download Portable" />
   </a>
 </p>
 
@@ -43,7 +43,7 @@ Logpile is built for gamers who want the best offline PC game launcher, library 
   <img src="docs/assets/comparison-table-v1.3.5.png" alt="Logpile v1.3.5 vs Competitors Comparison Matrix" width="100%" />
 </p>
 
-| Feature | Logpile v1.3.7 | Steam | Playnite | GOG Galaxy | LaunchBox |
+| Feature | Logpile v1.3.9 | Steam | Playnite | GOG Galaxy | LaunchBox |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Local Game Detection** | **Zero logins:** Scans drives & folders directly | Store account login required | Account logins required for library sync | GOG account login required | Account logins or store tokens required |
 | **Bulk Backlog Import** | **Built-in:** Import entire uninstalled library via Excel / CSV | No (Single manual shortcut only) | Plugin required | No | Plugin required |
@@ -54,8 +54,40 @@ Logpile is built for gamers who want the best offline PC game launcher, library 
 | **Themed Performance HUD** | **50+ Custom Styles:** Themed in-game overlays (0% idle GPU) | Basic plain text FPS counter | Third-party tools needed (RTSS) | Basic plain text FPS counter | Third-party tools needed |
 | **Theme Studio & Custom CSS** | **Built-in:** Live CSS injector, natural language synthesis, 8 community themes | No | Third-party skin plugins | No | Themes via community themes |
 | **Full Page & 4K Brag Snaps** | **Built-in:** Continuous vertical settings capture & 4K UHD gallery posters | Basic desktop screenshot | Screenshot plugins | Basic screenshot | Basic screenshot |
+| **Big Picture Console Mode** | **5 Theme Worlds:** Distinct 10-foot UIs, Couch OSK, Adaptive Glyphs & Voice AI | One fixed layout | Fullscreen mode (theme-dependent) | No | Paid Big Box mode |
 | **Controller Auto-Detect** | **Yes:** Instant Windows plug-and-play detection | Big Picture mode or manual setup | Wake-up button press required | Manual setup / limited | Wake-up button press required |
 | **Privacy & Offline First** | **100% Offline:** MIT open source, zero logins, zero tracking | Closed source, store accounts & tracking | Open source, relies on store logins | Closed source, accounts & telemetry | Closed source, logins for metadata |
+
+---
+
+## What's New in v1.3.9
+
+### 1. Big Picture Console Mode: 5 Distinct Theme Worlds
+Press `F11`, `Ctrl+Shift+F`, or click **Console Mode** in the top bar to switch into a 10-foot couch and handheld interface. Every built-in theme swaps to its own dedicated layout and its own **Today's Pick** mechanic:
+- **Cinematic:** Full-bleed IMAX screening room hero with lower-left gold marquee, bottom title counter, and a centered Today's Pick card with an internal `16:9` reel.
+- **Playful:** 3-slot wrap-around `16:9` landscape tile carousel over a dotted charcoal canvas with unobstructed artwork and a floating Surprise Capsule for Daily Pick.
+- **Atmospheric:** Survival-horror save-room view with `16:9` landscape artwork behind drifting mist, a 5-row sliding vertical Case Ledger (`Up`/`Down`), right-side case details, and an Analog Signal Receiver + `16:9` Signal Monitor for Daily Pick.
+- **Kinetic:** Dark asphalt motorsport HUD featuring a `-8deg` diagonal artwork split, speed-streak transitions, a 3-cell telemetry strip (`HRS_LOGGED`, `EST_RUN`, `DRIVE_STATE`), bounded 5-slot slanted Track Strip, and a 5-light Starting-Grid Gantry for Daily Pick.
+- **Competitive:** 3-zone tactical match lobby with a 6-row left Roster Queue (storefront tags and status LEDs), corner-reticle showcase framing, bottom-right `DEPLOY NOW` / `QUEUE INSTALL` panel, and a Matchmaking Queue Scanner (`MATCH FOUND`) for Daily Pick.
+
+### 2. Full Controller Navigation & Hardware-Adaptive Glyphs
+- **End-to-End Gamepad Control:** Navigate the Desktop library, Sanctuary Spotlight, sidebar, top bar, Settings modal, and Game Dossier screens by controller, with wrap-around list stepping in Console Mode and `LT`/`RT` trigger support.
+- **Auto-Detected Controller Prompts:** Automatically displays **Xbox**, **PlayStation** (`✕`, `○`, `▢`, `△`, `L1`/`R1`/`L2`/`R2`), or **Nintendo Switch** glyphs based on your connected gamepad, with manual override in Settings.
+- **Uninstalled Title Triggers:** In Console Mode, `(A)` and primary action triggers route uninstalled titles directly through `installUri` (`DOWNLOAD NOW`, `DOWNLOAD`, `RETRIEVE`, `PIT INSTALL`, `QUEUE INSTALL`).
+- **Multimodal Input:** Switch freely between controller, mouse, keyboard, and touch at any time.
+
+### 3. Console Telemetry Ribbon & On-Screen Couch Keyboard
+- **Top Telemetry Ribbon:** Displays category tabs (`Installed`, `Favorites`, `All Games`, `Today's Pick` / `Daily Pick`, `Search`, `AI Assistant`) via `LB`/`RB` or click, active search filter pill with one-click clear, connected controller/PC indicator, smart laptop/handheld battery readout (hidden on AC desktop PCs), 12-hour clock, Settings shortcut (`Start`), and **Return to Desktop**.
+- **On-Screen Virtual Keyboard (OSK):** Search games using D-pad, mouse, or touch with live match counts, one-click clear, and simultaneous physical keyboard input.
+
+### 4. Voice-First Console AI Companion & Privacy Controls
+- **Push-to-Talk & Spoken Replies:** In Console Mode, press `[R3]` (or click the Voice orb) to dictate prompts, stream recognized speech into chat, hear TTS replies, navigate quick chips with the D-pad, or open the On-Screen Keyboard across theme-matched HUDs.
+- **Enable Local Gaming AI Toggle:** Hide all AI Companion tabs and buttons cleanly across Desktop and Console modes when disabled.
+
+### 5. Optional Console Audio, Escape Controls & Desktop Fixes
+- **Tactile Controller Navigation Audio:** Zero-file Web Audio synthesized navigation ticks, confirm chimes, and back clicks (muted by default; configurable in Settings).
+- **Allow Escape Key to Exit Console Mode Toggle:** Configurable in Settings (off by default so `Esc` acts as Back inside menus and search).
+- **Desktop Today's Pick & Dossier Polish:** Restored the side-by-side 2-column Today's Pick layout across all 5 Desktop themes without vertical scrolling, aligned action buttons cleanly, and normalized Game Dossier card styling.
 
 ---
 
@@ -164,8 +196,8 @@ Tracks your true gaming journey: backlog campaign debt (HLTB synced), source dis
 
 ### For Gamers
 1. Grab the latest installer or portable archive from [Releases](../../releases/latest):
-   - **Installer:** [`Logpile.Setup.1.3.7.exe`](https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.7/Logpile.Setup.1.3.7.exe)
-   - **Portable (.zip):** [`Logpile-v1.3.7-Portable.zip`](https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.7/Logpile-v1.3.7-Portable.zip)
+   - **Installer:** [`Logpile.Setup.1.3.9.exe`](https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.9/Logpile.Setup.1.3.9.exe)
+   - **Portable (.zip):** [`Logpile-v1.3.9-Portable.zip`](https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.9/Logpile-v1.3.9-Portable.zip)
 2. Extract or install to any internal drive or portable SSD (`logpile_data/` stores all assets self-contained).
 3. *(Optional)* Drop any quantized `.gguf` model into the `/models` directory to enable offline conversational backlog guidance.
 

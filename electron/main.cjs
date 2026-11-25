@@ -1760,9 +1760,9 @@ function registerIpc() {
   })
   ipcMain.handle('window:close', () => mainWindow?.close())
   ipcMain.handle('window:isMaximized', () => Boolean(mainWindow?.isMaximized()))
-  ipcMain.handle('window:toggleFullScreen', () => {
+  ipcMain.handle('window:toggleFullScreen', (_event, flag) => {
     if (!mainWindow) return false
-    const next = !mainWindow.isFullScreen()
+    const next = typeof flag === 'boolean' ? flag : !mainWindow.isFullScreen()
     mainWindow.setFullScreen(next)
     return next
   })
@@ -1987,6 +1987,8 @@ function registerIpc() {
       overlayShortcut: settings.overlayShortcut || 'CommandOrControl+Shift+Space',
       fpsShortcut: settings.fpsShortcut || 'CommandOrControl+Shift+F',
       searchShortcut: settings.searchShortcut || 'CommandOrControl+F',
+      consoleModeShortcut: settings.consoleModeShortcut || 'F11',
+      allowEscExitConsole: Boolean(settings.allowEscExitConsole),
       fpsEnabled: Boolean(settings.fpsEnabled),
       fpsPosition: settings.fpsPosition || 'top-right',
       fpsOrientation: settings.fpsOrientation || 'horizontal',
@@ -2051,6 +2053,8 @@ function registerIpc() {
       overlayShortcut: next.overlayShortcut || 'CommandOrControl+Shift+Space',
       fpsShortcut: next.fpsShortcut || 'CommandOrControl+Shift+F',
       searchShortcut: next.searchShortcut || 'CommandOrControl+F',
+      consoleModeShortcut: next.consoleModeShortcut || 'F11',
+      allowEscExitConsole: Boolean(next.allowEscExitConsole),
       fpsEnabled: Boolean(next.fpsEnabled),
       fpsPosition: next.fpsPosition || 'top-right',
       fpsOrientation: next.fpsOrientation || 'horizontal',
@@ -3428,7 +3432,7 @@ function registerIpc() {
               return {
                 isInstalled: true,
                 installPath: regPath,
-                currentVersion: '1.3.7',
+                currentVersion: '1.3.9',
                 theme: installedTheme?.theme || savedTheme,
                 palette: installedTheme?.palette || savedPalette
               }
@@ -3450,7 +3454,7 @@ function registerIpc() {
           return {
             isInstalled: true,
             installPath: cand,
-            currentVersion: '1.3.7',
+            currentVersion: '1.3.9',
             theme: installedTheme?.theme || savedTheme,
             palette: installedTheme?.palette || savedPalette
           }
@@ -3637,7 +3641,7 @@ function registerIpc() {
         const { execSync } = require('node:child_process')
         try {
           const regBase = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\com.logpile.app'
-          execSync(`reg add "${regBase}" /v DisplayName /d "Logpile" /f && reg add "${regBase}" /v DisplayVersion /d "1.3.7" /f && reg add "${regBase}" /v Publisher /d "Corporate Introvert Gamer" /f && reg add "${regBase}" /v InstallLocation /d "${targetPath}" /f && reg add "${regBase}" /v DisplayIcon /d "${targetPath}\\Logpile.exe,0" /f`, { stdio: 'ignore' })
+          execSync(`reg add "${regBase}" /v DisplayName /d "Logpile" /f && reg add "${regBase}" /v DisplayVersion /d "1.3.9" /f && reg add "${regBase}" /v Publisher /d "Corporate Introvert Gamer" /f && reg add "${regBase}" /v InstallLocation /d "${targetPath}" /f && reg add "${regBase}" /v DisplayIcon /d "${targetPath}\\Logpile.exe,0" /f`, { stdio: 'ignore' })
         } catch (regErr) {
           console.warn('[Installer] Registry note:', regErr?.message)
         }
