@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Logpile In-Game Performance HUD Overlays</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background-color: #0b0f17;
+      color: #e6edf3;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      padding: 30px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrapper {
+      width: 1300px;
+      background: #111827;
+      border: 1px solid #1f293d;
+      border-radius: 16px;
+      padding: 32px 36px 32px 36px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+    }
+    .header {
+      margin-bottom: 24px;
+    }
+    .title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    h1 {
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .accent-bar {
+      width: 5px;
+      height: 24px;
+      background: #10b981;
+      border-radius: 4px;
+      display: inline-block;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: #34d399;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .subtitle {
+      font-size: 14px;
+      color: #94a3b8;
+    }
+    .hud-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+    }
+    .hud-card {
+      background: #0f1523;
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .hud-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      font-weight: 600;
+      color: #cbd5e1;
+    }
+    .hud-tag {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.06);
+      color: #94a3b8;
+    }
+    .hud-preview-stage {
+      background: #080b12;
+      border-radius: 8px;
+      padding: 18px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 80px;
+      border: 1px dashed rgba(255, 255, 255, 0.08);
+    }
+
+    /* Common HUD Base */
+    .hud-box {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 12px;
+      font-size: 12px;
+      user-select: none;
+    }
+    .hud-fps {
+      font-weight: 800;
+      font-size: 14px;
+      display: flex;
+      align-items: baseline;
+      gap: 3px;
+    }
+    .hud-fps small {
+      font-size: 9px;
+      font-weight: 600;
+      opacity: 0.8;
+    }
+    .hud-sep {
+      opacity: 0.35;
+      font-size: 11px;
+    }
+    .hud-metric {
+      font-size: 11px;
+      display: inline-flex;
+      align-items: baseline;
+      gap: 2px;
+    }
+    .hud-metric-label {
+      font-size: 9px;
+      opacity: 0.7;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    /* 1. Cyberpunk Neon */
+    .hud-cp77 {
+      background: rgba(10, 10, 14, 0.98);
+      border: 1px solid #fcee0a;
+      border-radius: 0 0 4px 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      box-shadow: 0 0 12px rgba(252, 238, 10, 0.2);
+    }
+    .hud-cp77 .badge-text {
+      color: #fcee0a;
+      font-weight: 900;
+      font-size: 9px;
+      border: 1px solid #fcee0a;
+      padding: 0 3px;
+    }
+    .hud-cp77 .hud-fps { color: #fcee0a; }
+    .hud-cp77 .hud-metric { color: #00f0ff; }
+
+    /* 2. Retro GameBoy DMG */
+    .hud-gameboy {
+      background: #8bac0f;
+      border: 1.5px solid #0f380f;
+      border-radius: 0 0 4px 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: #0f380f;
+      font-weight: 700;
+    }
+    .hud-gameboy .badge-text {
+      font-size: 9px;
+      font-weight: 900;
+      border: 1px solid #0f380f;
+      padding: 0 3px;
+    }
+    .hud-gameboy .hud-fps { color: #0f380f; }
+    .hud-gameboy .hud-metric { color: #0f380f; }
+
+    /* 3. F1 Motorsport Telemetry */
+    .hud-f1 {
+      background: rgba(12, 14, 18, 0.98);
+      border: 1px solid rgba(56, 189, 248, 0.45);
+      border-radius: 0 0 6px 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.15);
+    }
+    .hud-f1 .rev-leds {
+      display: inline-flex;
+      gap: 2px;
+      align-items: center;
+    }
+    .hud-f1 .rev-leds span {
+      width: 4px;
+      height: 7px;
+      border-radius: 1px;
+    }
+    .hud-f1 .hud-fps { color: #ffffff; }
+    .hud-f1 .hud-metric { color: #38bdf8; }
+
+    /* 4. Winamp Classic */
+    .hud-winamp {
+      background: rgba(20, 20, 20, 0.96);
+      border: 1px solid rgba(34, 197, 94, 0.6);
+      border-radius: 0 0 4px 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: #22c55e;
+      box-shadow: 0 0 8px rgba(34, 197, 94, 0.2);
+    }
+    .hud-winamp .eq-bars {
+      display: inline-flex;
+      align-items: flex-end;
+      gap: 2px;
+      height: 12px;
+    }
+    .hud-winamp .eq-bars span {
+      width: 2.5px;
+      border-radius: 1px;
+    }
+    .hud-winamp .hud-fps { color: #22c55e; }
+    .hud-winamp .hud-metric { color: #eab308; }
+
+    /* 5. Witcher Wolf Medallion */
+    .hud-witcher {
+      background: linear-gradient(135deg, rgba(30, 32, 38, 0.98), rgba(12, 12, 16, 0.99));
+      border: 1px solid #94a3b8;
+      border-radius: 0 0 6px 0;
+      box-shadow: 0 0 10px rgba(148, 163, 184, 0.15);
+    }
+    .hud-witcher .sword-icon {
+      color: #cbd5e1;
+      font-size: 13px;
+    }
+    .hud-witcher .hud-fps { color: #ffffff; }
+    .hud-witcher .hud-metric { color: #cbd5e1; }
+
+    /* 6. Vault Pip-Boy 3000 */
+    .hud-pipboy {
+      background: #041006;
+      border: 1px solid #22c55e;
+      border-radius: 0 0 4px 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: #22c55e;
+      box-shadow: 0 0 12px rgba(34, 197, 94, 0.25);
+    }
+    .hud-pipboy .badge-text {
+      color: #22c55e;
+      font-weight: 900;
+      font-size: 9px;
+      border: 1px solid #22c55e;
+      padding: 0 3px;
+    }
+    .hud-pipboy .hud-fps { color: #22c55e; }
+    .hud-pipboy .hud-metric { color: #4ade80; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="header">
+      <div class="title-row">
+        <h1>
+          <span class="accent-bar"></span>
+          Themed In-Game Performance HUDs
+        </h1>
+        <span class="badge">0.0% Idle GPU · PresentMon Intel Core</span>
+      </div>
+      <p class="subtitle">50+ built-in telemetry overlays tailored to your game aesthetic. Framerate, 1% lows, GPU/CPU thermals, and memory without third-party bloat.</p>
+    </div>
+
+    <div class="hud-grid">
+      <!-- 1. Cyberpunk Neon -->
+      <div class="hud-card">
+        <div class="hud-card-header">
+          <span>Cyberpunk Netrunner</span>
+          <span class="hud-tag">Sci-Fi / RPG</span>
+        </div>
+        <div class="hud-preview-stage">
+          <div class="hud-box hud-cp77">
+            <span class="badge-text">CP77</span>
+            <div class="hud-fps">144 <small>FPS</small></div>
+            <span class="hud-sep">|</span>
+            <div class="hud-metric"><span class="hud-metric-label">1%L</span> 118</div>
+            <span class="hud-sep">|</span>
+            <div class="hud-metric"><span class="hud-metric-label">GPU</span> 98% 68°C</div>
+            <span class="hud-sep">|</span>
+            <div class="hud-metric"><span class="hud-metric-label">CPU</span> 42%</div>
+            <span class="hud-sep">|</span>
+            <div class="hud-metric"><span class="hud-metric-label">MS</span> 6.9ms</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Retro 8-Bit GameBoy -->
+      <div class="hud-card">
+        <div class="hud-card-header">
+          <span>Retro 8-Bit Game Boy</span>
+          <span class="hud-tag">Arcade / Retro</span>
+        </div>
+        <div class="hud-preview-stage">
+          <div class="hud-box hud-gameboy">
+            <span class="badge-text">DMG-01</span>
+            <div class="hud-fps">60 <small>FPS</small></div>
+            <span class="hud-sep">|</span>
+            <div class="hud-metric"><span class="hud-metric-label">1%L</span> 59</div>
+            <span class="hud-sep">|</span>
+            <div class="hud-metric"><span class="hud-metric-label">VRAM</span> 3.4G</div>
+            <span class="hud-sep">|</span>
+            <div class="hud-metric"><span class="hud-metric-label">TIME</span> 16.6ms</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. F1 Motorsport Telemetry -->
+      <div class="hud-card">
+        <div class="hud-card-header">
+          <span>F1 Telemetry & Rev Strip</span>
+          <span class="hud-tag">Racing / Sim</span>
+        </div>
+        <div class="hud-preview-stage">
+          <div class="hud-box hud-f1">
+            <div class="rev-leds">
+              <span style="background: #22c55e;"></span>
+              <span style="background: #22c55e;"></span>
+              <span style="background: #eab308;"></span>
+              <span style="background: #ef4444;"></span>
+              <span style="background: #a855f7;"></span>
+            </div>
+            <div class="hud-fps">165 <small>FPS</small></div>
+            <span class="hud-sep">|</span>
+            <div class="hud-metric"><span class="hud-metric-label">1%L</span> 142</div>
+            <span class="hud-sep">|</span>
+            <div class="hud-metric"><span class="hud-metric-label">GPU</span> 99% 2450MHz</div>
+            <span class="hud-sep">|</span>
+            <div class="hud-metric"><span class="hud-metric-label">MS</span> 6.0ms</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. Retro Winamp 1999 -->
+      <div class="hud-card">
+        <div class="hud-card-header">
+          <span>Retro Winamp 1999</span>
+          <span class="hud-tag">Nostalgia / Chill</span>
+        </div>
+        <div class="hud-preview-stage">
+          <div class="hud-box hud-winamp">
+            <div class="eq-bars">
+              <span style="height: 6px; background: #22c55e;"></span>
+              <span style="height: 10px; background: #eab308;"></span>
+              <span style="height: 8px; background: #ef4444;"></span>
+            </div>
+            <div class="hud-fps">120 <small>FPS</small></div>
+            <span class="hud-sep">|</span>
+            <div class="hud-metric"><span class="hud-metric-label">1%L</span> 104</div>
+            <span class="hud-sep">|</span>
+            <div class="hud-metric"><span class="hud-metric-label">MEM</span> 8.4GB</div>
+            <span class="hud-sep">|</span>
+            <div class="hud-metric"><span class="hud-metric-label">TIME</span> 8.3ms</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. Silver Wolf Medallion -->
+      <div class="hud-card">
+        <div class="hud-card-header">
+          <span>Silver Wolf Medallion</span>
+          <span class="hud-tag">Dark Fantasy / Action</span>
+        </div>
+        <div class="hud-preview-stage">
+          <div class="hud-box hud-witcher">
+            <span class="sword-icon">⚔</span>
+            <div class="hud-fps">90 <small>FPS</small></div>
+            <span class="hud-sep">|</span>
+            <div class="hud-metric"><span class="hud-metric-label">1%L</span> 81</div>
+            <span class="hud-sep">|</span>
+            <div class="hud-metric"><span class="hud-metric-label">GPU</span> 95% 64°C</div>
+            <span class="hud-sep">|</span>
+            <div class="hud-metric"><span class="hud-metric-label">CPU</span> 38% 54°C</div>
+            <span class="hud-sep">|</span>
+            <div class="hud-metric"><span class="hud-metric-label">MS</span> 11.1ms</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6. Vault Pip-Boy 3000 -->
+      <div class="hud-card">
+        <div class="hud-card-header">
+          <span>Vault Pip-Boy 3000</span>
+          <span class="hud-tag">Post-Apocalyptic / FPS</span>
+        </div>
+        <div class="hud-preview-stage">
+          <div class="hud-box hud-pipboy">
+            <span class="badge-text">☢ SYS</span>
+            <div class="hud-fps">144 <small>FPS</small></div>
+            <span class="hud-sep">|</span>
+            <div class="hud-metric"><span class="hud-metric-label">1%L</span> 120</div>
+            <span class="hud-sep">|</span>
+            <div class="hud-metric"><span class="hud-metric-label">RAD</span> 0%</div>
+            <span class="hud-sep">|</span>
+            <div class="hud-metric"><span class="hud-metric-label">GPU</span> 96% 62°C</div>
+            <span class="hud-sep">|</span>
+            <div class="hud-metric"><span class="hud-metric-label">MS</span> 6.9ms</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
