@@ -840,7 +840,6 @@ h3 { font-size: 13px; font-weight: 600; letter-spacing: -.01em; }
 .brag-screenshot-btn { display: inline-flex; align-items: center; gap: 6px; }
 .brag-dropdown-menu { min-width: 250px; max-width: 280px; background: rgba(15, 17, 23, 0.98); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65); padding: 6px; z-index: 999999; display: flex; flex-direction: column; gap: 4px; backdrop-filter: blur(16px); }
 .brag-dropdown-menu.open-upwards { transform: translateY(-100%); box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.65); }
-.titlebar-snap-btn { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 8px; font-size: 11px; font-weight: 500; border-radius: 6px; }
 .brag-dropdown-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px; border: none; background: transparent; color: #e2e8f0; font-size: 11px; cursor: pointer; transition: background 0.15s ease; width: 100%; text-align: left; }
 .brag-dropdown-item:hover { background: rgba(255, 255, 255, 0.08); }
 .brag-dropdown-title { font-weight: 600; color: #f8fafc; display: block; }

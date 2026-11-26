@@ -4,6 +4,16 @@ All notable changes to [Logpile](https://github.com/ritesh-soni-logpile/logpile)
 
 ---
 
+## [v1.3.97] — 2026-11-26
+
+### Full-Page Brag Snap Consolidation, Game Dossier Fixes & Release Alignment
+- **Game Dossier Full-Page Snapshot Fix:** Enforced instant scrolling, synchronous DOM reflows, and dynamic slice accumulation so **Full View (Whole Page PNG)** captures the entire Game Dossier from Hero Stage through Overview specs without duplicating the hero banner.
+- **Unified Brag Capture Controls:** Removed duplicate `Snap Hero`, `Snap Theme`, and `Snap Theme View (PNG)` buttons across the titlebar and Game Dossier action row, consolidating capture actions into the single **Brag** dropdown menu and aligning gamepad navigation indices.
+- **Scoped Full View Captures:** Restricted **Full View (Whole Page PNG)** strictly to finite, non-virtualized views (**Game Dossier**, **Dashboard**, **Today's Pick**, plus **Settings** via its built-in snapshot tool) while keeping **Visible Window (PNG)** and **Showcase Collages (4K)** on Library grid views.
+- **Installer Naming Alignment:** Standardized NSIS installer artifact naming (`Logpile.Setup.1.3.97.exe`) to match `latest.yml` metadata and release links.
+
+---
+
 ## [v1.3.96] — 2026-11-26
 
 ### Epic Games v2 Migration, Native Netmarble & LoadingBay Scanners

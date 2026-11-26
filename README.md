@@ -10,12 +10,12 @@
 [![AlternativeTo](https://img.shields.io/badge/AlternativeTo-Listed-267ecb?style=for-the-badge)](https://alternativeto.net/software/logpile-desktop/about/)
 
 <p align="center">
-  <a href="https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.96/Logpile.Setup.1.3.96.exe">
-    <img src="https://img.shields.io/badge/Download-Installer%20(.exe)%20--%20v1.3.96-2ea44f?style=for-the-badge&logo=windows" alt="Download Installer" />
+  <a href="https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.97/Logpile.Setup.1.3.97.exe">
+    <img src="https://img.shields.io/badge/Download-Installer%20(.exe)%20--%20v1.3.97-2ea44f?style=for-the-badge&logo=windows" alt="Download Installer" />
   </a>
   &nbsp;&nbsp;
-  <a href="https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.96/Logpile-1.3.96-win.zip">
-    <img src="https://img.shields.io/badge/Download-Portable%20(.zip)%20--%20v1.3.96-0969da?style=for-the-badge&logo=zip" alt="Download Portable" />
+  <a href="https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.97/Logpile-1.3.97-win.zip">
+    <img src="https://img.shields.io/badge/Download-Portable%20(.zip)%20--%20v1.3.97-0969da?style=for-the-badge&logo=zip" alt="Download Portable" />
   </a>
 </p>
 
@@ -48,7 +48,7 @@ Logpile is built for gamers who want the best offline PC game launcher, library 
 <details>
 <summary><strong>View comparison table as text</strong></summary>
 
-| Feature | Logpile v1.3.96 | Steam | Playnite | GOG Galaxy | LaunchBox |
+| Feature | Logpile v1.3.97 | Steam | Playnite | GOG Galaxy | LaunchBox |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Local Game Detection** | **Zero logins:** Scans drives & folders directly | Store account login required | Account logins required for library sync | GOG account login required | Account logins or store tokens required |
 | **PC Store & Launcher Coverage** | **22+ Stores & Custom Folders:** Steam, Epic, GOG, Xbox, EA, Ubisoft, Amazon, Itch.io, Battle.net, Riot, Rockstar, CDPR, Humble, HoYoPlay, Legacy, Wargaming & more | Steam only | Via store plugins | Via community integrations | Via store imports |
@@ -145,18 +145,19 @@ Export your game sanctuary into balanced high-resolution gallery posters across 
 
 ---
 
-## What's New in v1.3.96
+## What's New in v1.3.97
 
-### Epic Games v2 Migration, Native Netmarble & LoadingBay Scanners
-- **Epic Games Dual-Engine (v1 + v2):** Seamlessly detects games from both legacy Epic manifests (`C:\ProgramData\Epic\EpicGamesLauncher\Data\Manifests\*.item`) and modern Epic v2 installations (`%LOCALAPPDATA%\com.epicgames.eglv2\installations.jsonl`), ensuring zero lost games during launcher updates.
-- **Native Netmarble Launcher Scanner:** Directly reads Netmarble's launcher configuration (`%APPDATA%\Netmarble Launcher\config.json`) and Windows uninstall entries to discover titles like *Tower of God: NEW WORLD* and *Game of Thrones: Kingsroad*, preserving custom install paths and cover artwork.
-- **Native NetEase / LoadingBay Scanner:** Deep registry indexing for LoadingBay games (`HKCU\SOFTWARE\LoadingBay\LoadingBayInstaller\game\*`) such as *Identity V* and *Once Human* with native `loadingbay://` launch URI execution.
-- **Exclusion Filter Hardening:** Ignores launcher binaries (`LoadingBay.exe`, `Rockstar Games SDK`, background redistributables) so only real playable games enter the library.
-- **Storefront Filter Isolation in Installed View:** Selecting a storefront filter (Steam, Epic, GOG, etc.) in the **Installed** workspace view strictly filters to copies installed on that specific storefront.
-- **EA Title Cleaner:** Automatic normalization for EA titles with corrupted trademark characters (e.g. `UNRAVELT two` -> `Unravel Two`).
-- **Franchise Stem Matcher Fix:** Resolved ReferenceError in franchise stem extraction during Game Dossier navigation.
+### Full-Page Game Dossier Capture, Brag Menu Consolidation & Installer Alignment
+- **Game Dossier Full-Page Capture:** Instant scroll lock, synchronous reflows, and dynamic slice assembly let **Full View (Whole Page PNG)** capture full Game Dossiers from Hero Stage through Overview specs cleanly without duplicating the hero banner.
+- **Unified Brag Capture Controls:** Removed duplicate `Snap Hero`, `Snap Theme`, and `Snap Theme View (PNG)` buttons across the titlebar and Dossier action row so every snapshot lives under the **Brag** dropdown menu.
+- **Scoped Full View Captures:** Kept **Full View (Whole Page PNG)** active exclusively for finite pages (**Game Dossier**, **Dashboard**, **Today's Pick**, and **Settings**) while keeping **Visible Window (PNG)** and **Showcase Collages (4K)** on Library grids.
+- **Installer Naming Alignment:** Standardized installer executable naming (`Logpile.Setup.1.3.97.exe`) to match `latest.yml` metadata and release links.
 
-👉 **[View Full Version History & Changelog (v1.3.5 - v1.3.96)](CHANGELOG.md)**
+### Also Included from v1.3.96 (Epic Games v2, Netmarble & LoadingBay)
+- **Epic Games Dual-Engine (v1 + v2):** Detects games from both legacy manifests and modern Epic v2 `installations.jsonl`.
+- **Native Netmarble & LoadingBay Scanners:** Direct config/registry indexing for Netmarble Launcher and NetEase LoadingBay titles alongside hardened launcher binary exclusions, Installed storefront filter isolation, EA title cleanup, and Dossier franchise matcher fixes.
+
+👉 **[View Full Version History & Changelog (v1.3.5 - v1.3.97)](CHANGELOG.md)**
 
 ---
 
@@ -173,8 +174,8 @@ Export your game sanctuary into balanced high-resolution gallery posters across 
 
 ### For Gamers
 1. Grab the latest installer or portable archive from [Releases](https://github.com/ritesh-soni-logpile/logpile/releases/latest):
-   - **Installer:** [`Logpile.Setup.1.3.96.exe`](https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.96/Logpile.Setup.1.3.96.exe)
-   - **Portable (.zip):** [`Logpile-1.3.96-win.zip`](https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.96/Logpile-1.3.96-win.zip)
+   - **Installer:** [`Logpile.Setup.1.3.97.exe`](https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.97/Logpile.Setup.1.3.97.exe)
+   - **Portable (.zip):** [`Logpile-1.3.97-win.zip`](https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.97/Logpile-1.3.97-win.zip)
 2. Extract or install to any internal drive or portable SSD (`logpile_data/` stores all assets self-contained).
 3. *(Optional)* Drop any quantized `.gguf` model into the `/models` directory to enable offline conversational backlog guidance.
 

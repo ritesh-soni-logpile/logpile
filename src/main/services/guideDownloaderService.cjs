@@ -3,7 +3,7 @@ const path = require('path')
 const { indexSingleFile } = require('./guideImporter.cjs')
 const { hasGuide } = require('../../../electron/db.cjs')
 
-const USER_AGENT = 'Logpile/1.3.96 (https://github.com/ritesh-soni-logpile/logpile; contact@logpile.local)'
+const USER_AGENT = 'Logpile/1.3.97 (https://github.com/ritesh-soni-logpile/logpile; contact@logpile.local)'
 
 const HEADERS = {
   'User-Agent': USER_AGENT,
