@@ -6965,10 +6965,27 @@ function App() {
     document.body.classList.add('is-fullpage-capturing')
     if (shellEl) shellEl.classList.add('is-fullpage-capturing')
 
-    // Inject temporary override style to completely eliminate titlebar overhang, shadows, and borders
+    // Inject temporary override style to completely eliminate titlebar overhang, shadows, borders, and force instant scrolling
     const overrideStyle = document.createElement('style')
     overrideStyle.id = 'fullpage-capture-overrides'
     overrideStyle.textContent = `
+      *, *::before, *::after,
+      html, body, .app-shell, .app-shell *,
+      .main-scroll, .main-scroll-fullbleed,
+      .app-shell .main-scroll, .app-shell .main-scroll-fullbleed,
+      .app-shell.is-detail-view .main-scroll,
+      .app-shell.is-detail-view .main-scroll-fullbleed,
+      .app-shell[class*="layout-"] .main-scroll-fullbleed,
+      .app-shell[class*="layout-"].is-detail-view .main-scroll-fullbleed,
+      .app-shell.layout-cinematic.is-detail-view .main-scroll-fullbleed,
+      .app-shell.layout-kinetic.is-detail-view .main-scroll-fullbleed,
+      .app-shell.layout-atmospheric.is-detail-view .main-scroll-fullbleed,
+      .app-shell.layout-playful.is-detail-view .main-scroll-fullbleed,
+      .app-shell.layout-competitive.is-detail-view .main-scroll-fullbleed {
+        scroll-behavior: auto !important;
+        transition: none !important;
+        animation: none !important;
+      }
       .titlebar {
         overflow: hidden !important;
       }
@@ -7046,11 +7063,19 @@ function App() {
         throw new Error(directRes?.error || 'Failed capturing view')
       }
 
+      const applyScrollPosition = async (targetTop) => {
+        scrollEl.scrollTop = targetTop
+        if (typeof scrollEl.scrollTo === 'function') {
+          scrollEl.scrollTo({ top: targetTop, behavior: 'instant' })
+        }
+        void scrollEl.offsetHeight
+        await new Promise((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 200)))
+        })
+      }
+
       // Capture top slice at scrollTop = 0
-      scrollEl.scrollTop = 0
-      await new Promise((resolve) => {
-        requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 150)))
-      })
+      await applyScrollPosition(0)
 
       const firstRes = await api.window?.captureRect?.({
         x: Math.round(rect.x),
@@ -7105,10 +7130,7 @@ function App() {
 
         if (remainingDips >= stepDips) {
           // Advance by exact captured height (zero overlap, zero skipped pixels)
-          scrollEl.scrollTop = currentScrolledDips
-          await new Promise((resolve) => {
-            requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 150)))
-          })
+          await applyScrollPosition(currentScrolledDips)
 
           const sliceRes = await api.window?.captureRect?.({
             x: Math.round(rect.x),
@@ -7139,10 +7161,7 @@ function App() {
         } else {
           // Final slice: scroll to very bottom and crop only the exact remaining tail
           const bottomScrollTop = Math.max(0, totalHeightToCapture - stepDips)
-          scrollEl.scrollTop = bottomScrollTop
-          await new Promise((resolve) => {
-            requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 150)))
-          })
+          await applyScrollPosition(bottomScrollTop)
 
           const lastRes = await api.window?.captureRect?.({
             x: Math.round(rect.x),
