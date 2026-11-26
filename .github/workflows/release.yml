@@ -64,3 +64,26 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy to itch.io via Butler
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+        run: |
+          if (-not $env:BUTLER_API_KEY) {
+            Write-Host "::warning::BUTLER_API_KEY secret not found or empty. Skipping itch.io push."
+            exit 0
+          }
+          Write-Host "Downloading itch.io Butler CLI..."
+          curl.exe -L -o butler.zip https://broth.itch.zone/butler/windows-amd64/LATEST/archive/default
+          tar -xf butler.zip
+          $installer = (Get-ChildItem -Path "dist" -Filter "Logpile.Setup.*.exe" | Select-Object -First 1).FullName
+          $portable = (Get-ChildItem -Path "dist" -Filter "Logpile-*-win.zip" | Select-Object -First 1).FullName
+          if ($installer) {
+            Write-Host "Pushing installer build to itch.io: $installer"
+            .\butler.exe push "$installer" logpile/logpile:windows-installer --userversion "${{ github.ref_name }}"
+          }
+          if ($portable) {
+            Write-Host "Pushing portable zip to itch.io: $portable"
+            .\butler.exe push "$portable" logpile/logpile:windows-portable --userversion "${{ github.ref_name }}"
+          }
