@@ -10,12 +10,12 @@
 [![AlternativeTo](https://img.shields.io/badge/AlternativeTo-Listed-267ecb?style=for-the-badge)](https://alternativeto.net/software/logpile-desktop/about/)
 
 <p align="center">
-  <a href="https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.95/Logpile.Setup.1.3.95.exe">
-    <img src="https://img.shields.io/badge/Download-Installer%20(.exe)%20--%20v1.3.95-2ea44f?style=for-the-badge&logo=windows" alt="Download Installer" />
+  <a href="https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.96/Logpile.Setup.1.3.96.exe">
+    <img src="https://img.shields.io/badge/Download-Installer%20(.exe)%20--%20v1.3.96-2ea44f?style=for-the-badge&logo=windows" alt="Download Installer" />
   </a>
   &nbsp;&nbsp;
-  <a href="https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.95/Logpile-1.3.95-win.zip">
-    <img src="https://img.shields.io/badge/Download-Portable%20(.zip)%20--%20v1.3.95-0969da?style=for-the-badge&logo=zip" alt="Download Portable" />
+  <a href="https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.96/Logpile-1.3.96-win.zip">
+    <img src="https://img.shields.io/badge/Download-Portable%20(.zip)%20--%20v1.3.96-0969da?style=for-the-badge&logo=zip" alt="Download Portable" />
   </a>
 </p>
 
@@ -41,7 +41,7 @@ Logpile is built for gamers who want the best offline PC game launcher, library 
 
 <img width="1360" height="1260" alt="comparison_table" src="https://github.com/user-attachments/assets/1391c89a-93ea-40fa-b743-18ffee0ccfbb" />
 
-| Feature | Logpile v1.3.95 | Steam | Playnite | GOG Galaxy | LaunchBox |
+| Feature | Logpile v1.3.96 | Steam | Playnite | GOG Galaxy | LaunchBox |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Local Game Detection** | **Zero logins:** Scans drives & folders directly | Store account login required | Account logins required for library sync | GOG account login required | Account logins or store tokens required |
 | **PC Store & Launcher Coverage** | **22+ Stores & Custom Folders:** Steam, Epic, GOG, Xbox, EA, Ubisoft, Amazon, Itch.io, Battle.net, Riot, Rockstar, CDPR, Humble, HoYoPlay, Legacy, Wargaming & more | Steam only | Via store plugins | Via community integrations | Via store imports |
@@ -57,6 +57,18 @@ Logpile is built for gamers who want the best offline PC game launcher, library 
 | **Big Picture Console Mode** | **5 Theme Worlds:** Distinct 10-foot UIs, Couch OSK, Adaptive Glyphs & Voice AI | One fixed layout | Fullscreen mode (theme-dependent) | No | Paid Big Box mode |
 | **Controller Auto-Detect** | **Yes:** Instant Windows plug-and-play detection | Big Picture mode or manual setup | Wake-up button press required | Manual setup / limited | Wake-up button press required |
 | **Privacy & Offline First** | **100% Offline:** MIT open source, zero logins, zero tracking | Closed source, store accounts & tracking | Open source, relies on store logins | Closed source, accounts & telemetry | Closed source, logins for metadata |
+
+---
+
+## What's New in v1.3.96
+
+### Epic Games v2 Migration, Native Netmarble & LoadingBay Scanners
+- **Epic Games Dual-Engine (v1 + v2):** Seamlessly detects games from both legacy Epic manifests (`C:\ProgramData\Epic\EpicGamesLauncher\Data\Manifests\*.item`) and modern Epic v2 installations (`%LOCALAPPDATA%\com.epicgames.eglv2\installations.jsonl`), ensuring zero lost games during launcher updates.
+- **Native Netmarble Launcher Scanner:** Directly reads Netmarble's launcher configuration (`%APPDATA%\Netmarble Launcher\config.json`) and Windows uninstall entries to discover titles like *Tower of God: NEW WORLD* and *Game of Thrones: Kingsroad*, preserving custom install paths and cover artwork.
+- **Native NetEase / LoadingBay Scanner:** Deep registry indexing for LoadingBay games (`HKCU\SOFTWARE\LoadingBay\LoadingBayInstaller\game\*`) such as *Identity V* and *Once Human* with native `loadingbay://` launch URI execution.
+- **Exclusion Filter Hardening:** Ignores launcher binaries (`LoadingBay.exe`, `Rockstar Games SDK`, background redistributables) so only real playable games enter the library.
+- **Storefront Filter Isolation in Installed View:** Selecting a storefront filter (Steam, Epic, GOG, etc.) in the **Installed** workspace view strictly filters to copies installed on that specific storefront.
+- **EA Title Cleaner:** Automatic normalization for EA titles with corrupted trademark characters (e.g. `UNRAVELT two` -> `Unravel Two`).
 
 ---
 

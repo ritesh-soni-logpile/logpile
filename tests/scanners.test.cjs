@@ -29,6 +29,7 @@ const { inferStoreName, autoLabelCustomStore } = require('../src/main/services/e
 const { mergeRecords } = require('../src/main/services/deduplicationService.cjs')
 const { normalizeCanonicalTitle } = require('../src/main/services/titleNormalizer.cjs')
 const { reconcileSteam } = require('../src/main/services/scanners/steamScanner.cjs')
+const { scanEpic, parseEpicManifest, parseEpicV2Installations, reconcileEpic } = require('../src/main/services/scanners/epicScanner.cjs')
 const { createDatabase, getGames, getLibrarySettings, setLibrarySettings, markSourceUninstalled } = require('../electron/db.cjs')
 
 const tempRoots = []
@@ -53,7 +54,7 @@ afterEach(() => {
   }
 })
 
-describe('Universal PC Platform Scanners (v1.3.95)', () => {
+describe('Universal PC Platform Scanners (v1.3.96)', () => {
   it('parses Windows registry tree output accurately', () => {
     const raw = [
       'HKEY_CURRENT_USER\\Software\\Cognosphere\\HYP\\hk4e_global',
@@ -489,5 +490,90 @@ describe('Universal PC Platform Scanners (v1.3.95)', () => {
     } finally {
       db.close()
     }
+  })
+
+  it('epicScanner seamlessly supports both legacy v1 manifests and modern v2 architecture', async () => {
+    const root = makeTempDir()
+    const v1Dir = path.join(root, 'v1_manifests')
+    const v2Dir = path.join(root, 'v2_eglv2')
+    fs.mkdirSync(v1Dir, { recursive: true })
+    fs.mkdirSync(v2Dir, { recursive: true })
+
+    // Setup legacy v1 game
+    const v1GameDir = path.join(root, 'Games', 'Control')
+    makeDummyFile(path.join(v1GameDir, 'Control.exe'))
+    const v1ItemPath = path.join(v1Dir, 'Control.item')
+    fs.writeFileSync(v1ItemPath, JSON.stringify({
+      DisplayName: 'Control Ultimate Edition',
+      AppName: 'ControlApp',
+      CatalogItemId: 'control-cat-id',
+      InstallLocation: v1GameDir,
+      LaunchExecutable: 'Control.exe',
+      InstallSize: 45000000000,
+    }))
+
+    // Setup modern v2 game
+    const v2GameDir = path.join(root, 'Games', 'GhostwireTokyo')
+    makeDummyFile(path.join(v2GameDir, 'GWT.exe'))
+    const installationsJsonPath = path.join(v2Dir, 'installations.jsonl')
+    fs.writeFileSync(installationsJsonPath, [
+      JSON.stringify({ version: 1, entries: 1 }),
+      JSON.stringify({
+        installationId: 'GWT-INSTALL-ID',
+        complete: true,
+        dir: v2GameDir,
+        itemId: 'gwt-cat-id',
+        artifactId: 'gwt-art-id',
+        launchExecutable: 'GWT.exe',
+      }),
+    ].join('\n'))
+
+    const catalogCachePath = path.join(v2Dir, 'catalog-cache.json')
+    fs.writeFileSync(catalogCachePath, JSON.stringify({
+      items: {
+        'gwt-cat-id': {
+          item: {
+            id: 'gwt-cat-id',
+            title: 'Ghostwire Tokyo',
+            developer: 'Tango Gameworks',
+            keyImages: [
+              { type: 'DieselGameBoxTall', url: 'https://cdn.epic.com/gwt_tall.png' },
+              { type: 'DieselGameBox', url: 'https://cdn.epic.com/gwt_wide.png' },
+            ],
+          },
+        },
+      },
+    }))
+
+    const diskSizeCachePath = path.join(v2Dir, 'disk-size-cache.json')
+    fs.writeFileSync(diskSizeCachePath, JSON.stringify({
+      entries: [
+        { app_id: { itemId: 'gwt-cat-id', appName: 'gwt-art-id' }, bytes: 25000000000 },
+      ],
+    }))
+
+    const result = await scanEpic(null, null, {
+      v1Directory: v1Dir,
+      v2Directory: v2Dir,
+      v2InstallationsPath: installationsJsonPath,
+      catalogCachePath,
+      diskSizeCachePath,
+    })
+
+    assert.equal(result.records.length, 2)
+    const control = result.records.find((r) => r.canonicalTitle.includes('Control'))
+    const gwt = result.records.find((r) => r.canonicalTitle.includes('Ghostwire'))
+
+    assert.ok(control, 'Legacy v1 Control should be discovered')
+    assert.equal(control.isInstalled, true)
+    assert.equal(control.installPath, v1GameDir)
+    assert.equal(control.executablePath, path.join(v1GameDir, 'Control.exe'))
+
+    assert.ok(gwt, 'Modern v2 Ghostwire should be discovered')
+    assert.equal(gwt.isInstalled, true)
+    assert.equal(gwt.installPath, v2GameDir)
+    assert.equal(gwt.executablePath, path.join(v2GameDir, 'GWT.exe'))
+    assert.equal(gwt.coverUrl, 'https://cdn.epic.com/gwt_tall.png')
+    assert.equal(gwt.installSizeBytes, 25000000000)
   })
 })

@@ -1,5 +1,6 @@
 const path = require('node:path')
 const {
+  safeRead,
   fileExists,
   getDriveLetter,
   emitProgress,
@@ -10,6 +11,7 @@ const {
   isOtherStoreInstallPath,
   resolveGameExecutable,
   matchUninstallEntriesByRule,
+  getUninstallRegistryEntries,
 } = require('./scannerUtils.cjs')
 
 function extractBattleNetCode(item, keyTail) {
@@ -63,7 +65,13 @@ function scanRockstar(onProgress, _db, options = {}) {
     match: (item) => String(item.Publisher || '').toLowerCase().includes('rockstar games'),
     exclude: (item) => {
       const name = String(item.DisplayName || '').toLowerCase()
-      return name.includes('rockstar games launcher') || name.includes('social club') || name.includes('rockstar sdk')
+      return (
+        name.includes('rockstar games launcher') ||
+        name.includes('social club') ||
+        name.includes('rockstar sdk') ||
+        name.includes('rockstar games sdk') ||
+        name.endsWith(' sdk')
+      )
     },
   }, options)
 
@@ -119,6 +127,203 @@ function scanRockstar(onProgress, _db, options = {}) {
   return { source: 'rockstar', records }
 }
 
+function scanNetmarble(onProgress, _db, options = {}) {
+  emitProgress(onProgress, { source: 'netmarble', phase: 'scanning', current: 0, total: 1, message: 'Scanning for Netmarble installations...' })
+  const records = []
+  const seenPaths = new Set()
+
+  // 1. Read official Netmarble Launcher config.json
+  const isMockTest = Array.isArray(options.entries)
+  const appData = process.env.APPDATA || (process.env.USERPROFILE ? path.join(process.env.USERPROFILE, 'AppData', 'Roaming') : null)
+  const configPath = options.netmarbleConfigPath || (!isMockTest && appData ? path.join(appData, 'Netmarble Launcher', 'config.json') : null)
+  if (configPath && fileExists(configPath)) {
+    try {
+      const raw = safeRead(configPath)
+      const parsed = raw ? JSON.parse(raw) : null
+      const games = parsed?.game || {}
+      for (const [gameCode, gameData] of Object.entries(games)) {
+        const build = gameData?.build || {}
+        const installPath = cleanDirectoryPath(gameData?.installPath || build?.installPath)
+        if (!installPath || !fileExists(installPath)) continue
+        if (seenPaths.has(installPath.toLowerCase())) continue
+
+        const title = cleanGameTitle(build?.name || gameData?.installFolderName || gameCode)
+        const exeName = build?.download?.executeFileName || build?.executeFileName
+        const directExe = exeName ? path.join(installPath, exeName) : null
+        const resolvedExe = (directExe && fileExists(directExe)) ? directExe : resolveGameExecutable(installPath, title)
+        const coverUrl = build?.iconImageUrl || null
+
+        seenPaths.add(installPath.toLowerCase())
+        records.push({
+          canonicalTitle: title,
+          normalizedTitle: title,
+          description: null,
+          developer: 'Netmarble',
+          publisher: 'Netmarble',
+          releaseDate: null,
+          coverUrl,
+          heroUrl: null,
+          isInstalled: Boolean(resolvedExe && fileExists(resolvedExe)),
+          driveLetter: getDriveLetter(installPath),
+          installPath,
+          installSizeBytes: directorySizeSafe(installPath),
+          playTimeSeconds: 0,
+          lastPlayed: null,
+          platform: 'netmarble',
+          platformGameId: `netmarble:${gameCode}`,
+          platformLaunchId: gameCode,
+          idSource: 'netmarble:config',
+          launchUri: null,
+          installUri: null,
+          executable: resolvedExe,
+          launchArguments: null,
+          source: 'local-scan',
+          storeName: 'Netmarble',
+          driveStatus: 'online',
+        })
+      }
+    } catch {}
+  }
+
+  // 2. Fallback / supplementary Windows Uninstall entries
+  const uninstallRecords = matchUninstallEntriesByRule({
+    platform: 'netmarble',
+    storeName: 'Netmarble',
+    defaultPublisher: 'Netmarble',
+    match: (item) => {
+      const pub = String(item.Publisher || '').toLowerCase()
+      const loc = String(item.InstallLocation || '').toLowerCase()
+      const name = String(item.DisplayName || '').toLowerCase()
+      const key = String(item.key || '').toLowerCase()
+      return (
+        pub.includes('netmarble') ||
+        loc.includes('\\netmarble\\') ||
+        loc.includes('\\netmarble game\\') ||
+        key.includes('tog') ||
+        key.includes('gotasia')
+      )
+    },
+    exclude: (item) => {
+      const name = String(item.DisplayName || '').toLowerCase()
+      return name.includes('netmarble launcher') || name === 'netmarble'
+    },
+  }, options)
+
+  for (const rec of uninstallRecords) {
+    const key = (rec.installPath || rec.canonicalTitle).toLowerCase()
+    if (seenPaths.has(key)) continue
+    seenPaths.add(key)
+    records.push(rec)
+  }
+
+  emitProgress(onProgress, { source: 'netmarble', phase: 'complete', current: 1, total: 1, message: `Found ${records.length} Netmarble titles.` })
+  return { source: 'netmarble', records }
+}
+
+function scanNetEase(onProgress, _db, options = {}) {
+  emitProgress(onProgress, { source: 'netease', phase: 'scanning', current: 0, total: 1, message: 'Scanning for NetEase / LoadingBay titles...' })
+  const records = []
+  const seenPaths = new Set()
+
+  // 1. Scan LoadingBay game registry
+  const isMockTest = Array.isArray(options.entries)
+  const regEntries = Array.isArray(options.loadingBayRegistryEntries)
+    ? options.loadingBayRegistryEntries
+    : (isMockTest ? [] : queryRegistryTree('HKEY_CURRENT_USER\\SOFTWARE\\LoadingBay\\LoadingBayInstaller\\game'))
+
+  const uninstallEntries = Array.isArray(options.entries) ? options.entries : getUninstallRegistryEntries()
+  const uninstallByGameId = new Map()
+  for (const item of uninstallEntries) {
+    const key = String(item.key || '')
+    const match = key.match(/Loading\s*Bay\s*(\d+)/i)
+    if (match) {
+      uninstallByGameId.set(match[1], item)
+    }
+  }
+
+  for (const entry of regEntries) {
+    const gameId = String(entry.key || '').split('\\').pop()
+    if (!gameId || !/^\d+$/.test(gameId)) continue
+
+    const installPath = cleanDirectoryPath(entry.InstallPath || entry.LastInstallPath)
+    if (!installPath || !fileExists(installPath)) continue
+    if (seenPaths.has(installPath.toLowerCase())) continue
+
+    const uninst = uninstallByGameId.get(gameId)
+    const rawTitle = uninst?.DisplayName || path.basename(installPath)
+    const title = cleanGameTitle(rawTitle)
+    const startupExe = entry.StartupPath || entry.RunningProcessName
+    const directExe = startupExe ? path.join(installPath, startupExe) : null
+    const executable = (directExe && fileExists(directExe)) ? directExe : resolveGameExecutable(installPath, title)
+    const isInstalled = Boolean(executable && fileExists(executable))
+
+    seenPaths.add(installPath.toLowerCase())
+    records.push({
+      canonicalTitle: title,
+      normalizedTitle: title,
+      description: null,
+      developer: uninst?.Publisher || 'NetEase Games',
+      publisher: 'NetEase Games',
+      releaseDate: null,
+      coverUrl: null,
+      heroUrl: null,
+      isInstalled,
+      driveLetter: getDriveLetter(installPath),
+      installPath,
+      installSizeBytes: directorySizeSafe(installPath),
+      playTimeSeconds: 0,
+      lastPlayed: null,
+      platform: 'netease',
+      platformGameId: `netease:${gameId}`,
+      platformLaunchId: gameId,
+      idSource: 'netease-loadingbay:registry',
+      launchUri: `loadingbay://mygame/?gameId=${gameId}`,
+      installUri: null,
+      executable,
+      launchArguments: null,
+      source: 'local-scan',
+      storeName: 'NetEase',
+      driveStatus: 'online',
+    })
+  }
+
+  // 2. Match standard Windows Uninstall entries
+  const uninstallRecords = matchUninstallEntriesByRule({
+    platform: 'netease',
+    storeName: 'NetEase',
+    defaultPublisher: 'NetEase Games',
+    match: (item) => {
+      const pub = String(item.Publisher || '').toLowerCase()
+      const loc = String(item.InstallLocation || '').toLowerCase()
+      const key = String(item.key || '').toLowerCase()
+      return (
+        pub.includes('netease') ||
+        loc.includes('\\netease\\') ||
+        loc.includes('\\loading bay\\') ||
+        key.includes('loading bay')
+      )
+    },
+    exclude: (item) => {
+      const name = String(item.DisplayName || '').toLowerCase()
+      return (
+        name.replace(/\s+/g, '').includes('loadingbay') ||
+        name.includes('fever') ||
+        name.includes('netease launcher')
+      )
+    },
+  }, options)
+
+  for (const rec of uninstallRecords) {
+    const key = (rec.installPath || rec.canonicalTitle).toLowerCase()
+    if (seenPaths.has(key)) continue
+    seenPaths.add(key)
+    records.push(rec)
+  }
+
+  emitProgress(onProgress, { source: 'netease', phase: 'complete', current: 1, total: 1, message: `Found ${records.length} NetEase titles.` })
+  return { source: 'netease', records }
+}
+
 const PUBLISHER_SCAN_CONFIGS = [
   {
     source: 'cdprojekt',
@@ -133,38 +338,6 @@ const PUBLISHER_SCAN_CONFIGS = [
     exclude: (item) => {
       const name = String(item.DisplayName || '').toLowerCase()
       return name.includes('redlauncher') || name.includes('redprelauncher') || name.includes('redmod')
-    },
-  },
-  {
-    source: 'netmarble',
-    platform: 'netmarble',
-    storeName: 'Netmarble',
-    defaultPublisher: 'Netmarble',
-    label: 'Netmarble',
-    match: (item) => {
-      const pub = String(item.Publisher || '').toLowerCase()
-      const loc = String(item.InstallLocation || '').toLowerCase()
-      return pub.includes('netmarble') || loc.includes('\\netmarble\\')
-    },
-    exclude: (item) => {
-      const name = String(item.DisplayName || '').toLowerCase()
-      return name.includes('netmarble launcher') || name === 'netmarble'
-    },
-  },
-  {
-    source: 'netease',
-    platform: 'netease',
-    storeName: 'NetEase',
-    defaultPublisher: 'NetEase Games',
-    label: 'NetEase',
-    match: (item) => {
-      const pub = String(item.Publisher || '').toLowerCase()
-      const loc = String(item.InstallLocation || '').toLowerCase()
-      return pub.includes('netease') || loc.includes('\\netease\\') || loc.includes('\\loading bay\\')
-    },
-    exclude: (item) => {
-      const name = String(item.DisplayName || '').toLowerCase()
-      return name.includes('loading bay') || name.includes('fever') || name.includes('netease launcher')
     },
   },
   {
@@ -269,8 +442,8 @@ module.exports = {
   scanBattleNet,
   scanRockstar,
   scanCdProjekt: publisherScanners.cdprojekt,
-  scanNetmarble: publisherScanners.netmarble,
-  scanNetEase: publisherScanners.netease,
+  scanNetmarble,
+  scanNetEase,
   scanGaijin: publisherScanners.gaijin,
   scanNexon: publisherScanners.nexon,
   scanKuro: publisherScanners.kuro,

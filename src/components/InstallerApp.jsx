@@ -330,7 +330,7 @@ export function InstallerApp() {
           <span style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em', color: '#94a3b8' }}>
             LOGPILE SETUP
           </span>
-          <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 600 }}>v1.3.95</span>
+          <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 600 }}>v1.3.96</span>
           <span
             style={{
               fontSize: '8.5px',
@@ -815,7 +815,7 @@ export function InstallerApp() {
             </h2>
             <p style={{ margin: '0 0 20px', fontSize: '13px', color: '#94a3b8', maxWidth: '420px', lineHeight: 1.4 }}>
               {isUpdate
-                ? `Upgrade to v1.3.95 completed successfully. All your games, settings, and ${activeTheme.name} theme are intact.`
+                ? `Upgrade to v1.3.96 completed successfully. All your games, settings, and ${activeTheme.name} theme are intact.`
                 : 'Installation completed successfully. Your desktop shortcut and performance monitors are configured.'}
             </p>
 

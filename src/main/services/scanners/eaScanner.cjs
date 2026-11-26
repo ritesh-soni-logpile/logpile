@@ -25,7 +25,12 @@ function scanEA(onProgress) {
       const normalizedPath = folderPath ? path.normalize(folderPath) : null
       const isOnline = normalizedPath && fileExists(normalizedPath)
       const gameId = item.key.split('\\').pop()
-      const cleanTitle = displayName.replace(/[™®]/g, '').replace(/T$/g, '').trim()
+      let cleanTitle = displayName.replace(/[™®]/g, '').trim()
+      if (cleanTitle.toLowerCase().startsWith('unravel')) {
+        cleanTitle = cleanTitle.replace(/T\b/gi, '').replace(/\bUNRAVEL\b/g, 'Unravel').replace(/\btwo\b/g, 'Two').trim()
+      } else {
+        cleanTitle = cleanTitle.replace(/T$/g, '').trim()
+      }
 
       records.push({
         canonicalTitle: cleanTitle,

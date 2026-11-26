@@ -1864,7 +1864,7 @@ export function SettingsModal({
 
           <div className="settings-sidebar-footer">
             <span>Logpile Desktop</span>
-            <span className="settings-card-badge">v1.3.95</span>
+            <span className="settings-card-badge">v1.3.96</span>
           </div>
         </aside>
 
@@ -5664,7 +5664,7 @@ export function SettingsModal({
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <h3 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Logpile Desktop</h3>
-                        <span className="settings-version-tag">v1.3.95</span>
+                        <span className="settings-version-tag">v1.3.96</span>
                       </div>
                       <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '4px 0 0' }}>
                         An offline-first, private personal game sanctuary &amp; library manager.

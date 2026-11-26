@@ -202,10 +202,11 @@ function consolidateGames(games = []) {
   })
 }
 function splitSourceLabels(value) { return String(value || '').split(/[,;|]/).map((label) => normalizeStoreLabel(label.trim())).filter((label) => label && label.toLowerCase() !== 'custom') }
-function sourceLabelsForGame(game) {
+function sourceLabelsForGame(game, installedOnly = false) {
   if (!game) return []
   const rawVariants = game.variants || [game]
-  const variants = [...rawVariants].sort((a, b) => {
+  const filteredVariants = installedOnly ? rawVariants.filter((v) => Boolean(v.is_installed)) : rawVariants
+  const variants = [...filteredVariants].sort((a, b) => {
     const tierDiff = getEditionTierScore(b.canonical_title) - getEditionTierScore(a.canonical_title)
     if (tierDiff !== 0) return tierDiff
     return Number(Boolean(b.is_installed)) - Number(Boolean(a.is_installed))
@@ -214,6 +215,7 @@ function sourceLabelsForGame(game) {
     const customLabels = splitSourceLabels(variant.store_name || variant.storeName || variant.source)
     const sources = variant.sources || []
     const sourceLabels = sources.flatMap((source) => {
+      if (installedOnly && source.is_installed === false) return []
       const split = splitSourceLabels(source.sourceName || source.source_name)
       if (split.length) return split
       const plat = platformLabel(source.platform)
@@ -228,11 +230,11 @@ function sourceLabelsForGame(game) {
   return [...new Set(labels.map(normalizeStoreLabel))]
 }
 function sourceLabelForGame(game) { return sourceLabelsForGame(game)[0] }
-function sourceOptionsForGames(games = []) {
+function sourceOptionsForGames(games = [], installedOnly = false) {
   const counts = new Map()
   for (const game of games) {
     if (game.is_hidden) continue
-    for (const label of sourceLabelsForGame(game)) {
+    for (const label of sourceLabelsForGame(game, installedOnly)) {
       const key = sourceKey(label)
       if (!key) continue
       const current = counts.get(key) || { key, label, count: 0 }
@@ -7710,7 +7712,10 @@ function App() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isDetailView, handleBackToLibrary, isBigPictureMode, handleToggleBigPicture, consoleModeShortcut, allowEscExitConsole])
-  const genres = useMemo(() => [...new Set(games.flatMap((game) => String(game.genres || game.genre || '').split(',').map((genre) => genre.trim()).filter(Boolean)))].sort(), [games]); const sourceOptions = useMemo(() => sourceOptionsForGames(games), [games])
+  const genres = useMemo(() => [...new Set(games.flatMap((game) => String(game.genres || game.genre || '').split(',').map((genre) => genre.trim()).filter(Boolean)))].sort(), [games]); const sourceOptions = useMemo(() => {
+    const isInstalledView = view === 'installed' || view === 'today'
+    return sourceOptionsForGames(isInstalledView ? games.filter((g) => g.is_installed && !g.is_utility && !g.is_dlc) : games, isInstalledView)
+  }, [games, view])
   const sortOptions = useMemo(() => [
     { value: 'title-asc', label: 'Title A–Z' },
     { value: 'title-desc', label: 'Title Z–A' },
@@ -7822,7 +7827,10 @@ function App() {
         result = result.filter((game) => !game.has_guide)
       }
     }
-    if (sourceFilters.length) result = result.filter((game) => sourceFilters.some((source) => sourceLabelsForGame(game).some((label) => sourceKey(label) === source)))
+    if (sourceFilters.length) {
+      const isInstalledView = view === 'installed' || view === 'today'
+      result = result.filter((game) => sourceFilters.some((source) => sourceLabelsForGame(game, isInstalledView).some((label) => sourceKey(label) === source)))
+    }
     if (genreFilter !== 'all') result = result.filter((game) => String(game.genres || game.genre || '').split(',').map((genre) => genre.trim()).includes(genreFilter))
     if (backlogFilter !== 'all') result = result.filter((game) => game.backlog_status === backlogFilter)
     if (timeFilter === 'under5') result = result.filter((game) => game.hltb_main_hours && game.hltb_main_hours < 5)
@@ -11221,7 +11229,7 @@ onDossierInfo={(info) => {
     </div>
   </footer>
 ) : (
-  <footer className="statusbar"><span className="statusbar-item statusbar-terminal"><TerminalSquare size={13} style={{ color: 'var(--accent, #d6ff4b)', opacity: 0.9 }} /> {scannerStatus ? <span className="inline-flex items-center gap-1.5"><span className="pulse-dot" /> {scannerStatus}</span> : 'Ready'}</span>{globalSyncRunning && (<span className="statusbar-item statusbar-sync-active" title="Artwork & metadata sync in progress"><span className="pulse-dot" /><span>{globalSyncProgress?.gameTitle ? `Syncing: ${globalSyncProgress.gameTitle} (${globalSyncProgress.current}/${globalSyncProgress.total})${globalSyncProgress.formattedTransfer ? ` • ${globalSyncProgress.formattedTransfer}` : ''}` : (globalSyncProgress?.message || `Syncing artwork (${globalSyncProgress?.current || 0}/${globalSyncProgress?.total || 0})...`)}</span><button type="button" onClick={handleCancelGlobalSync} className="statusbar-cancel-btn" title="Cancel sync immediately"><X size={11} /> Cancel</button></span>)}{guideSyncStatus?.running && (<span className="statusbar-item statusbar-sync-active" title="Strategy guides downloading from StrategyWiki in progress"><span className="pulse-dot" /><span>{guideSyncStatus.progress?.title ? `Downloading Guides: ${guideSyncStatus.progress.title} (${guideSyncStatus.progress.current}/${guideSyncStatus.progress.total})` : 'Downloading Guides from StrategyWiki...'}</span><button type="button" onClick={() => window.api?.guides?.cancelBatch?.()} className="statusbar-cancel-btn" title="Cancel guide download"><X size={11} /> Cancel</button></span>)}<span className="statusbar-item statusbar-storage"><HardDrive size={11} style={{ color: 'var(--accent, #d6ff4b)', opacity: 0.85 }} /> Offline · Local storage</span>{isVoiceListening && (<span className="statusbar-item statusbar-voice-listening" style={{ color: 'var(--accent, #d6ff4b)' }}><span className="pulse-dot" style={{ background: 'var(--accent, #d6ff4b)', boxShadow: '0 0 8px var(--accent-glow, rgba(214, 255, 75, 0.6))' }} /> Listening (PTT)...</span>)}{connectedGamepad && (<><span className="statusbar-item statusbar-gamepad" title={`Connected Controller: ${connectedGamepad}`}><Gamepad2 size={12} style={{ color: 'var(--accent, #d6ff4b)' }} /><span>{connectedGamepad}</span></span><span className="statusbar-item statusbar-shortcuts" title="Controller Navigation Shortcuts"><span className="statusbar-shortcut-item"><GamepadGlyph button="A" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> Select</span><span className="statusbar-shortcut-item"><GamepadGlyph button="B" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> {isDetailView ? 'Library' : 'Back'}</span><span className="statusbar-shortcut-item"><GamepadGlyph button="X" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> {isDetailView ? 'Launch' : 'Status'}</span><span className="statusbar-shortcut-item"><GamepadGlyph button="Y" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> Fav</span><span className="statusbar-shortcut-item"><GamepadGlyph button="LB/RB" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> {isDetailView ? 'Tabs' : 'Views'}</span>{isDetailView && <span className="statusbar-shortcut-item"><GamepadGlyph button="LT/RT" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> Games</span>}</span></>)}<span className="statusbar-item statusbar-version">Version 1.3.95</span></footer>
+  <footer className="statusbar"><span className="statusbar-item statusbar-terminal"><TerminalSquare size={13} style={{ color: 'var(--accent, #d6ff4b)', opacity: 0.9 }} /> {scannerStatus ? <span className="inline-flex items-center gap-1.5"><span className="pulse-dot" /> {scannerStatus}</span> : 'Ready'}</span>{globalSyncRunning && (<span className="statusbar-item statusbar-sync-active" title="Artwork & metadata sync in progress"><span className="pulse-dot" /><span>{globalSyncProgress?.gameTitle ? `Syncing: ${globalSyncProgress.gameTitle} (${globalSyncProgress.current}/${globalSyncProgress.total})${globalSyncProgress.formattedTransfer ? ` • ${globalSyncProgress.formattedTransfer}` : ''}` : (globalSyncProgress?.message || `Syncing artwork (${globalSyncProgress?.current || 0}/${globalSyncProgress?.total || 0})...`)}</span><button type="button" onClick={handleCancelGlobalSync} className="statusbar-cancel-btn" title="Cancel sync immediately"><X size={11} /> Cancel</button></span>)}{guideSyncStatus?.running && (<span className="statusbar-item statusbar-sync-active" title="Strategy guides downloading from StrategyWiki in progress"><span className="pulse-dot" /><span>{guideSyncStatus.progress?.title ? `Downloading Guides: ${guideSyncStatus.progress.title} (${guideSyncStatus.progress.current}/${guideSyncStatus.progress.total})` : 'Downloading Guides from StrategyWiki...'}</span><button type="button" onClick={() => window.api?.guides?.cancelBatch?.()} className="statusbar-cancel-btn" title="Cancel guide download"><X size={11} /> Cancel</button></span>)}<span className="statusbar-item statusbar-storage"><HardDrive size={11} style={{ color: 'var(--accent, #d6ff4b)', opacity: 0.85 }} /> Offline · Local storage</span>{isVoiceListening && (<span className="statusbar-item statusbar-voice-listening" style={{ color: 'var(--accent, #d6ff4b)' }}><span className="pulse-dot" style={{ background: 'var(--accent, #d6ff4b)', boxShadow: '0 0 8px var(--accent-glow, rgba(214, 255, 75, 0.6))' }} /> Listening (PTT)...</span>)}{connectedGamepad && (<><span className="statusbar-item statusbar-gamepad" title={`Connected Controller: ${connectedGamepad}`}><Gamepad2 size={12} style={{ color: 'var(--accent, #d6ff4b)' }} /><span>{connectedGamepad}</span></span><span className="statusbar-item statusbar-shortcuts" title="Controller Navigation Shortcuts"><span className="statusbar-shortcut-item"><GamepadGlyph button="A" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> Select</span><span className="statusbar-shortcut-item"><GamepadGlyph button="B" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> {isDetailView ? 'Library' : 'Back'}</span><span className="statusbar-shortcut-item"><GamepadGlyph button="X" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> {isDetailView ? 'Launch' : 'Status'}</span><span className="statusbar-shortcut-item"><GamepadGlyph button="Y" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> Fav</span><span className="statusbar-shortcut-item"><GamepadGlyph button="LB/RB" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> {isDetailView ? 'Tabs' : 'Views'}</span>{isDetailView && <span className="statusbar-shortcut-item"><GamepadGlyph button="LT/RT" glyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /> Games</span>}</span></>)}<span className="statusbar-item statusbar-version">Version 1.3.96</span></footer>
 )}</main>
     </div><VirtualKeyboard isOpen={oskOpen} value={query} onChange={(val) => { setQuery(val); setDebouncedQuery(val); setGamepadIndex(0); if (view === 'system' || view === 'today' || view === 'about') setSidebarView('all'); }} onDone={() => { setOskOpen(false); setFocusZone('grid'); setGamepadIndex(0); }} onClose={() => { setOskOpen(false); setFocusZone('grid'); setGamepadIndex(0); }} activeRow={oskRow} activeCol={oskCol} matchCount={filteredGames.length} isGamepadMode={isGamepadMode} gamepadGlyphStyle={gamepadGlyphStyle} connectedGamepad={connectedGamepad} /><SettingsModal isOpen={settingsModalOpen} onClose={() => setSettingsModalOpen(false)} initialTab={settingsModalTab} isGamepadMode={isGamepadMode} settingsSection={settingsSection} settingsCategoryIndex={settingsCategoryIndex} settingsContentIndex={settingsContentIndex} onSettingsTabChange={(tabId) => { setSettingsModalTab(tabId); const idx = SETTINGS_TAB_IDS.indexOf(tabId); if (idx >= 0) setSettingsCategoryIndex(idx); }} gamepadGlyphStyle={gamepadGlyphStyle} onGamepadGlyphStyleChange={handleGamepadGlyphStyleChange} consoleAudioEnabled={consoleAudioEnabled} onToggleConsoleAudio={handleToggleConsoleAudio} stats={stats} health={libraryHealth} backupsList={backupsList} backupBusy={backupBusy} restoreBusy={restoreBusy} onBackupNow={handleBackupNow} onOpenBackupsFolder={handleOpenBackupsFolder} onOpenBackupsManager={handleOpenBackupsManager} onExport={handleExport} onBackupCache={handleBackupCache} onRestoreCache={handleRestoreCache} onPurge={() => setPurgeOpen(true)} onRefresh={() => loadData({ preserveScroll: true })} connectedGamepad={connectedGamepad} hiddenGames={hiddenGames} onRestoreHidden={(game) => updateHiddenState(game, false)} activityLog={activityLog} activityLoading={activityLoading} onRefreshActivity={fetchSystemHealthAndActivity} layoutTheme={layoutTheme} onLayoutThemeChange={handleLayoutThemeChange} sourcesPlacement={sourcesPlacement} onSourcesPlacementChange={handleSourcesPlacementChange} colorPalette={colorPalette} onColorPaletteChange={handleColorPaletteChange} onTriggerIntroPreview={() => { setSettingsModalOpen(false); setShowIntro(true); }} aiUserEnabled={aiUserEnabled} onToggleAiUserEnabled={handleToggleAiUserEnabled} aiInstalled={aiInstalled} isBigPictureMode={isBigPictureMode} onExitBigPicture={() => handleToggleBigPicture(false)} /><AiAssistantDrawer
         open={aiDrawerOpen}

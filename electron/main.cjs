@@ -3494,7 +3494,7 @@ function registerIpc() {
               return {
                 isInstalled: true,
                 installPath: regPath,
-                currentVersion: '1.3.95',
+                currentVersion: '1.3.96',
                 theme: installedTheme?.theme || savedTheme,
                 palette: installedTheme?.palette || savedPalette
               }
@@ -3516,7 +3516,7 @@ function registerIpc() {
           return {
             isInstalled: true,
             installPath: cand,
-            currentVersion: '1.3.95',
+            currentVersion: '1.3.96',
             theme: installedTheme?.theme || savedTheme,
             palette: installedTheme?.palette || savedPalette
           }
@@ -3703,7 +3703,7 @@ function registerIpc() {
         const { execSync } = require('node:child_process')
         try {
           const regBase = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\com.logpile.app'
-          execSync(`reg add "${regBase}" /v DisplayName /d "Logpile" /f && reg add "${regBase}" /v DisplayVersion /d "1.3.95" /f && reg add "${regBase}" /v Publisher /d "Corporate Introvert Gamer" /f && reg add "${regBase}" /v InstallLocation /d "${targetPath}" /f && reg add "${regBase}" /v DisplayIcon /d "${targetPath}\\Logpile.exe,0" /f`, { stdio: 'ignore' })
+          execSync(`reg add "${regBase}" /v DisplayName /d "Logpile" /f && reg add "${regBase}" /v DisplayVersion /d "1.3.96" /f && reg add "${regBase}" /v Publisher /d "Corporate Introvert Gamer" /f && reg add "${regBase}" /v InstallLocation /d "${targetPath}" /f && reg add "${regBase}" /v DisplayIcon /d "${targetPath}\\Logpile.exe,0" /f`, { stdio: 'ignore' })
         } catch (regErr) {
           console.warn('[Installer] Registry note:', regErr?.message)
         }
