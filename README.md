@@ -39,7 +39,7 @@ Logpile is built for gamers who want the best offline PC game launcher, library 
 
 ## How Logpile Compares
 
-<img width="1360" height="1260" alt="comparison_table" src="https://github.com/user-attachments/assets/1391c89a-93ea-40fa-b743-18ffee0ccfbb" />
+<img width="1360" height="1260" alt="comparison_table" src="comparison_table.png" />
 
 | Feature | Logpile v1.3.96 | Steam | Playnite | GOG Galaxy | LaunchBox |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -219,8 +219,8 @@ Tracks your true gaming journey: backlog campaign debt (HLTB synced), source dis
 
 ### For Gamers
 1. Grab the latest installer or portable archive from [Releases](../../releases/latest):
-   - **Installer:** [`Logpile.Setup.1.3.95.exe`](https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.95/Logpile.Setup.1.3.95.exe)
-   - **Portable (.zip):** [`Logpile-1.3.95-win.zip`](https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.95/Logpile-1.3.95-win.zip)
+   - **Installer:** [`Logpile.Setup.1.3.96.exe`](https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.96/Logpile.Setup.1.3.96.exe)
+   - **Portable (.zip):** [`Logpile-1.3.96-win.zip`](https://github.com/ritesh-soni-logpile/logpile/releases/download/v1.3.96/Logpile-1.3.96-win.zip)
 2. Extract or install to any internal drive or portable SSD (`logpile_data/` stores all assets self-contained).
 3. *(Optional)* Drop any quantized `.gguf` model into the `/models` directory to enable offline conversational backlog guidance.
 
