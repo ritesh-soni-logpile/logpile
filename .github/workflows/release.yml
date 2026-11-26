@@ -50,16 +50,32 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Extract Release Notes from CHANGELOG.md
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $changelog = Get-Content -Raw CHANGELOG.md
+          $tag = "${{ github.ref_name }}"
+          if ($changelog -match "(?s)## \[$tag\].*?(?=(?:\r?\n## \[|\z))") {
+            $notes = $matches[0].Trim()
+            Set-Content -Path "release_notes.md" -Value $notes -Encoding UTF8
+            Write-Host "Successfully extracted changelog notes for $tag"
+          } else {
+            Set-Content -Path "release_notes.md" -Value "## Logpile $tag" -Encoding UTF8
+            Write-Host "No matching section found in CHANGELOG.md; wrote fallback header"
+          }
+
       - name: Publish to GitHub Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
+          name: Logpile ${{ github.ref_name }}
+          body_path: release_notes.md
           files: |
             dist/*.exe
             dist/*.zip
             dist/*.blockmap
             dist/latest.yml
-          generate_release_notes: true
           draft: false
           prerelease: false
         env:
