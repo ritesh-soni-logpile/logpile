@@ -131,6 +131,21 @@ Logpile includes over 50 custom in-game telemetry HUDs powered by Intel PresentM
 
 ---
 
+### 5. 4K Ultra-Wide Brag Showcase Collage Engine
+Export your game sanctuary into balanced high-resolution gallery posters across multiple sanctuary themes, accent palettes, and aspect ratios (Full Grid, 16:9, 9:16, 1:1) in a single click with automatic clipboard copy.
+
+<p align="center">
+  <img src="docs/assets/brag-showcase-amber.jpg" width="24%" alt="Logpile 4K Brag Showcase - Amber Gold" />
+  <img src="docs/assets/brag-showcase-crimson.jpg" width="24%" alt="Logpile 4K Brag Showcase - Crimson Red" />
+  <img src="docs/assets/brag-showcase-emerald.jpg" width="24%" alt="Logpile 4K Brag Showcase - Emerald Green" />
+  <img src="docs/assets/brag-showcase-slate.jpg" width="24%" alt="Logpile 4K Brag Showcase - OLED Slate" />
+</p>
+
+- **Dynamic Aspect Ratios & Title Wrapping:** Dynamic column scaling, high-DPI aspect-fill cover rendering, and multi-line title wrapping to prevent name clipping.
+- **Whole-Page Continuous Stitching:** Capture complete scrollable pages—including full library grids, game dossiers, and settings—into single seamless vertical images.
+
+---
+
 ## What's New in v1.3.96
 
 ### Epic Games v2 Migration, Native Netmarble & LoadingBay Scanners
