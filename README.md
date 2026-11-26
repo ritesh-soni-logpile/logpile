@@ -60,7 +60,7 @@ Logpile is built for gamers who want the best offline PC game launcher, library 
 | **Offline Strategy Guides** | **Built-in:** Offline guide, map & tip viewer | Community web browser tabs only | External browser links only | External browser links only | External browser links only |
 | **Themed Performance HUD** | **50+ Custom Styles:** Themed in-game overlays (0% idle GPU) | Basic plain text FPS counter | Third-party tools needed (RTSS) | Basic plain text FPS counter | Third-party tools needed |
 | **Theme Studio & Custom CSS** | **Built-in:** Live CSS injector, natural language synthesis, 8 community themes | No | Third-party skin plugins | No | Themes via community themes |
-| **Full Page & 4K Brag Snaps** | **Built-in:** Continuous vertical settings capture & 4K UHD gallery posters | Basic desktop screenshot | Screenshot plugins | Basic screenshot | Basic screenshot |
+| **Full Page & 4K Brag Snaps** | **Built-in:** Continuous vertical dossier, dashboard & settings capture + 4K UHD gallery posters | Basic desktop screenshot | Screenshot plugins | Basic screenshot | Basic screenshot |
 | **Big Picture Console Mode** | **5 Theme Worlds:** Distinct 10-foot UIs, Couch OSK, Adaptive Glyphs & Voice AI | One fixed layout | Fullscreen mode (theme-dependent) | No | Paid Big Box mode |
 | **Controller Auto-Detect** | **Yes:** Instant Windows plug-and-play detection | Big Picture mode or manual setup | Wake-up button press required | Manual setup / limited | Wake-up button press required |
 | **Privacy & Offline First** | **100% Offline:** MIT open source, zero logins, zero tracking | Closed source, store accounts & tracking | Open source, relies on store logins | Closed source, accounts & telemetry | Closed source, logins for metadata |
@@ -96,8 +96,7 @@ Press `F11`, `Ctrl+Shift+F`, or click **Console Mode** in the top bar to switch 
 Selecting any game opens its dedicated Dossier stage, adapting color and styling to your active sanctuary theme.
 
 <p align="center">
-  <img src="docs/assets/game-dossier-hero.jpg" width="49%" alt="Resident Evil 2 Game Dossier Hero" />
-  <img src="docs/assets/game-dossier-overview.jpg" width="49%" alt="Resident Evil 2 Dossier Specs, HLTB & Franchise" />
+  <img src="docs/assets/game-dossier-full.png" width="82%" alt="Logpile Full Game Dossier - Middle-earth: Shadow of War (Competitive Theme)" />
 </p>
 
 - **Specs & Details:** Developer, publisher, release date, platform tags, and HowLongToBeat completion times.
@@ -142,7 +141,7 @@ Export your game sanctuary into balanced high-resolution gallery posters across 
 </p>
 
 - **Dynamic Aspect Ratios & Title Wrapping:** Dynamic column scaling, high-DPI aspect-fill cover rendering, and multi-line title wrapping to prevent name clipping.
-- **Whole-Page Continuous Stitching:** Capture complete scrollable pages—including full library grids, game dossiers, and settings—into single seamless vertical images.
+- **Whole-Page Continuous Stitching:** Capture complete scrollable pages—including full game dossiers, Sanctuary Dashboard, Today's Pick, and Settings—into single seamless vertical images.
 
 ---
 
