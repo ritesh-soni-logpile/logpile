@@ -6991,21 +6991,16 @@ function App() {
         box-shadow: none !important;
         border-top-color: transparent !important;
       }
+      .cinematic-scroll-pill {
+        display: none !important;
+      }
     `
     document.head.appendChild(overrideStyle)
-
-    const heroStage = isDetailView ? scrollEl.querySelector('.cinematic-hero-stage') : null
-    const dossierSection = isDetailView ? scrollEl.querySelector('.cinematic-dossier-section') : null
-    const backdropWrap = isDetailView ? document.querySelector('.global-detail-backdrop-wrap') : null
-    const scrollPill = isDetailView ? scrollEl.querySelector('.cinematic-scroll-pill') : null
 
     const cleanupCaptureState = () => {
       try {
         overrideStyle.remove()
       } catch {}
-      if (heroStage) heroStage.style.display = ''
-      if (backdropWrap) backdropWrap.style.display = ''
-      if (scrollPill) scrollPill.style.display = ''
       document.body.classList.remove('is-fullpage-capturing')
       if (shellEl) shellEl.classList.remove('is-fullpage-capturing')
       scrollEl.scrollTop = originalScrollTop
@@ -7036,9 +7031,7 @@ function App() {
       const captureHeight = viewportHeight || Math.round(rect.height)
       const captureY = Math.round(rect.y)
 
-      const heroHeight = (heroStage && dossierSection) ? (Math.round(heroStage.getBoundingClientRect().height) || captureHeight) : 0
-      const dossierHeight = (heroStage && dossierSection) ? (Math.round(dossierSection.scrollHeight) || Math.round(dossierSection.getBoundingClientRect().height)) : 0
-      const totalHeightToCapture = (heroStage && dossierSection) ? (heroHeight + dossierHeight) : totalHeight
+      const totalHeightToCapture = totalHeight
 
       // If already fits within single viewport or invalid width, capture directly with full view prefix
       if (totalHeightToCapture <= viewportHeight + 10 || captureWidth <= 10) {
@@ -7102,190 +7095,92 @@ function App() {
         0, 0, canvas.width, stepCanvasHeight
       )
 
-      if (heroStage && dossierSection) {
-        // Hide fixed hero stage and backdrop so subsequent slices only scroll and capture dossier content
-        heroStage.style.display = 'none'
-        if (backdropWrap) backdropWrap.style.display = 'none'
-        if (scrollPill) scrollPill.style.display = 'none'
+      // Universal view scrolling capture across all pages (Game Dossier, Dashboard, Library Grid, Today's Pick)
+      let currentScrolledDips = stepDips
+      let currentCanvasY = stepCanvasHeight
 
-        scrollEl.scrollTop = 0
-        await new Promise((resolve) => {
-          requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 150)))
-        })
+      while (currentScrolledDips < totalHeightToCapture) {
+        const remainingDips = totalHeightToCapture - currentScrolledDips
+        if (remainingDips <= 0) break
 
-        let currentDossierY = 0
-        let currentCanvasY = stepCanvasHeight
+        if (remainingDips >= stepDips) {
+          // Advance by exact captured height (zero overlap, zero skipped pixels)
+          scrollEl.scrollTop = currentScrolledDips
+          await new Promise((resolve) => {
+            requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 150)))
+          })
 
-        while (currentDossierY < dossierHeight) {
-          const remainingDips = dossierHeight - currentDossierY
-          if (remainingDips <= 0) break
+          const sliceRes = await api.window?.captureRect?.({
+            x: Math.round(rect.x),
+            y: captureY,
+            width: captureWidth,
+            height: stepDips,
+          })
 
-          if (remainingDips >= stepDips) {
-            scrollEl.scrollTop = currentDossierY
-            await new Promise((resolve) => {
-              requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 150)))
-            })
-
-            const sliceRes = await api.window?.captureRect?.({
-              x: Math.round(rect.x),
-              y: captureY,
-              width: captureWidth,
-              height: stepDips,
-            })
-
-            if (!sliceRes?.success || !sliceRes?.dataUrl) {
-              throw new Error(sliceRes?.error || 'Failed capturing view segment')
-            }
-
-            const sliceImg = new Image()
-            sliceImg.src = sliceRes.dataUrl
-            await new Promise((resolve, reject) => {
-              sliceImg.onload = resolve
-              sliceImg.onerror = reject
-            })
-
-            ctx.drawImage(
-              sliceImg,
-              0, 0, sliceImg.naturalWidth, sliceImg.naturalHeight,
-              0, currentCanvasY, canvas.width, stepCanvasHeight
-            )
-
-            currentDossierY += stepDips
-            currentCanvasY += stepCanvasHeight
-          } else {
-            // Final slice of dossier
-            const bottomScrollTop = Math.max(0, dossierHeight - stepDips)
-            scrollEl.scrollTop = bottomScrollTop
-            await new Promise((resolve) => {
-              requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 150)))
-            })
-
-            const lastRes = await api.window?.captureRect?.({
-              x: Math.round(rect.x),
-              y: captureY,
-              width: captureWidth,
-              height: stepDips,
-            })
-
-            if (!lastRes?.success || !lastRes?.dataUrl) {
-              throw new Error(lastRes?.error || 'Failed capturing view segment')
-            }
-
-            const lastImg = new Image()
-            lastImg.src = lastRes.dataUrl
-            await new Promise((resolve, reject) => {
-              lastImg.onload = resolve
-              lastImg.onerror = reject
-            })
-
-            const sourceCropY = dossierHeight >= stepDips
-              ? Math.round((stepDips - remainingDips) * (lastImg.naturalHeight / stepDips))
-              : 0
-            const sourceCropH = Math.min(
-              lastImg.naturalHeight - sourceCropY,
-              Math.round(remainingDips * (lastImg.naturalHeight / stepDips))
-            )
-            const destCropH = canvas.height - currentCanvasY
-
-            ctx.drawImage(
-              lastImg,
-              0, sourceCropY, lastImg.naturalWidth, sourceCropH,
-              0, currentCanvasY, canvas.width, destCropH
-            )
-
-            currentDossierY = dossierHeight
-            currentCanvasY = canvas.height
-            break
+          if (!sliceRes?.success || !sliceRes?.dataUrl) {
+            throw new Error(sliceRes?.error || 'Failed capturing view segment')
           }
-        }
-      } else {
-        // Standard view scrolling capture (Dashboard, Settings, Library Grid)
-        let currentScrolledDips = stepDips
-        let currentCanvasY = stepCanvasHeight
 
-        while (currentScrolledDips < totalHeight) {
-          const remainingDips = totalHeight - currentScrolledDips
-          if (remainingDips <= 0) break
+          const sliceImg = new Image()
+          sliceImg.src = sliceRes.dataUrl
+          await new Promise((resolve, reject) => {
+            sliceImg.onload = resolve
+            sliceImg.onerror = reject
+          })
 
-          if (remainingDips >= stepDips) {
-            // Advance by exact captured height (zero overlap, zero skipped pixels)
-            scrollEl.scrollTop = currentScrolledDips
-            await new Promise((resolve) => {
-              requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 150)))
-            })
+          ctx.drawImage(
+            sliceImg,
+            0, 0, sliceImg.naturalWidth, sliceImg.naturalHeight,
+            0, currentCanvasY, canvas.width, stepCanvasHeight
+          )
 
-            const sliceRes = await api.window?.captureRect?.({
-              x: Math.round(rect.x),
-              y: captureY,
-              width: captureWidth,
-              height: stepDips,
-            })
+          currentScrolledDips += stepDips
+          currentCanvasY += stepCanvasHeight
+        } else {
+          // Final slice: scroll to very bottom and crop only the exact remaining tail
+          const bottomScrollTop = Math.max(0, totalHeightToCapture - stepDips)
+          scrollEl.scrollTop = bottomScrollTop
+          await new Promise((resolve) => {
+            requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 150)))
+          })
 
-            if (!sliceRes?.success || !sliceRes?.dataUrl) {
-              throw new Error(sliceRes?.error || 'Failed capturing view segment')
-            }
+          const lastRes = await api.window?.captureRect?.({
+            x: Math.round(rect.x),
+            y: captureY,
+            width: captureWidth,
+            height: stepDips,
+          })
 
-            const sliceImg = new Image()
-            sliceImg.src = sliceRes.dataUrl
-            await new Promise((resolve, reject) => {
-              sliceImg.onload = resolve
-              sliceImg.onerror = reject
-            })
-
-            ctx.drawImage(
-              sliceImg,
-              0, 0, sliceImg.naturalWidth, sliceImg.naturalHeight,
-              0, currentCanvasY, canvas.width, stepCanvasHeight
-            )
-
-            currentScrolledDips += stepDips
-            currentCanvasY += stepCanvasHeight
-          } else {
-            // Final slice: scroll to very bottom and crop only the exact remaining tail
-            const bottomScrollTop = Math.max(0, totalHeight - stepDips)
-            scrollEl.scrollTop = bottomScrollTop
-            await new Promise((resolve) => {
-              requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 150)))
-            })
-
-            const lastRes = await api.window?.captureRect?.({
-              x: Math.round(rect.x),
-              y: captureY,
-              width: captureWidth,
-              height: stepDips,
-            })
-
-            if (!lastRes?.success || !lastRes?.dataUrl) {
-              throw new Error(lastRes?.error || 'Failed capturing view segment')
-            }
-
-            const lastImg = new Image()
-            lastImg.src = lastRes.dataUrl
-            await new Promise((resolve, reject) => {
-              lastImg.onload = resolve
-              lastImg.onerror = reject
-            })
-
-            // In this bottom-anchored capture, only the bottom `remainingDips` is needed
-            const sourceCropY = totalHeight >= stepDips
-              ? Math.round((stepDips - remainingDips) * (lastImg.naturalHeight / stepDips))
-              : 0
-            const sourceCropH = Math.min(
-              lastImg.naturalHeight - sourceCropY,
-              Math.round(remainingDips * (lastImg.naturalHeight / stepDips))
-            )
-            const destCropH = canvas.height - currentCanvasY
-
-            ctx.drawImage(
-              lastImg,
-              0, sourceCropY, lastImg.naturalWidth, sourceCropH,
-              0, currentCanvasY, canvas.width, destCropH
-            )
-
-            currentScrolledDips = totalHeight
-            currentCanvasY = canvas.height
-            break
+          if (!lastRes?.success || !lastRes?.dataUrl) {
+            throw new Error(lastRes?.error || 'Failed capturing view segment')
           }
+
+          const lastImg = new Image()
+          lastImg.src = lastRes.dataUrl
+          await new Promise((resolve, reject) => {
+            lastImg.onload = resolve
+            lastImg.onerror = reject
+          })
+
+          // In this bottom-anchored capture, only the bottom `remainingDips` is needed
+          const sourceCropY = totalHeightToCapture >= stepDips
+            ? Math.round((stepDips - remainingDips) * (lastImg.naturalHeight / stepDips))
+            : 0
+          const sourceCropH = Math.min(
+            lastImg.naturalHeight - sourceCropY,
+            Math.round(remainingDips * (lastImg.naturalHeight / stepDips))
+          )
+          const destCropH = canvas.height - currentCanvasY
+
+          ctx.drawImage(
+            lastImg,
+            0, sourceCropY, lastImg.naturalWidth, sourceCropH,
+            0, currentCanvasY, canvas.width, destCropH
+          )
+
+          currentScrolledDips = totalHeightToCapture
+          currentCanvasY = canvas.height
+          break
         }
       }
 
