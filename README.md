@@ -39,7 +39,7 @@ Logpile is built for gamers who want the best offline PC game launcher, library 
 
 ## How Logpile Compares
 
-<img width="1360" height="1260" alt="comparison_table" src="comparison_table.png" />
+<img width="1360" height="1260" alt="comparison_table" src="docs/assets/comparison_table.png" />
 
 | Feature | Logpile v1.3.96 | Steam | Playnite | GOG Galaxy | LaunchBox |
 | :--- | :--- | :--- | :--- | :--- | :--- |
