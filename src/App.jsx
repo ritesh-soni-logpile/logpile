@@ -3955,7 +3955,7 @@ function VirtualGrid({
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollElementRef?.current || gridRef.current,
-    estimateSize: () => (isBigPictureMode ? 440 : 360),
+    estimateSize: () => (isBigPictureMode ? 460 : 420),
     overscan: 4,
     scrollMargin,
     initialOffset: initialScrollTop || 0,
@@ -7011,6 +7011,13 @@ function App() {
       .cinematic-scroll-pill {
         display: none !important;
       }
+      .main-scroll::-webkit-scrollbar,
+      .main-scroll-fullbleed::-webkit-scrollbar,
+      ::-webkit-scrollbar {
+        display: none !important;
+        width: 0px !important;
+        height: 0px !important;
+      }
     `
     document.head.appendChild(overrideStyle)
 
@@ -7038,20 +7045,28 @@ function App() {
       prefix = 'Logpile-FullSettings'
     } else if (view === 'about') {
       prefix = 'Logpile-FullAbout'
+    } else if (view === 'ready') {
+      prefix = `Logpile-FullReadyToInstall-${layoutTheme}`
+    } else if (view === 'installed') {
+      prefix = `Logpile-FullInstalled-${layoutTheme}`
+    } else if (view === 'all') {
+      prefix = `Logpile-FullAllGames-${layoutTheme}`
+    } else if (view === 'utilities') {
+      prefix = `Logpile-FullUtilities-${layoutTheme}`
+    } else if (view === 'dlc') {
+      prefix = `Logpile-FullDLC-${layoutTheme}`
     }
 
     try {
       const rect = scrollEl.getBoundingClientRect()
-      const totalHeight = scrollEl.scrollHeight
       const viewportHeight = scrollEl.clientHeight
       const captureWidth = Math.round(rect.width)
       const captureHeight = viewportHeight || Math.round(rect.height)
       const captureY = Math.round(rect.y)
-
-      const totalHeightToCapture = totalHeight
+      const stepDips = captureHeight
 
       // If already fits within single viewport or invalid width, capture directly with full view prefix
-      if (totalHeightToCapture <= viewportHeight + 10 || captureWidth <= 10) {
+      if (scrollEl.scrollHeight <= viewportHeight + 10 || captureWidth <= 10) {
         cleanupCaptureState()
         const directRes = await api.window?.captureScreen?.(prefix)
         if (directRes?.success) {
@@ -7070,9 +7085,12 @@ function App() {
         }
         void scrollEl.offsetHeight
         await new Promise((resolve) => {
-          requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 200)))
+          requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 180)))
         })
       }
+
+      // Slices accumulator
+      const slices = []
 
       // Capture top slice at scrollTop = 0
       await applyScrollPosition(0)
@@ -7095,111 +7113,132 @@ function App() {
         firstImg.onerror = reject
       })
 
-      let scale = firstImg.naturalWidth / captureWidth
-      const rawCanvasHeight = Math.round(totalHeightToCapture * scale)
-      const maxDim = 16384
-      if (rawCanvasHeight > maxDim) {
-        scale = maxDim / totalHeightToCapture
+      const dpr = firstImg.naturalWidth / captureWidth
+      const actualFirstHeightDips = firstRes.capturedHeight || captureHeight
+
+      slices.push({
+        img: firstImg,
+        topDips: 0,
+        heightDips: actualFirstHeightDips,
+        isTail: false,
+      })
+
+      let coveredTopDips = actualFirstHeightDips
+
+      // Dynamically traverse the full scrollHeight across any virtualized grid (Installed, Ready to Install, etc.)
+      let maxLoops = 250 // Safety cap covering massive libraries
+      while (maxLoops-- > 0) {
+        const liveScrollHeight = scrollEl.scrollHeight
+        const maxScrollTop = Math.max(0, liveScrollHeight - viewportHeight)
+
+        // When covered dips reach or exceed maxScrollTop, only the remaining tail needs capturing
+        if (coveredTopDips >= maxScrollTop) {
+          const remainingTailDips = liveScrollHeight - coveredTopDips
+          if (remainingTailDips > 1) {
+            // Scroll to absolute bottom to expose the final remaining tail
+            await applyScrollPosition(maxScrollTop)
+
+            const tailRes = await api.window?.captureRect?.({
+              x: Math.round(rect.x),
+              y: captureY,
+              width: captureWidth,
+              height: captureHeight,
+            })
+
+            if (tailRes?.success && tailRes?.dataUrl) {
+              const tailImg = new Image()
+              tailImg.src = tailRes.dataUrl
+              await new Promise((resolve, reject) => {
+                tailImg.onload = resolve
+                tailImg.onerror = reject
+              })
+
+              const naturalH = tailImg.naturalHeight
+              const sourceCropY = Math.max(0, Math.round((viewportHeight - remainingTailDips) * dpr))
+              const sourceCropH = Math.min(naturalH - sourceCropY, Math.round(remainingTailDips * dpr))
+
+              slices.push({
+                img: tailImg,
+                topDips: coveredTopDips,
+                heightDips: remainingTailDips,
+                isTail: true,
+                cropY: sourceCropY,
+                cropH: sourceCropH,
+              })
+              coveredTopDips += remainingTailDips
+            }
+          }
+          break
+        }
+
+        // Advance to next uncaptured slice
+        const targetScrollTop = Math.min(coveredTopDips, maxScrollTop)
+        await applyScrollPosition(targetScrollTop)
+
+        const sliceRes = await api.window?.captureRect?.({
+          x: Math.round(rect.x),
+          y: captureY,
+          width: captureWidth,
+          height: stepDips,
+        })
+
+        if (!sliceRes?.success || !sliceRes?.dataUrl) {
+          throw new Error(sliceRes?.error || 'Failed capturing view segment')
+        }
+
+        const sliceImg = new Image()
+        sliceImg.src = sliceRes.dataUrl
+        await new Promise((resolve, reject) => {
+          sliceImg.onload = resolve
+          sliceImg.onerror = reject
+        })
+
+        const sliceHeightDips = sliceRes.capturedHeight || stepDips
+        slices.push({
+          img: sliceImg,
+          topDips: coveredTopDips,
+          heightDips: sliceHeightDips,
+          isTail: false,
+        })
+
+        coveredTopDips += sliceHeightDips
+
+        const progressPercent = Math.min(98, Math.round((coveredTopDips / scrollEl.scrollHeight) * 100))
+        setNotice(`Capturing full view (${progressPercent}% · slice ${slices.length})...`)
+      }
+
+      setNotice('Stitching full view into PNG...')
+
+      const totalDips = coveredTopDips
+      const maxCanvasDim = 16384
+      let outputScale = dpr
+      const rawPixelHeight = Math.round(totalDips * outputScale)
+      if (rawPixelHeight > maxCanvasDim) {
+        outputScale = maxCanvasDim / totalDips
       }
 
       const canvas = document.createElement('canvas')
-      canvas.width = Math.round(captureWidth * scale)
-      canvas.height = Math.round(totalHeightToCapture * scale)
+      canvas.width = Math.round(captureWidth * outputScale)
+      canvas.height = Math.round(totalDips * outputScale)
       const ctx = canvas.getContext('2d')
       ctx.imageSmoothingEnabled = true
       ctx.imageSmoothingQuality = 'high'
 
-      // Exact DIP height actually captured by the window
-      const stepDips = firstRes.capturedHeight || captureHeight
-      const stepCanvasHeight = Math.round(stepDips * scale)
-
-      // Draw top slice (from 0 to stepDips)
-      ctx.drawImage(
-        firstImg,
-        0, 0, firstImg.naturalWidth, firstImg.naturalHeight,
-        0, 0, canvas.width, stepCanvasHeight
-      )
-
-      // Universal view scrolling capture across all pages (Game Dossier, Dashboard, Library Grid, Today's Pick)
-      let currentScrolledDips = stepDips
-      let currentCanvasY = stepCanvasHeight
-
-      while (currentScrolledDips < totalHeightToCapture) {
-        const remainingDips = totalHeightToCapture - currentScrolledDips
-        if (remainingDips <= 0) break
-
-        if (remainingDips >= stepDips) {
-          // Advance by exact captured height (zero overlap, zero skipped pixels)
-          await applyScrollPosition(currentScrolledDips)
-
-          const sliceRes = await api.window?.captureRect?.({
-            x: Math.round(rect.x),
-            y: captureY,
-            width: captureWidth,
-            height: stepDips,
-          })
-
-          if (!sliceRes?.success || !sliceRes?.dataUrl) {
-            throw new Error(sliceRes?.error || 'Failed capturing view segment')
-          }
-
-          const sliceImg = new Image()
-          sliceImg.src = sliceRes.dataUrl
-          await new Promise((resolve, reject) => {
-            sliceImg.onload = resolve
-            sliceImg.onerror = reject
-          })
-
+      for (const slice of slices) {
+        const destY = Math.round(slice.topDips * outputScale)
+        const destH = Math.round(slice.heightDips * outputScale)
+        if (slice.isTail) {
           ctx.drawImage(
-            sliceImg,
-            0, 0, sliceImg.naturalWidth, sliceImg.naturalHeight,
-            0, currentCanvasY, canvas.width, stepCanvasHeight
+            slice.img,
+            0, slice.cropY, slice.img.naturalWidth, slice.cropH,
+            0, destY, canvas.width, destH
           )
-
-          currentScrolledDips += stepDips
-          currentCanvasY += stepCanvasHeight
         } else {
-          // Final slice: scroll to very bottom and crop only the exact remaining tail
-          const bottomScrollTop = Math.max(0, totalHeightToCapture - stepDips)
-          await applyScrollPosition(bottomScrollTop)
-
-          const lastRes = await api.window?.captureRect?.({
-            x: Math.round(rect.x),
-            y: captureY,
-            width: captureWidth,
-            height: stepDips,
-          })
-
-          if (!lastRes?.success || !lastRes?.dataUrl) {
-            throw new Error(lastRes?.error || 'Failed capturing view segment')
-          }
-
-          const lastImg = new Image()
-          lastImg.src = lastRes.dataUrl
-          await new Promise((resolve, reject) => {
-            lastImg.onload = resolve
-            lastImg.onerror = reject
-          })
-
-          // In this bottom-anchored capture, only the bottom `remainingDips` is needed
-          const sourceCropY = totalHeightToCapture >= stepDips
-            ? Math.round((stepDips - remainingDips) * (lastImg.naturalHeight / stepDips))
-            : 0
-          const sourceCropH = Math.min(
-            lastImg.naturalHeight - sourceCropY,
-            Math.round(remainingDips * (lastImg.naturalHeight / stepDips))
-          )
-          const destCropH = canvas.height - currentCanvasY
-
           ctx.drawImage(
-            lastImg,
-            0, sourceCropY, lastImg.naturalWidth, sourceCropH,
-            0, currentCanvasY, canvas.width, destCropH
+            slice.img,
+            0, 0, slice.img.naturalWidth, slice.img.naturalHeight,
+            0, destY, canvas.width, destH
           )
-
-          currentScrolledDips = totalHeightToCapture
-          currentCanvasY = canvas.height
-          break
         }
       }
 
@@ -10281,7 +10320,7 @@ function App() {
                 <Layers size={13} style={{ color: 'var(--accent, #f59e0b)' }} />
                 <div>
                   <span className="brag-dropdown-title">Full View (Whole Page PNG)</span>
-                  <span className="brag-dropdown-sub">Complete scrollable page (Dashboard, Game Dossier, Settings)</span>
+                  <span className="brag-dropdown-sub">Complete scrollable page (Installed, Ready to Install, Game Dossier, Dashboard)</span>
                 </div>
               </button>
               <button
