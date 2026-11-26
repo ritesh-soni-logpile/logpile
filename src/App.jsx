@@ -4568,7 +4568,6 @@ function HeroView({
   layoutTheme = 'cinematic',
   onIdleChange,
   onScrollStateChange,
-  onSnapHero,
   onAskAi,
   familyLocks = {},
   isGamepadMode = false,
@@ -5365,24 +5364,10 @@ function HeroView({
                 <span>Captures{localCaptures.length > 0 ? ` (${localCaptures.length})` : ''}</span>
               </button>
 
-              <button
-                type="button"
-                className={cn('hero-ghost-btn', isGamepadMode && dossierSection === 'actions' && dossierActionIndex === 3 && 'gamepad-focused')}
-                title={`Snap this ${layoutTheme.toUpperCase()} theme view (PNG)`}
-                onClick={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  onSnapHero?.(activeGame)
-                }}
-              >
-                <Camera size={14} />
-                <span>Snap Theme</span>
-              </button>
-
               {onAskAi ? (
                 <button
                   type="button"
-                  className={cn('hero-ghost-btn', isGamepadMode && dossierSection === 'actions' && dossierActionIndex === 4 && 'gamepad-focused')}
+                  className={cn('hero-ghost-btn', isGamepadMode && dossierSection === 'actions' && dossierActionIndex === 3 && 'gamepad-focused')}
                   title={`Ask Gaming AI about ${activeGame.canonical_title}`}
                   onClick={(e) => {
                     e.preventDefault()
@@ -5398,7 +5383,7 @@ function HeroView({
               {guideReady ? (
                 <button
                   type="button"
-                  className={cn('hero-ghost-btn', isGamepadMode && dossierSection === 'actions' && dossierActionIndex === 5 && 'gamepad-focused')}
+                  className={cn('hero-ghost-btn', isGamepadMode && dossierSection === 'actions' && dossierActionIndex === 4 && 'gamepad-focused')}
                   style={{ borderColor: 'rgba(74, 222, 128, 0.35)', color: '#4ade80' }}
                   title="Offline walkthrough indexed in SQLite knowledge base. Click to open AI guide."
                   onClick={(e) => {
@@ -5414,7 +5399,7 @@ function HeroView({
               ) : (
                 <button
                   type="button"
-                  className={cn('hero-ghost-btn', isGamepadMode && dossierSection === 'actions' && dossierActionIndex === 5 && 'gamepad-focused')}
+                  className={cn('hero-ghost-btn', isGamepadMode && dossierSection === 'actions' && dossierActionIndex === 4 && 'gamepad-focused')}
                   title={`Download offline walkthrough guide for ${activeGame.canonical_title}`}
                   onClick={handleDownloadSingleGuide}
                   disabled={downloadingGuide}
@@ -5429,7 +5414,7 @@ function HeroView({
               {onEdit ? (
                 <button
                   type="button"
-                  className={cn('hero-ghost-btn', isGamepadMode && dossierSection === 'actions' && dossierActionIndex === 6 && 'gamepad-focused')}
+                  className={cn('hero-ghost-btn', isGamepadMode && dossierSection === 'actions' && dossierActionIndex === 5 && 'gamepad-focused')}
                   onClick={() => onEdit(activeGame)}
                   title="Edit metadata & artwork"
                 >
@@ -5440,7 +5425,7 @@ function HeroView({
 
               <button
                 type="button"
-                className={cn('hero-ghost-btn hero-details-scroll-btn', isGamepadMode && dossierSection === 'actions' && dossierActionIndex === 7 && 'gamepad-focused')}
+                className={cn('hero-ghost-btn hero-details-scroll-btn', isGamepadMode && dossierSection === 'actions' && dossierActionIndex === 6 && 'gamepad-focused')}
                 title="Scroll to specifications & story overview"
                 onClick={() => {
                   const dossierEl = document.querySelector('.cinematic-dossier-section')
@@ -5509,18 +5494,6 @@ function HeroView({
                     >
                       <UploadCloud size={14} />
                       <span>Upload Custom Hero Banner</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      className="hero-menu-item"
-                      onClick={() => {
-                        setMoreMenuOpen(false)
-                        onSnapHero?.(activeGame)
-                      }}
-                    >
-                      <Camera size={14} />
-                      <span>Snap Theme View (PNG)</span>
                     </button>
 
                     <div className="hero-menu-divider" />
@@ -6450,7 +6423,7 @@ function App() {
     return () => window.removeEventListener('keydown', handleKey)
   }, [toggleSidebar, handleToggleSpotlight, inAppSearchShortcut, consoleModeShortcut, handleToggleBigPicture])
 
-  const mainScrollRef = useRef(null); const spinTodayRef = useRef(null); const searchInputRef = useRef(null); const libraryScrollRef = useRef(0); const lastClickedGameIdRef = useRef(null); const navOriginRef = useRef({ view: 'installed', source: 'grid', scrollTop: 0 }); const hasSeededRef = useRef(false); const [restoredGameId, setRestoredGameId] = useState(null); const [games, setGames] = useState([]); const [hiddenGames, setHiddenGames] = useState([]); const [stats, setStats] = useState(() => ({ ...EMPTY_LIBRARY_STATS })); const [query, setQuery] = useState(''); const [debouncedQuery, setDebouncedQuery] = useState(''); const [view, setView] = useState('installed'); const [sourceFilters, setSourceFilters] = useState([]); const [genreFilter, setGenreFilter] = useState('all'); const [backlogFilter, setBacklogFilter] = useState('all'); const [sortKey, setSortKey] = useState('title-asc'); const [viewMode, setViewMode] = useState('grid'); const [activeGame, setActiveGame] = useState(null); const isDetailView = viewMode === 'hero' && Boolean(activeGame);   const [layoutTheme, setLayoutTheme] = useState(() => localStorage.getItem('logpile-layout-theme') || 'cinematic');
+  const mainScrollRef = useRef(null); const spinTodayRef = useRef(null); const searchInputRef = useRef(null); const libraryScrollRef = useRef(0); const lastClickedGameIdRef = useRef(null); const navOriginRef = useRef({ view: 'installed', source: 'grid', scrollTop: 0 }); const hasSeededRef = useRef(false); const [restoredGameId, setRestoredGameId] = useState(null); const [games, setGames] = useState([]); const [hiddenGames, setHiddenGames] = useState([]); const [stats, setStats] = useState(() => ({ ...EMPTY_LIBRARY_STATS })); const [query, setQuery] = useState(''); const [debouncedQuery, setDebouncedQuery] = useState(''); const [view, setView] = useState('installed'); const [sourceFilters, setSourceFilters] = useState([]); const [genreFilter, setGenreFilter] = useState('all'); const [backlogFilter, setBacklogFilter] = useState('all'); const [sortKey, setSortKey] = useState('title-asc'); const [viewMode, setViewMode] = useState('grid'); const [activeGame, setActiveGame] = useState(null); const isDetailView = viewMode === 'hero' && Boolean(activeGame); const canCaptureFullPage = Boolean((isDetailView && activeGame) || view === 'dashboard' || view === 'today');   const [layoutTheme, setLayoutTheme] = useState(() => localStorage.getItem('logpile-layout-theme') || 'cinematic');
   const [colorPalette, setColorPalette] = useState(() => {
     try {
       return localStorage.getItem('logpile-color-palette') || 'auto';
@@ -6946,6 +6919,7 @@ function App() {
 
   const handleCaptureFullPage = async () => {
     setScreenshotMenuOpen(false)
+    if (!canCaptureFullPage) return
     setScreenshotBusy(true)
     setActiveCaptureAction('fullpage')
     setNoticeTone('info')
@@ -7008,7 +6982,9 @@ function App() {
         box-shadow: none !important;
         border-top-color: transparent !important;
       }
-      .cinematic-scroll-pill {
+      .cinematic-scroll-pill,
+      .notice,
+      .dashboard-notice-banner {
         display: none !important;
       }
       .main-scroll::-webkit-scrollbar,
@@ -7033,7 +7009,7 @@ function App() {
 
     await new Promise((resolve) => setTimeout(resolve, 80))
 
-    let prefix = 'Logpile-FullView-Library'
+    let prefix = 'Logpile-FullView'
     if (isDetailView && activeGame) {
       const cleanTitle = (activeGame.canonical_title || 'Game').replace(/[^a-zA-Z0-9_-]/g, '_')
       prefix = `Logpile-FullDossier-${cleanTitle}-${layoutTheme}`
@@ -7041,20 +7017,6 @@ function App() {
       prefix = `Logpile-FullDashboard-${layoutTheme}`
     } else if (view === 'today') {
       prefix = `Logpile-FullTodaysPick-${layoutTheme}`
-    } else if (view === 'system') {
-      prefix = 'Logpile-FullSettings'
-    } else if (view === 'about') {
-      prefix = 'Logpile-FullAbout'
-    } else if (view === 'ready') {
-      prefix = `Logpile-FullReadyToInstall-${layoutTheme}`
-    } else if (view === 'installed') {
-      prefix = `Logpile-FullInstalled-${layoutTheme}`
-    } else if (view === 'all') {
-      prefix = `Logpile-FullAllGames-${layoutTheme}`
-    } else if (view === 'utilities') {
-      prefix = `Logpile-FullUtilities-${layoutTheme}`
-    } else if (view === 'dlc') {
-      prefix = `Logpile-FullDLC-${layoutTheme}`
     }
 
     try {
@@ -7265,35 +7227,6 @@ function App() {
       window.setTimeout(() => setNotice(''), 4500)
     }
   }
-
-  const handleSnapHero = useCallback(async (gameToSnap = activeGame) => {
-    if (!gameToSnap) return
-    setScreenshotBusy(true)
-    setActiveCaptureAction('hero')
-    setNoticeTone('info')
-    setNotice(`Snapping ${layoutTheme} hero view for "${gameToSnap.canonical_title}"...`)
-    await new Promise((resolve) => setTimeout(resolve, 160))
-    try {
-      const cleanTitle = (gameToSnap.canonical_title || 'Game').replace(/[^a-zA-Z0-9_-]/g, '_')
-      const prefix = `Logpile-Hero-${cleanTitle}-${layoutTheme}`
-      const res = await api.window?.captureScreen?.(prefix)
-      if (res?.success) {
-        const fileName = res.filePath ? res.filePath.split(/[/\\]/).pop() : `${prefix}.png`
-        setNoticeTone('success')
-        setNotice(`Saved to captures: ${fileName} (copied to clipboard!)`)
-      } else {
-        throw new Error(res?.error || 'Capture failed')
-      }
-    } catch (err) {
-      console.error('Failed to snap hero view:', err)
-      setNoticeTone('error')
-      setNotice(err.message || 'Failed to capture hero view.')
-    } finally {
-      setScreenshotBusy(false)
-      setActiveCaptureAction(null)
-      window.setTimeout(() => setNotice(''), 4500)
-    }
-  }, [activeGame, layoutTheme])
 
   const handleCaptureFilteredShowcase = async (aspectRatio = 'auto') => {
     setScreenshotMenuOpen(false)
@@ -8689,15 +8622,21 @@ function App() {
     return w >= 1180 ? 5 : w >= 880 ? 4 : w >= 600 ? 3 : 2
   }, [isBigPictureMode])
 
-  const bragMenuItems = useMemo(() => [
-    { id: 'fullpage', action: handleCaptureFullPage },
-    { id: 'screen', action: handleCaptureScreen },
-    { id: 'showcase_auto', action: () => handleCaptureFilteredShowcase('auto') },
-    { id: 'showcase_16_9', action: () => handleCaptureFilteredShowcase('16:9') },
-    { id: 'showcase_9_16', action: () => handleCaptureFilteredShowcase('9:16') },
-    { id: 'showcase_1_1', action: () => handleCaptureFilteredShowcase('1:1') },
-    { id: 'open_folder', action: handleOpenCapturesFolder },
-  ], [handleCaptureFullPage, handleCaptureScreen, handleCaptureFilteredShowcase, handleOpenCapturesFolder])
+  const bragMenuItems = useMemo(() => {
+    const items = []
+    if (canCaptureFullPage) {
+      items.push({ id: 'fullpage', action: handleCaptureFullPage })
+    }
+    items.push(
+      { id: 'screen', action: handleCaptureScreen },
+      { id: 'showcase_auto', action: () => handleCaptureFilteredShowcase('auto') },
+      { id: 'showcase_16_9', action: () => handleCaptureFilteredShowcase('16:9') },
+      { id: 'showcase_9_16', action: () => handleCaptureFilteredShowcase('9:16') },
+      { id: 'showcase_1_1', action: () => handleCaptureFilteredShowcase('1:1') },
+      { id: 'open_folder', action: handleOpenCapturesFolder },
+    )
+    return items
+  }, [canCaptureFullPage, handleCaptureFullPage, handleCaptureScreen, handleCaptureFilteredShowcase, handleOpenCapturesFolder])
 
   const handleGamepadNavigate = useCallback((direction) => {
     playNavTick()
@@ -8856,7 +8795,7 @@ function App() {
 
       // Section: Actions Row
       if (dossierSection === 'actions') {
-        const totalActions = 8
+        const totalActions = 7
         if (direction === 'left') {
           setDossierActionIndex((prev) => Math.max(0, prev - 1))
         } else if (direction === 'right') {
@@ -9462,13 +9401,11 @@ function App() {
             setDossierSection('content')
             setDossierContentIndex(0)
           } else if (dossierActionIndex === 3) {
-            handleSnapHero(activeGame)
-          } else if (dossierActionIndex === 4) {
             if (activeGame) {
               setActiveGame(activeGame)
               setAiDrawerOpen(true)
             }
-          } else if (dossierActionIndex === 5) {
+          } else if (dossierActionIndex === 4) {
             if (info.guideReady) {
               if (activeGame) {
                 setActiveGame(activeGame)
@@ -9477,9 +9414,9 @@ function App() {
             } else {
               info.handleDownloadGuide?.()
             }
-          } else if (dossierActionIndex === 6) {
+          } else if (dossierActionIndex === 5) {
             setEditorGame(activeGame)
-          } else if (dossierActionIndex === 7) {
+          } else if (dossierActionIndex === 6) {
             setDossierSection('tabs')
           }
           return
@@ -9801,7 +9738,7 @@ function App() {
     spotlightState, isSpotlightCollapsed, handleToggleSpotlight, handleLaunch,
     spotlightFocusIndex, jumpInFocusIndex, dossierSection, dossierActionIndex, dossierTabIndex,
     dossierActiveTab, dossierContentRow, dossierContentIndex, dossierLightboxIndex,
-    handleSnapHero, setAiDrawerOpen, setEditorGame,
+    setAiDrawerOpen, setEditorGame,
     settingsSection, settingsCategoryIndex, settingsContentIndex, SETTINGS_TAB_IDS,
     oskOpen, oskRow, oskCol, isBigPictureMode, aiDrawerOpen, handleOpenSettings,
     displayFavoriteGames, isAiAvailable, confirmModal, handleToggleBigPicture
@@ -10268,19 +10205,6 @@ function App() {
         )}
       </div>
       <div className="titlebar-tools">
-        {isDetailView && (
-          <button
-            type="button"
-            className="outline-button brag-screenshot-btn titlebar-snap-btn"
-            onClick={() => handleSnapHero(activeGame)}
-            disabled={screenshotBusy}
-            title="Snap this theme-based view to captures & clipboard"
-            style={{ marginRight: '6px', height: '26px', fontSize: '11px', padding: '0 8px' }}
-          >
-            <Camera size={12} />
-            <span>{activeCaptureAction === 'hero' ? 'Snapping…' : 'Snap Hero'}</span>
-          </button>
-        )}
         <div
           ref={bragMenuRef}
           className="relative inline-block"
@@ -10311,21 +10235,23 @@ function App() {
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
             >
+              {canCaptureFullPage && (
+                <button
+                  type="button"
+                  className={cn("brag-dropdown-item", isGamepadMode && screenshotMenuOpen && bragMenuItems[bragFocusIndex]?.id === 'fullpage' && "gamepad-focused")}
+                  onClick={handleCaptureFullPage}
+                  title="Capture entire scrollable page from top to bottom"
+                >
+                  <Layers size={13} style={{ color: 'var(--accent, #f59e0b)' }} />
+                  <div>
+                    <span className="brag-dropdown-title">Full View (Whole Page PNG)</span>
+                    <span className="brag-dropdown-sub">Complete scrollable page (Game Dossier, Dashboard, Today&apos;s Pick)</span>
+                  </div>
+                </button>
+              )}
               <button
                 type="button"
-                className={cn("brag-dropdown-item", isGamepadMode && screenshotMenuOpen && bragFocusIndex === 0 && "gamepad-focused")}
-                onClick={handleCaptureFullPage}
-                title="Capture entire scrollable page from top to bottom"
-              >
-                <Layers size={13} style={{ color: 'var(--accent, #f59e0b)' }} />
-                <div>
-                  <span className="brag-dropdown-title">Full View (Whole Page PNG)</span>
-                  <span className="brag-dropdown-sub">Complete scrollable page (Installed, Ready to Install, Game Dossier, Dashboard)</span>
-                </div>
-              </button>
-              <button
-                type="button"
-                className={cn("brag-dropdown-item", isGamepadMode && screenshotMenuOpen && bragFocusIndex === 1 && "gamepad-focused")}
+                className={cn("brag-dropdown-item", isGamepadMode && screenshotMenuOpen && bragMenuItems[bragFocusIndex]?.id === 'screen' && "gamepad-focused")}
                 onClick={handleCaptureScreen}
                 title="Capture current visible window snapshot"
               >
@@ -10343,7 +10269,7 @@ function App() {
               <div className="brag-ratio-grid">
                 <button
                   type="button"
-                  className={cn("brag-ratio-btn", isGamepadMode && screenshotMenuOpen && bragFocusIndex === 2 && "gamepad-focused")}
+                  className={cn("brag-ratio-btn", isGamepadMode && screenshotMenuOpen && bragMenuItems[bragFocusIndex]?.id === 'showcase_auto' && "gamepad-focused")}
                   onClick={() => handleCaptureFilteredShowcase('auto')}
                   title="Continuous full tapestry showing every game without cutoff"
                 >
@@ -10355,7 +10281,7 @@ function App() {
                 </button>
                 <button
                   type="button"
-                  className={cn("brag-ratio-btn", isGamepadMode && screenshotMenuOpen && bragFocusIndex === 3 && "gamepad-focused")}
+                  className={cn("brag-ratio-btn", isGamepadMode && screenshotMenuOpen && bragMenuItems[bragFocusIndex]?.id === 'showcase_16_9' && "gamepad-focused")}
                   onClick={() => handleCaptureFilteredShowcase('16:9')}
                   title="16:9 landscape 4K UHD - ideal for PC monitors, Reddit, and X"
                 >
@@ -10367,7 +10293,7 @@ function App() {
                 </button>
                 <button
                   type="button"
-                  className={cn("brag-ratio-btn", isGamepadMode && screenshotMenuOpen && bragFocusIndex === 4 && "gamepad-focused")}
+                  className={cn("brag-ratio-btn", isGamepadMode && screenshotMenuOpen && bragMenuItems[bragFocusIndex]?.id === 'showcase_9_16' && "gamepad-focused")}
                   onClick={() => handleCaptureFilteredShowcase('9:16')}
                   title="9:16 vertical 4K - ideal for Instagram Stories, Reels, and Mobile"
                 >
@@ -10379,7 +10305,7 @@ function App() {
                 </button>
                 <button
                   type="button"
-                  className={cn("brag-ratio-btn", isGamepadMode && screenshotMenuOpen && bragFocusIndex === 5 && "gamepad-focused")}
+                  className={cn("brag-ratio-btn", isGamepadMode && screenshotMenuOpen && bragMenuItems[bragFocusIndex]?.id === 'showcase_1_1' && "gamepad-focused")}
                   onClick={() => handleCaptureFilteredShowcase('1:1')}
                   title="1:1 square 4K - ideal for Instagram feed posts and Discord"
                 >
@@ -10393,7 +10319,7 @@ function App() {
               <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.08)', margin: '4px 2px' }} />
               <button
                 type="button"
-                className={cn("brag-dropdown-item", isGamepadMode && screenshotMenuOpen && bragFocusIndex === 6 && "gamepad-focused")}
+                className={cn("brag-dropdown-item", isGamepadMode && screenshotMenuOpen && bragMenuItems[bragFocusIndex]?.id === 'open_folder' && "gamepad-focused")}
                 onClick={handleOpenCapturesFolder}
               >
                 <FolderOpen size={13} style={{ color: '#94a3b8' }} />
@@ -10599,7 +10525,7 @@ function App() {
         </div>
       </aside>
       )}
-      <main className="main-content"><div ref={mainScrollRef} className={cn('main-scroll', isDetailView && 'main-scroll-fullbleed', isBigPictureMode && !isDetailView && 'console-stage-scroll-host')}><ErrorBoundary key={`${view}-${viewMode}-${activeGame?.id || 'none'}`} fallback={({ error, reset }) => <TabErrorFallback error={error} reset={reset} onBack={handleBackToLibrary} />}>{isDetailView ? <HeroView games={filteredGames} activeGame={activeGame || filteredGames[0]} familyLocks={familyLocks} onSelect={setActiveGame} onLaunch={handleLaunch} onBack={handleBackToLibrary} onEdit={setEditorGame} onHideGame={(game) => updateHiddenState(game, true)} onMoveCategory={moveCategory} onContextMenu={handleCardContextMenu} isCinematicTheme={layoutTheme === 'cinematic'} layoutTheme={layoutTheme} scrollContainerRef={mainScrollRef} onIdleChange={setIsDetailHudIdle} onScrollStateChange={setIsDetailScrolled} onSnapHero={handleSnapHero} onAskAi={isAiAvailable ? ((g) => { if (g) setActiveGame(g); setAiDrawerOpen(true); }) : null} onToggleFavorite={handleToggleFavorite} onUpdateStatus={async (game, newStatus) => {
+      <main className="main-content"><div ref={mainScrollRef} className={cn('main-scroll', isDetailView && 'main-scroll-fullbleed', isBigPictureMode && !isDetailView && 'console-stage-scroll-host')}><ErrorBoundary key={`${view}-${viewMode}-${activeGame?.id || 'none'}`} fallback={({ error, reset }) => <TabErrorFallback error={error} reset={reset} onBack={handleBackToLibrary} />}>{isDetailView ? <HeroView games={filteredGames} activeGame={activeGame || filteredGames[0]} familyLocks={familyLocks} onSelect={setActiveGame} onLaunch={handleLaunch} onBack={handleBackToLibrary} onEdit={setEditorGame} onHideGame={(game) => updateHiddenState(game, true)} onMoveCategory={moveCategory} onContextMenu={handleCardContextMenu} isCinematicTheme={layoutTheme === 'cinematic'} layoutTheme={layoutTheme} scrollContainerRef={mainScrollRef} onIdleChange={setIsDetailHudIdle} onScrollStateChange={setIsDetailScrolled} onAskAi={isAiAvailable ? ((g) => { if (g) setActiveGame(g); setAiDrawerOpen(true); }) : null} onToggleFavorite={handleToggleFavorite} onUpdateStatus={async (game, newStatus) => {
   const allowed = ['unplayed', 'playing', 'paused', 'completed']
   if (!allowed.includes(newStatus)) return
 
